@@ -24,6 +24,7 @@ It contains a basic implementation of the [A3C algorithm](https://arxiv.org/abs/
 ```
 conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/ && conda config --set show_channel_urls yes && conda create --name gsa_1 python=3.5 -y && source activate gsa_1 && git clone https://github.com/YuhangSong2017/go.git && cd go && tar -C /usr/local -xzf go1.7.4.linux-amd64.tar.gz && echo "export PATH=$PATH:/usr/local/go/bin" >> /etc/profile && source /etc/profile && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && pip install "gym[atari]" && pip install universe && pip install six && pip install tensorflow-gpu && conda install --channel https://conda.anaconda.org/menpo opencv3 && conda install -y numpy && conda install -y scipy
 
+
 ```
 
 # Getting Started
