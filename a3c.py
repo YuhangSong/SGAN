@@ -7,6 +7,9 @@ import six.moves.queue as queue
 import scipy.signal
 import threading
 import distutils.version
+import config
+import subprocess
+import time
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -19,6 +22,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_si = np.asarray(rollout.states)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
+    marks = np.asarray(rollout.marks)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -29,9 +33,9 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features)
+    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features, marks)
 
-Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features"])
+Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features", "marks"])
 
 class PartialRollout(object):
     """
@@ -46,14 +50,16 @@ class PartialRollout(object):
         self.r = 0.0
         self.terminal = False
         self.features = []
+        self.marks = []
 
-    def add(self, state, action, reward, value, terminal, features):
+    def add(self, state, action, reward, value, terminal, features, mark):
         self.states += [state]
         self.actions += [action]
         self.rewards += [reward]
         self.values += [value]
         self.terminal = terminal
         self.features += [features]
+        self.marks += [mark]
 
     def extend(self, other):
         assert not self.terminal
@@ -64,6 +70,7 @@ class PartialRollout(object):
         self.r = other.r
         self.terminal = other.terminal
         self.features.extend(other.features)
+        self.marks.extend(other.marks)
 
 class RunnerThread(threading.Thread):
     """
@@ -71,7 +78,7 @@ class RunnerThread(threading.Thread):
     is that a universe environment is _real time_.  This means that there should be a thread
     that would constantly interact with the environment and tell it what to do.  This thread is here.
     """
-    def __init__(self, env, policy, num_local_steps, visualise):
+    def __init__(self, env, policy, num_local_steps, visualise, task):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(5)
         self.num_local_steps = num_local_steps
@@ -82,6 +89,7 @@ class RunnerThread(threading.Thread):
         self.sess = None
         self.summary_writer = None
         self.visualise = visualise
+        self.task = task
 
     def start_runner(self, sess, summary_writer):
         self.sess = sess
@@ -93,7 +101,7 @@ class RunnerThread(threading.Thread):
             self._run()
 
     def _run(self):
-        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise)
+        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise, self.task)
         while True:
             # the timeout variable exists because apparently, if one worker dies, the other workers
             # won't die with it, unless the timeout is set to some large number.  This is an empirical
@@ -103,7 +111,7 @@ class RunnerThread(threading.Thread):
 
 
 
-def env_runner(env, policy, num_local_steps, summary_writer, render):
+def env_runner(env, policy, num_local_steps, summary_writer, render, task):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
@@ -113,6 +121,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
     last_features = policy.get_initial_features()
     length = 0
     rewards = 0
+    episode = 0
 
     while True:
         terminal_end = False
@@ -127,7 +136,10 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 env.render()
 
             # collect the experience
-            rollout.add(last_state, action, reward, value_, terminal, last_features)
+            mark = [task, episode, length]
+            rollout.add(last_state, action, reward, value_, terminal, last_features, mark)
+
+            # move to next step
             length += 1
             rewards += reward
 
@@ -150,6 +162,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0
+                episode += 1
                 break
 
         if not terminal_end:
@@ -206,7 +219,7 @@ class A3C(object):
             # on the one hand;  but on the other hand, we get less frequent parameter updates, which
             # slows down learning.  In this code, we found that making local steps be much
             # smaller than 20 makes the algorithm more difficult to tune and to get to work.
-            self.runner = RunnerThread(env, pi, 20, visualise)
+            self.runner = RunnerThread(env, pi, 20, visualise, self.task)
 
 
             grads = tf.gradients(self.loss, pi.var_list)
@@ -269,6 +282,27 @@ class A3C(object):
         sess.run(self.sync)  # copy weights from shared to local
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
+
+        if config.enable_gsa:
+
+            for i in range(np.shape(batch.si)[0]):
+                file = config.real_state_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__requiring'+'.npz'
+                np.savez(file,
+                         state=batch.si[i])
+
+            time.sleep(10)
+
+            for i in range(np.shape(batch.si)[0]):
+
+                try:
+                    file = config.waiting_reward_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__waiting'+'.npz'
+                    gsa_reward = np.load(file)['gsa_reward'][0]
+                    print(gsa_reward)
+                    break
+                except Exception, e:
+                    print(str(Exception)+": "+str(e)) 
+
+
 
         should_compute_summary = self.task == 0 and self.local_steps % 11 == 0
 
