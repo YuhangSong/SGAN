@@ -1,0 +1,6 @@
+num_workers = 1
+enable_gsa = False
+logdir = '../../result/gsa_1/test_2/'
+
+# default
+real_state_dir = logdir + 'real_state/'
