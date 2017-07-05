@@ -182,6 +182,7 @@ class A3C(object):
 
         self.env = env
         self.task = task
+        self.waiting_interval = 0.0
         worker_device = "/job:worker/task:{}/cpu:0".format(task)
         with tf.device(tf.train.replica_device_setter(1, worker_device=worker_device)):
             with tf.variable_scope("global"):
@@ -290,17 +291,26 @@ class A3C(object):
                 np.savez(file,
                          state=batch.si[i])
 
-            time.sleep(10)
+            time.sleep(self.waiting_interval)
+
+            success = True
 
             for i in range(np.shape(batch.si)[0]):
 
                 try:
                     file = config.waiting_reward_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__waiting'+'.npz'
                     gsa_reward = np.load(file)['gsa_reward'][0]
-                    print(gsa_reward)
-                    break
+                    
                 except Exception, e:
                     print(str(Exception)+": "+str(e)) 
+                    success = False
+                
+            if success:
+                self.waiting_interval -= config.adjust_interval_down
+            else:
+                self.waiting_interval += config.adjust_interval_up
+
+        print(self.waiting_interval)
 
 
 

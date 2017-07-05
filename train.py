@@ -63,6 +63,9 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     if mode == 'tmux':
         cmds_map += [new_cmd(session, "htop", ["htop"], mode, logdir, shell)]
 
+    if config.enable_gsa:
+        cmds_map += [new_cmd(session,"wgan", ["source", "activate", "song_1"], mode, logdir, shell)]
+
     windows = [v[0] for v in cmds_map]
 
     notes = []
@@ -70,6 +73,7 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         "mkdir -p {}".format(logdir),
         "echo {} {} > {}/cmd.sh".format(sys.executable, ' '.join([shlex_quote(arg) for arg in sys.argv if arg != '-n']), logdir),
     ]
+
     if mode == 'nohup' or mode == 'child':
         cmds += ["echo '#!/bin/sh' >{}/kill.sh".format(logdir)]
         notes += ["Run `source {}/kill.sh` to kill the job".format(logdir)]
@@ -92,6 +96,11 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         cmds += ["sleep 1"]
     for window, cmd in cmds_map:
         cmds += [cmd]
+
+    if config.enable_gsa:
+        cmds_map = [new_cmd(session,"wgan", ["python", "run_wgan.py"], mode, logdir, shell)]
+        for window, cmd in cmds_map:
+            cmds += [cmd]
 
     return cmds, notes
 

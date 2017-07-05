@@ -5,8 +5,12 @@ import numpy as np
 
 def fake_gsa():
 
-    path_dic_of_requiring_file=GetFileList(FindPath=config.real_state_dir,
+    try:
+        path_dic_of_requiring_file=GetFileList(FindPath=config.real_state_dir,
                                            FlagStr=['__requiring.npz'])
+    except Exception, e:
+        print(str(Exception)+": "+str(e))
+        return
 
     for i in range(len(path_dic_of_requiring_file)):
 
@@ -19,7 +23,6 @@ def fake_gsa():
 
         try:
             requiring_state = np.load(path_of_requiring_file)['state']
-            print(np.shape(requiring_state))
         except Exception, e:
             print(str(Exception)+": "+str(e))
             continue
