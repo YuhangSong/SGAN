@@ -2,16 +2,18 @@ import argparse
 import os
 import sys
 from six.moves import shlex_quote
+import config
+import subprocess
 
 parser = argparse.ArgumentParser(description="Run commands")
-parser.add_argument('-w', '--num-workers', default=8, type=int,
+parser.add_argument('-w', '--num-workers', default=config.num_workers, type=int,
                     help="Number of workers")
 parser.add_argument('-r', '--remotes', default=None,
                     help='The address of pre-existing VNC servers and '
                          'rewarders to use (e.g. -r vnc://localhost:5900+15900,vnc://localhost:5901+15901).')
 parser.add_argument('-e', '--env-id', type=str, default="PongDeterministic-v3",
                     help="Environment id")
-parser.add_argument('-l', '--log-dir', type=str, default="../../result/gsa_1/test_1",
+parser.add_argument('-l', '--log-dir', type=str, default=config.logdir,
                     help="Log directory path")
 parser.add_argument('-n', '--dry-run', action='store_true',
                     help="Print out commands rather than executing them")
@@ -61,6 +63,9 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     if mode == 'tmux':
         cmds_map += [new_cmd(session, "htop", ["htop"], mode, logdir, shell)]
 
+    if config.enable_gsa:
+        cmds_map += [new_cmd(session,"wgan", ["source", "activate", "song_1"], mode, logdir, shell)]
+
     windows = [v[0] for v in cmds_map]
 
     notes = []
@@ -68,6 +73,7 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         "mkdir -p {}".format(logdir),
         "echo {} {} > {}/cmd.sh".format(sys.executable, ' '.join([shlex_quote(arg) for arg in sys.argv if arg != '-n']), logdir),
     ]
+
     if mode == 'nohup' or mode == 'child':
         cmds += ["echo '#!/bin/sh' >{}/kill.sh".format(logdir)]
         notes += ["Run `source {}/kill.sh` to kill the job".format(logdir)]
@@ -91,10 +97,23 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     for window, cmd in cmds_map:
         cmds += [cmd]
 
+    if config.enable_gsa:
+        cmds_map = [new_cmd(session,"wgan", ["python", "run_wgan.py"], mode, logdir, shell)]
+        for window, cmd in cmds_map:
+            cmds += [cmd]
+
     return cmds, notes
 
+def rm_and_mkdir(dir):
+    subprocess.call(["rm", "-r", dir])
+    subprocess.call(["mkdir", "-p", dir])
+
+def setup_dir():
+    rm_and_mkdir(config.real_state_dir)
+    rm_and_mkdir(config.waiting_reward_dir)
 
 def run():
+    setup_dir()
     args = parser.parse_args()
     cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
     if args.dry_run:
