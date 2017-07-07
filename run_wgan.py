@@ -13,18 +13,22 @@ import torchvision.utils as vutils
 from torch.autograd import Variable
 import os
 import numpy as np
+import copy
 
 import wgan_models.dcgan as dcgan
 import wgan_models.mlp as mlp
 import support_lib
 import config
+import subprocess
+import time
+import gsa_io
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='lsun', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', default='../../dataset', help='path to dataset')
-parser.add_argument('--workers', type=int, help='number of data loading workers', default=2)
-parser.add_argument('--batchSize', type=int, default=64, help='input batch size')
-parser.add_argument('--imageSize', type=int, default=64, help='the height / width of the input image to network')
+parser.add_argument('--workers', type=int, help='number of data loading workers', default=16)
+parser.add_argument('--batchSize', type=int, default=config.gsa_batchsize, help='input batch size')
+parser.add_argument('--imageSize', type=int, default=config.gsa_size, help='the height / width of the input image to network')
 parser.add_argument('--nc', type=int, default=3, help='input image channels')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -44,7 +48,7 @@ parser.add_argument('--noBN', action='store_true', help='use batchnorm or not (o
 parser.add_argument('--mlp_G', action='store_true', help='use MLP for G')
 parser.add_argument('--mlp_D', action='store_true', help='use MLP for D')
 parser.add_argument('--n_extra_layers', type=int, default=0, help='Number of extra layers on gen and disc')
-parser.add_argument('--experiment', default=None, help='Where to store samples and models')
+parser.add_argument('--experiment', default=config.logdir, help='Where to store samples and models')
 parser.add_argument('--adam', action='store_true', help='Whether to use adam (default is rmsprop)')
 opt = parser.parse_args()
 print(opt)
@@ -159,6 +163,8 @@ else:
     optimizerD = optim.RMSprop(netD.parameters(), lr = opt.lrD)
     optimizerG = optim.RMSprop(netG.parameters(), lr = opt.lrG)
 
+real_cpu_recorder = []
+real_cpu_recorder_path = []
 gen_iterations = 0
 for epoch in range(opt.niter):
     
@@ -213,8 +219,67 @@ for epoch in range(opt.niter):
 
             # train D network with real
             if config.enable_gsa:
-                # input gsa state
-                real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
+                # # input gsa state
+                # real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
+
+                # load history
+                real_cpu_loader = copy.deepcopy(real_cpu_recorder)
+                real_cpu_loader_path = copy.deepcopy(real_cpu_recorder_path)
+                # del history
+                del real_cpu_recorder
+                del real_cpu_recorder_path
+
+                while True:
+
+                    # load a batch
+                    try:
+                        path_dic_of_requiring_file=gsa_io.GetFileList(FindPath=config.real_state_dir,
+                                                               FlagStr=['__requiring.npz'])
+                    except Exception, e:
+                        print('find file list fialed with error: '+str(Exception)+": "+str(e))
+                        continue
+
+                    for i in range(len(path_dic_of_requiring_file)):
+
+                        path_of_requiring_file = path_dic_of_requiring_file[i]
+
+                        if path_of_requiring_file.split('.np')[1] is not 'z':
+                            print('find npz temp file: '+path_of_requiring_file+'>>pass')
+                            continue
+
+                        try:
+                            requiring_state = np.load(path_of_requiring_file)['state']
+                            real_cpu_loader += [requiring_state]
+                            real_cpu_loader_path += [path_of_requiring_file]
+                        except Exception, e:
+                            print('load requiring_state error: '+str(Exception)+": "+str(e))
+                            continue
+
+                        subprocess.call(["mv", path_of_requiring_file, path_of_requiring_file.split('__')[0]+'__done.npz'])
+
+                    # cut
+                    if len(real_cpu_loader) >= opt.batchSize:
+
+                        print('load real_cpu_loader: '+str(np.shape(real_cpu_loader)))
+
+                        # load used part
+                        real_cpu = copy.deepcopy(real_cpu_loader)[0:opt.batchSize]
+                        print('load real_cpu: '+str(np.shape(real_cpu)))
+                        real_cpu=np.asarray(real_cpu)
+                        real_cpu = torch.FloatTensor(real_cpu)
+                        real_cpu_path = copy.deepcopy(real_cpu_loader_path)[0:opt.batchSize]
+
+                        # record uused part
+                        real_cpu_recorder = copy.deepcopy(real_cpu_loader)[opt.batchSize:-1]
+                        real_cpu_recorder_path = copy.deepcopy(real_cpu_loader_path)[opt.batchSize:-1]
+                        print('load real_cpu_recorder: '+str(np.shape(real_cpu_recorder)))
+
+                        # del loader
+                        del real_cpu_loader
+                        del real_cpu_loader_path
+
+                        # break out loader loop
+                        break
             else:
                 # use data in dataloader
                 real_cpu, _ = data
@@ -236,8 +301,12 @@ for epoch in range(opt.niter):
             errD_real.backward(one)
 
             if config.enable_gsa:
-                # output the gsa reward
-                print(outputD_real[3,0,0,0])
+                # # output the gsa reward
+                # print(outputD_real[3,0,0,0])
+                for real_cpu_path_i in range(len(real_cpu_path)):
+                    file = config.waiting_reward_dir+real_cpu_path[real_cpu_path_i].split('/')[-1].split('__')[0]+'__waiting.npz'
+                    np.savez(file,
+                             gsa_reward=[(-outputD_real[real_cpu_path_i,0,0,0]+1.0)*0.1])
 
             # train D network with fake
             noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)

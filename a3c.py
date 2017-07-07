@@ -10,6 +10,7 @@ import distutils.version
 import config
 import subprocess
 import time
+import cv2
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -20,6 +21,7 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     given a rollout, compute its returns and the advantage
     """
     batch_si = np.asarray(rollout.states)
+    batch_gsa_si = np.asarray(rollout.gsa_state)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
     marks = np.asarray(rollout.marks)
@@ -33,9 +35,9 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features, marks)
+    return Batch(batch_si, batch_gsa_si, batch_a, batch_adv, batch_r, rollout.terminal, features, marks)
 
-Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features", "marks"])
+Batch = namedtuple("Batch", ["si", "gsa_si", "a", "adv", "r", "terminal", "features", "marks"])
 
 class PartialRollout(object):
     """
@@ -44,6 +46,7 @@ class PartialRollout(object):
     """
     def __init__(self):
         self.states = []
+        self.gsa_state = []
         self.actions = []
         self.rewards = []
         self.values = []
@@ -52,8 +55,9 @@ class PartialRollout(object):
         self.features = []
         self.marks = []
 
-    def add(self, state, action, reward, value, terminal, features, mark):
+    def add(self, state, gsa_state, action, reward, value, terminal, features, mark):
         self.states += [state]
+        self.gsa_state += [gsa_state]
         self.actions += [action]
         self.rewards += [reward]
         self.values += [value]
@@ -64,6 +68,7 @@ class PartialRollout(object):
     def extend(self, other):
         assert not self.terminal
         self.states.extend(other.states)
+        self.gsa_state.extend(other.gsa_state)
         self.actions.extend(other.actions)
         self.rewards.extend(other.rewards)
         self.values.extend(other.values)
@@ -109,7 +114,33 @@ class RunnerThread(threading.Thread):
 
             self.queue.put(next(rollout_provider), timeout=600.0)
 
+def to_agent(frame):
 
+    # Resize by half, then down to 42x42 (essentially mipmapping). If
+    # we resize directly we lose pixels that, when mapped to 42x42,
+    # aren't close enough to the pixel boundary.
+    frame = cv2.resize(frame, (80, 80))
+    frame = cv2.resize(frame, (42, 42))
+    frame = frame.mean(2)
+    frame = frame.astype(np.float32)
+    frame *= (1.0 / 255.0)
+    frame = np.reshape(frame, [42, 42, 1])
+
+    return frame
+
+def to_gsa(frame):
+
+    # Resize by half, then down to 42x42 (essentially mipmapping). If
+    # we resize directly we lose pixels that, when mapped to 42x42,
+    # aren't close enough to the pixel boundary.
+    frame = cv2.resize(frame, (80, 80))
+    frame = cv2.resize(frame, (config.gsa_size, config.gsa_size))
+    frame = frame.astype(np.float32)
+    frame *= (1.0 / 255.0)
+    frame = np.reshape(frame, [config.gsa_size, config.gsa_size, 3])
+    frame = np.transpose(frame,(2,0,1))
+
+    return frame
 
 def env_runner(env, policy, num_local_steps, summary_writer, render, task):
     """
@@ -117,7 +148,10 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
     the policy, and as long as the rollout exceeds a certain length, the thread
     runner appends the policy to the queue.
     """
-    last_state = env.reset()
+    last_frame = env.reset()
+    last_state = to_agent(last_frame)
+    last_gsa_state = to_gsa(last_frame)
+
     last_features = policy.get_initial_features()
     length = 0
     rewards = 0
@@ -131,19 +165,24 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
             fetched = policy.act(last_state, *last_features)
             action, value_, features = fetched[0], fetched[1], fetched[2:]
             # argmax to convert from one-hot
-            state, reward, terminal, info = env.step(action.argmax())
+            frame, reward, terminal, info = env.step(action.argmax())
+
+            state = to_agent(frame)
+            gsa_state = to_gsa(frame)
+
             if render:
                 env.render()
 
             # collect the experience
             mark = [task, episode, length]
-            rollout.add(last_state, action, reward, value_, terminal, last_features, mark)
+            rollout.add(last_state, last_gsa_state, action, reward, value_, terminal, last_features, mark)
 
             # move to next step
             length += 1
             rewards += reward
 
             last_state = state
+            last_gsa_state = gsa_state
             last_features = features
 
             if info:
@@ -157,7 +196,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
             if terminal or length >= timestep_limit:
                 terminal_end = True
                 if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
-                    last_state = env.reset()
+                    last_frame = env.reset()
+                    last_state = to_agent(last_frame)
+                    last_gsa_state = to_gsa(last_frame)
                 last_features = policy.get_initial_features()
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
@@ -289,7 +330,7 @@ class A3C(object):
             for i in range(np.shape(batch.si)[0]):
                 file = config.real_state_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__requiring'+'.npz'
                 np.savez(file,
-                         state=batch.si[i])
+                         state=batch.gsa_si[i])
 
             time.sleep(self.waiting_interval)
 
