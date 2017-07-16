@@ -53,6 +53,8 @@ parser.add_argument('--adam', action='store_true', help='Whether to use adam (de
 opt = parser.parse_args()
 print(opt)
 
+subprocess.call(["mkdir", "-p", opt.experiment])
+
 # Where to store samples and models
 if opt.experiment is None:
     opt.experiment = 'samples'
@@ -65,39 +67,6 @@ random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
 cudnn.benchmark = True
-
-# load dataset
-if torch.cuda.is_available() and not opt.cuda:
-    print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-
-if opt.dataset in ['imagenet', 'folder', 'lfw']:
-    # folder dataset
-    dataset = dset.ImageFolder(root=opt.dataroot,
-                               transform=transforms.Compose([
-                                   transforms.Scale(opt.imageSize),
-                                   transforms.CenterCrop(opt.imageSize),
-                                   transforms.ToTensor(),
-                                   transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                               ]))
-elif opt.dataset == 'lsun':
-    dataset = dset.LSUN(db_path=opt.dataroot, classes=['bedroom_train'],
-                        transform=transforms.Compose([
-                            transforms.Scale(opt.imageSize),
-                            transforms.CenterCrop(opt.imageSize),
-                            transforms.ToTensor(),
-                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                        ]))
-elif opt.dataset == 'cifar10':
-    dataset = dset.CIFAR10(root=opt.dataroot, download=True,
-                           transform=transforms.Compose([
-                               transforms.Scale(opt.imageSize),
-                               transforms.ToTensor(),
-                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-                           ])
-    )
-assert dataset
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=opt.batchSize,
-                                         shuffle=True, num_workers=int(opt.workers))
 
 ngpu = int(opt.ngpu)
 nz = int(opt.nz)
@@ -163,14 +132,12 @@ else:
     optimizerD = optim.RMSprop(netD.parameters(), lr = opt.lrD)
     optimizerG = optim.RMSprop(netG.parameters(), lr = opt.lrG)
 
-real_cpu_recorder = []
-real_cpu_recorder_path = []
 gen_iterations = 0
-for epoch in range(opt.niter):
+epoch = 0
+while True:
     
-    data_iter = iter(dataloader)
     i = 0
-    while i < len(dataloader):
+    while i < 111:
 
         ######################################################################
         ########################### Update D network #########################
@@ -206,7 +173,7 @@ for epoch in range(opt.niter):
             G network is trained for one time
         '''
         j = 0
-        while j < Diters and i < len(dataloader):
+        while j < Diters:
             j += 1
 
             # clamp parameters to a cube
@@ -214,75 +181,10 @@ for epoch in range(opt.niter):
                 p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
 
             # next data
-            data = data_iter.next()
             i += 1
 
             # train D network with real
-            if config.enable_gsa:
-                # # input gsa state
-                # real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
-
-                # load history
-                real_cpu_loader = copy.deepcopy(real_cpu_recorder)
-                real_cpu_loader_path = copy.deepcopy(real_cpu_recorder_path)
-                # del history
-                del real_cpu_recorder
-                del real_cpu_recorder_path
-
-                while True:
-
-                    # load a batch
-                    try:
-                        path_dic_of_requiring_file=gsa_io.GetFileList(FindPath=config.real_state_dir,
-                                                               FlagStr=['__requiring.npz'])
-                    except Exception, e:
-                        print('find file list fialed with error: '+str(Exception)+": "+str(e))
-                        continue
-
-                    for i in range(len(path_dic_of_requiring_file)):
-
-                        path_of_requiring_file = path_dic_of_requiring_file[i]
-
-                        if path_of_requiring_file.split('.np')[1] is not 'z':
-                            print('find npz temp file: '+path_of_requiring_file+'>>pass')
-                            continue
-
-                        try:
-                            requiring_state = np.load(path_of_requiring_file)['state']
-                            real_cpu_loader += [requiring_state]
-                            real_cpu_loader_path += [path_of_requiring_file]
-                        except Exception, e:
-                            print('load requiring_state error: '+str(Exception)+": "+str(e))
-                            continue
-
-                        subprocess.call(["mv", path_of_requiring_file, path_of_requiring_file.split('__')[0]+'__done.npz'])
-
-                    # cut
-                    if len(real_cpu_loader) >= opt.batchSize:
-
-                        print('load real_cpu_loader: '+str(np.shape(real_cpu_loader)))
-
-                        # load used part
-                        real_cpu = copy.deepcopy(real_cpu_loader)[0:opt.batchSize]
-                        print('load real_cpu: '+str(np.shape(real_cpu)))
-                        real_cpu=np.asarray(real_cpu)
-                        real_cpu = torch.FloatTensor(real_cpu)
-                        real_cpu_path = copy.deepcopy(real_cpu_loader_path)[0:opt.batchSize]
-
-                        # record uused part
-                        real_cpu_recorder = copy.deepcopy(real_cpu_loader)[opt.batchSize:-1]
-                        real_cpu_recorder_path = copy.deepcopy(real_cpu_loader_path)[opt.batchSize:-1]
-                        print('load real_cpu_recorder: '+str(np.shape(real_cpu_recorder)))
-
-                        # del loader
-                        del real_cpu_loader
-                        del real_cpu_loader_path
-
-                        # break out loader loop
-                        break
-            else:
-                # use data in dataloader
-                real_cpu, _ = data
+            real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
 
             
 
@@ -296,17 +198,12 @@ for epoch in range(opt.niter):
             inputv = Variable(input)
 
             errD_real, outputD_real = netD(inputv)
-            print('real prob')
-            print(errD_real)
             errD_real.backward(one)
 
             if config.enable_gsa:
-                # # output the gsa reward
+                # output the gsa reward
                 # print(outputD_real[3,0,0,0])
-                for real_cpu_path_i in range(len(real_cpu_path)):
-                    file = config.waiting_reward_dir+real_cpu_path[real_cpu_path_i].split('/')[-1].split('__')[0]+'__waiting.npz'
-                    np.savez(file,
-                             gsa_reward=[(-outputD_real[real_cpu_path_i,0,0,0]+1.0)*0.1])
+                pass
 
             # train D network with fake
             noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
@@ -314,8 +211,6 @@ for epoch in range(opt.niter):
             fake = Variable(netG(noisev).data)
             inputv = fake
             errD_fake, _ = netD(inputv)
-            print('fake prob')
-            print(errD_fake)
             errD_fake.backward(mone)
             errD = errD_real - errD_fake
             optimizerD.step()
@@ -359,10 +254,11 @@ for epoch in range(opt.niter):
         ######################################################################
 
         gen_iterations += 1
+        epoch += 1
 
         '''log result'''
-        print('[%d/%d][%d/%d][%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-            % (epoch, opt.niter, i, len(dataloader), gen_iterations,
+        print('[epoch:%d][%d/%d][%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
+            % (epoch, i, 111, gen_iterations,
             errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
         if gen_iterations % 500 == 0:
             real_cpu = real_cpu.mul(0.5).add(0.5)
