@@ -39,6 +39,9 @@ conda create -n lsun_1 python=2.7 -y && source activate lsun_1 && git clone http
 
 python train.py --num-workers 2 --env-id PongDeterministic-v3 --log-dir /tmp/pong
 
+# opencv in brown
+http://dhaneshr.net/2016/06/03/installing-opencv-2-4-x-with-ffmpeg-python-on-anaconda/
+
 ```
 
 # Getting Started
