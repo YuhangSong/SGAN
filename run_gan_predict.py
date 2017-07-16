@@ -27,8 +27,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='lsun', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', default='../../dataset', help='path to dataset')
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=16)
-parser.add_argument('--batchSize', type=int, default=config.gsa_batchsize, help='input batch size')
-parser.add_argument('--imageSize', type=int, default=config.gsa_size, help='the height / width of the input image to network')
+parser.add_argument('--batchSize', type=int, default=config.gan_batchsize, help='input batch size')
+parser.add_argument('--imageSize', type=int, default=config.gan_size, help='the height / width of the input image to network')
 parser.add_argument('--nc', type=int, default=3, help='input image channels')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
@@ -67,6 +67,9 @@ random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
 
 cudnn.benchmark = True
+
+if torch.cuda.is_available() and not opt.cuda:
+    print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 ngpu = int(opt.ngpu)
 nz = int(opt.nz)
@@ -132,153 +135,159 @@ else:
     optimizerD = optim.RMSprop(netD.parameters(), lr = opt.lrD)
     optimizerG = optim.RMSprop(netG.parameters(), lr = opt.lrG)
 
-gen_iterations = 0
-epoch = 0
+'''load dataset'''
+dataset = np.load(config.dataset_path)['dataset']
+print('dataset loaded, size: ' + str(np.shape(dataset)))
+dataset = dataset.tolist() # convert to list so that it is easily sampled
+
+iteration_i = 0
+dataset_i = 0
+
 while True:
-    
-    i = 0
-    while i < 111:
 
-        ######################################################################
-        ########################### Update D network #########################
-        ######################################################################
+    ######################################################################
+    ########################### Update D network #########################
+    ######################################################################
 
-        '''
-            when train D network, paramters of D network in trained,
-            reset requires_grad of D network to true.
-            (they are set to False below in netG update)
-        '''
+    '''
+        when train D network, paramters of D network in trained,
+        reset requires_grad of D network to true.
+        (they are set to False below in netG update)
+    '''
+    for p in netD.parameters():
+        p.requires_grad = True
+
+    '''
+        train the discriminator Diters times
+        Diters is set to 100 only on the first 25 generator iterations or
+        very sporadically (once every 500 generator iterations).
+        This helps to start with the critic at optimum even in the first iterations.
+        There shouldn't be a major difference in performance, but it can help,
+        especially when visualizing learning curves (since otherwise you'd see the
+        loss going up until the critic is properly trained).
+        This is also why the first 25 iterations take significantly longer than
+        the rest of the training as well.
+    '''
+    if iteration_i < 25 or iteration_i % 500 == 0:
+        Diters = 100
+    else:
+        Diters = opt.Diters
+
+    '''
+        start interation training of D network
+        D network is trained for sevrel steps when 
+        G network is trained for one time
+    '''
+    j = 0
+    while j < Diters:
+        j += 1
+
+        # clamp parameters to a cube
         for p in netD.parameters():
-            p.requires_grad = True
+            p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
 
-        '''
-            train the discriminator Diters times
-            Diters is set to 100 only on the first 25 generator iterations or
-            very sporadically (once every 500 generator iterations).
-            This helps to start with the critic at optimum even in the first iterations.
-            There shouldn't be a major difference in performance, but it can help,
-            especially when visualizing learning curves (since otherwise you'd see the
-            loss going up until the critic is properly trained).
-            This is also why the first 25 iterations take significantly longer than
-            the rest of the training as well.
-        '''
-        if gen_iterations < 25 or gen_iterations % 500 == 0:
-            Diters = 100
-        else:
-            Diters = opt.Diters
+        # next dataset
+        dataset_i += 1
 
-        '''
-            start interation training of D network
-            D network is trained for sevrel steps when 
-            G network is trained for one time
-        '''
-        j = 0
-        while j < Diters:
-            j += 1
+        # train D network with real
+        data_iteration_indexs = np.random.choice(a = range(len(dataset)),
+                                                 size = config.gan_batchsize)
+        data_iteration = []
+        for data_iteration_index in data_iteration_indexs:
+            data_iteration += [dataset[data_iteration_index]]
+        data_iteration = np.asarray(data_iteration)
+        real_cpu = torch.FloatTensor(data_iteration[:,1,:,:,:])
+        # real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
 
-            # clamp parameters to a cube
-            for p in netD.parameters():
-                p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
+        
 
-            # next data
-            i += 1
+        netD.zero_grad()
+        batch_size = real_cpu.size(0)
 
-            # train D network with real
-            real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
+        if opt.cuda:
+            real_cpu = real_cpu.cuda()
 
-            
+        input.resize_as_(real_cpu).copy_(real_cpu)
+        inputv = Variable(input)
 
-            netD.zero_grad()
-            batch_size = real_cpu.size(0)
+        errD_real, outputD_real = netD(inputv)
+        errD_real.backward(one)
 
-            if opt.cuda:
-                real_cpu = real_cpu.cuda()
+        # output the gsa reward
+        # print(outputD_real[3,0,0,0])
 
-            input.resize_as_(real_cpu).copy_(real_cpu)
-            inputv = Variable(input)
-
-            errD_real, outputD_real = netD(inputv)
-            errD_real.backward(one)
-
-            if config.enable_gsa:
-                # output the gsa reward
-                # print(outputD_real[3,0,0,0])
-                pass
-
-            # train D network with fake
-            noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-            noisev = Variable(noise, volatile = True) # totally freeze netG
-            fake = Variable(netG(noisev).data)
-            inputv = fake
-            errD_fake, _ = netD(inputv)
-            errD_fake.backward(mone)
-            errD = errD_real - errD_fake
-            optimizerD.step()
-
-        ######################################################################
-        ####################### End of Update D network ######################
-        ######################################################################
-
-        ######################################################################
-        ########################## Update G network ##########################
-        ######################################################################
-
-        '''
-            when train G networks, paramters in p network is freezed
-            to avoid computation on grad
-            this is reset to true when training D network
-        '''
-        for p in netD.parameters():
-            p.requires_grad = False
-
-        netG.zero_grad()
-
-        '''
-            in case our last batch was the tail batch of the dataloader,
-            make sure we feed a full batch of noise
-        '''
+        # train D network with fake
         noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-        noisev = Variable(noise)
-        fake = netG(noisev)
-        errG, _ = netD(fake)
-        errG.backward(one)
-        optimizerG.step()
-
-        ######################################################################
-        ###################### End of Update G network #######################
-        ######################################################################
-
-
-        ######################################################################
-        ########################### One in dataloader ########################
-        ######################################################################
-
-        gen_iterations += 1
-        epoch += 1
-
-        '''log result'''
-        print('[epoch:%d][%d/%d][%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-            % (epoch, i, 111, gen_iterations,
-            errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
-        if gen_iterations % 500 == 0:
-            real_cpu = real_cpu.mul(0.5).add(0.5)
-            vutils.save_image(real_cpu, '{0}/real_samples.png'.format(opt.experiment))
-            fake = netG(Variable(fixed_noise, volatile=True))
-            fake.data = fake.data.mul(0.5).add(0.5)
-            vutils.save_image(fake.data, '{0}/fake_samples_{1}.png'.format(opt.experiment, gen_iterations))
-
-        ######################################################################
-        ######################### End One in dataloader ######################
-        ######################################################################
+        noisev = Variable(noise, volatile = True) # totally freeze netG
+        fake = Variable(netG(noisev).data)
+        inputv = fake
+        errD_fake, _ = netD(inputv)
+        errD_fake.backward(mone)
+        errD = errD_real - errD_fake
+        optimizerD.step()
 
     ######################################################################
-    ############################# One in epoch ###########################
+    ####################### End of Update D network ######################
     ######################################################################
 
-    '''do checkpointing'''
-    torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, epoch))
-    torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, epoch))
+    ######################################################################
+    ########################## Update G network ##########################
+    ######################################################################
+
+    '''
+        when train G networks, paramters in p network is freezed
+        to avoid computation on grad
+        this is reset to true when training D network
+    '''
+    for p in netD.parameters():
+        p.requires_grad = False
+
+    netG.zero_grad()
+
+    '''
+        in case our last batch was the tail batch of the dataloader,
+        make sure we feed a full batch of noise
+    '''
+    noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
+    noisev = Variable(noise)
+    fake = netG(noisev)
+    errG, _ = netD(fake)
+    errG.backward(one)
+    optimizerG.step()
 
     ######################################################################
-    ########################## End One in epoch ##########################
+    ###################### End of Update G network #######################
     ######################################################################
+
+
+    ######################################################################
+    ########################### One Iteration ### ########################
+    ######################################################################
+
+    '''log result'''
+    print('[iteration_i:%d][dataset_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
+        % (iteration_i, iteration_i,
+        errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+
+    '''log image result'''
+    if iteration_i % 500 == 0:
+
+        '''log real result'''
+        real_cpu = real_cpu.mul(0.5).add(0.5)
+        vutils.save_image(real_cpu, '{0}/real_samples.png'.format(opt.experiment))
+
+        '''log fake result'''
+        fake = netG(Variable(fixed_noise, volatile=True))
+        fake.data = fake.data.mul(0.5).add(0.5)
+        vutils.save_image(fake.data, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
+
+        '''do checkpointing'''
+        torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, iteration_i))
+        torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, iteration_i))
+
+    iteration_i += 1
+    ######################################################################
+    ######################### End One in Iteration  ######################
+    ######################################################################
+
+    
