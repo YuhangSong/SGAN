@@ -1,5 +1,5 @@
 num_workers = 1
-enable_gsa = False
+enable_gsa = True
 logdir = '../../result/gsa_1/test_13/'
 
 # default
