@@ -30,7 +30,7 @@ parser.add_argument('--workers', type=int, help='number of data loading workers'
 parser.add_argument('--batchSize', type=int, default=config.gan_batchsize, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=config.gan_size, help='the height / width of the input image to network')
 parser.add_argument('--nc', type=int, default=3, help='input image channels')
-parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
+parser.add_argument('--nz', type=int, default=config.gan_nz, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
 parser.add_argument('--niter', type=int, default=25, help='number of epochs to train for')
@@ -38,7 +38,7 @@ parser.add_argument('--lrD', type=float, default=0.00005, help='learning rate fo
 parser.add_argument('--lrG', type=float, default=0.00005, help='learning rate for Generator, default=0.00005')
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda'  , default=True, action='store_true', help='enables cuda')
-parser.add_argument('--ngpu'  , type=int, default=1, help='number of GPUs to use')
+parser.add_argument('--ngpu'  , type=int, default=config.gan_ngpu, help='number of GPUs to use')
 parser.add_argument('--netG', default='', help="path to netG (to continue training)")
 parser.add_argument('--netD', default='', help="path to netD (to continue training)")
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
@@ -121,7 +121,7 @@ one = torch.FloatTensor([1])
 mone = one * -1
 
 '''load dataset'''
-dataset = np.load(config.dataset_path)['dataset']
+dataset = np.load(config.dataset_path+config.dataset_name)['dataset']
 dataset_len = np.shape(dataset)[0]
 print('dataset loaded, size: ' + str(np.shape(dataset)))
 dataset = torch.FloatTensor(dataset)
@@ -304,7 +304,7 @@ while True:
         c = torch.unsqueeze(c,1)
         state_prediction_gt_one_save = torch.cat([c,c,c],1)
         # state_prediction_gt_one_save = state_prediction_gt_one_save.mul(0.5).add(0.5)
-        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples.png'.format(opt.experiment))
+        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''log perdict result'''
         state_prediction_one = state_prediction[0]
