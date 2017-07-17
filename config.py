@@ -1,6 +1,6 @@
 num_workers = 1
 enable_gsa = True
-logdir = '../../result/gmbrl_1/test_7/'
+logdir = '../../result/gmbrl_1/test_8/'
 dataset_path = '../../dataset/' + 'dataset_5.npz'
 
 # default
