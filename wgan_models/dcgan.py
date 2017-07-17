@@ -3,12 +3,25 @@ import torch.nn as nn
 import torch.nn.parallel
 
 class DCGAN_D(nn.Module):
+
+    '''
+        deep conv GAN: D
+    '''
+
     def __init__(self, isize, nz, nc, ndf, ngpu, n_extra_layers=0):
+
+        '''
+            build the model
+        '''
+
+        # basic init
         super(DCGAN_D, self).__init__()
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
+        # starting main model
         main = nn.Sequential()
+
         # input is 4 x isize x isize
         # the first 3 channels are state, the 4th channel is prediction
         main.add_module('initial.conv.{0}-{1}'.format(4, ndf),
@@ -17,6 +30,7 @@ class DCGAN_D(nn.Module):
                         nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ndf
 
+        # keep conv till
         while csize > 4:
             in_feat = cndf
             out_feat = cndf * 2
@@ -29,26 +43,49 @@ class DCGAN_D(nn.Module):
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size. K x 4 x 4
+        # state size K x 4 x 4
         main.add_module('final.{0}-{1}.conv'.format(cndf, 1),
                         nn.Conv2d(cndf, 1, 4, 1, 0, bias=False))
+
+        # main model done
         self.main = main
 
-
     def forward(self, input):
+
+        '''
+            specific return when comute forward
+        '''
+
+        # compute output according to GPU parallel
         if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
             output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
         else: 
             output = self.main(input)
+
+        # compute error
         error = output.mean(0)
+
+        # return
         return error.view(1), output
 
 class DCGAN_G(nn.Module):
+
+    '''
+        deep conv GAN: G
+    '''
+
     def __init__(self, isize, nz, nc, ngf, ngpu, n_extra_layers=0):
+
+        '''
+            build model
+        '''
+
+        # basic intialize
         super(DCGAN_G, self).__init__()
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
+        # starting main model
         main = nn.Sequential()
 
         # input is 3 x isize x isize
@@ -60,7 +97,7 @@ class DCGAN_G(nn.Module):
                                                        nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ngf
 
-        # conv
+        # conv till
         while csize > 4:
             in_feat = cndf
             out_feat = cndf * 2
@@ -73,7 +110,7 @@ class DCGAN_G(nn.Module):
             cndf = cndf * 2  
             csize = csize / 2
 
-        # conv final
+        # conv final to nz
         # state size. K x 4 x 4
         main.add_module('final.{0}-{1}.conv'.format(cndf, nz),
                         nn.Conv2d(cndf, nz, 4, 1, 0, bias=False))
@@ -84,8 +121,7 @@ class DCGAN_G(nn.Module):
             cngf = cngf * 2
             tisize = tisize * 2
 
-
-        # deconv
+        # initail deconv
         main.add_module('initial.{0}-{1}.convt'.format(nz, cngf),
                         nn.ConvTranspose2d(nz, cngf, 4, 1, 0, bias=False))
         main.add_module('initial.{0}.batchnormt'.format(cngf),
@@ -94,6 +130,7 @@ class DCGAN_G(nn.Module):
                         nn.ReLU(True))
         csize, cndf = 4, cngf
 
+        # deconv till
         while csize < isize//2:
             main.add_module('pyramid.{0}-{1}.convt'.format(cngf, cngf//2),
                             nn.ConvTranspose2d(cngf, cngf//2, 4, 2, 1, bias=False))
@@ -104,19 +141,31 @@ class DCGAN_G(nn.Module):
             cngf = cngf // 2
             csize = csize * 2
 
+        # layer for final output
         main.add_module('final.{0}-{1}.convt'.format(cngf, 1),
                         nn.ConvTranspose2d(cngf, 1, 4, 2, 1, bias=False))
         main.add_module('final.{0}.tanht'.format(1),
                         nn.Tanh())
+
+        # main model done
         self.main = main
 
     def forward(self, input):
+
+        '''
+            specific forward comute
+        '''
+
+        # compute output according to gpu parallel
         if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
             output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
         else: 
             output = self.main(input)
-        return output 
-###############################################################################
+
+        # return
+        return output
+
+
 class DCGAN_D_nobn(nn.Module):
     def __init__(self, isize, nz, nc, ndf, ngpu, n_extra_layers=0):
         super(DCGAN_D_nobn, self).__init__()
