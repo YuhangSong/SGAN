@@ -8,7 +8,7 @@ import cv2
 import copy
 import subprocess
 file = 'pong.mp4'
-dataset_file = 'dataset_pong_1.npz'
+dataset_file = 'dataset_pong_2.npz'
 dir = '../../dataset/'
 filename = dir + file
 vid = imageio.get_reader(filename,  'ffmpeg')

@@ -1,9 +1,9 @@
 num_workers = 1
 enable_gsa = True
-logdir = '../../result/gmbrl_1/test_8/'
-dataset_path = '../../dataset/' + 'dataset_5.npz'
+logdir = '../../result/gmbrl_1/test_pong_d01/'
+dataset_path = '../../dataset/' + 'dataset_pong_d01.npz'
 
 # default
-gan_predict_interval = 0.5
+gan_predict_interval = 0.1
 gan_size = 64
 gan_batchsize = 64

@@ -133,6 +133,8 @@ if opt.cuda:
     inputd = inputd.cuda()
     inputg = inputg.cuda()
     one, mone = one.cuda(), mone.cuda()
+
+    # index select and random_ is not supported for cuda
     # dataset = dataset.cuda()
     # dataset_sampler_indexs = dataset_sampler_indexs.cuda()
 
@@ -304,7 +306,7 @@ while True:
         c = torch.unsqueeze(c,1)
         state_prediction_gt_one_save = torch.cat([c,c,c],1)
         # state_prediction_gt_one_save = state_prediction_gt_one_save.mul(0.5).add(0.5)
-        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples.png'.format(opt.experiment))
+        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''log perdict result'''
         state_prediction_one = state_prediction[0]
