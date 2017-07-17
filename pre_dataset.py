@@ -31,17 +31,21 @@ for step in range(0, num_step):
     c = []
     for color in range(3):
         temp = np.asarray(cv2.resize(image[:,:,color], (config.gan_size, config.gan_size)))
+        temp = np.expand_dims(temp,0)
         c += [copy.deepcopy(temp)]
 
-    image = np.asarray(np.add(c[0]*0.299,c[1]*0.587))
-    image = np.asarray(np.add(image,c[2]*0.114))
+    if config.gan_nc is 1:
+        image = np.asarray(np.add(c[0]*0.299,c[1]*0.587))
+        image = np.asarray(np.add(image,c[2]*0.114))
+    elif config.gan_nc is 3:
+        image = np.concatenate((c[0],c[1],c[2]),0)
 
     print 'video>'+str(file)+'\t'+'step>'+str(step)+'\t'+'size>'+str(np.shape(image))
     
     if last_image is None or llast_image is None or lllast_image is None:
         pass
     else:
-        pair = np.asarray([lllast_image,llast_image,last_image,image])
+        pair = [lllast_image,llast_image,last_image,image]
         dataset += [copy.deepcopy(np.asarray(pair))]
 
     lllast_image = copy.deepcopy(llast_image)
