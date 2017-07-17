@@ -7,8 +7,8 @@ import config
 import cv2
 import copy
 import subprocess
-file = 'A380.mp4'
-dataset_file = 'dataset_5.npz'
+file = 'pong.mp4'
+dataset_file = 'dataset_pong_1.npz'
 dir = '../../dataset/'
 filename = dir + file
 vid = imageio.get_reader(filename,  'ffmpeg')
