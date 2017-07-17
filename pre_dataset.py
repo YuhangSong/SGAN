@@ -8,7 +8,7 @@ import cv2
 import copy
 import subprocess
 file = 'A380.mp4'
-dataset_file = 'dataset_4.npz'
+dataset_file = 'dataset_5.npz'
 dir = '../../dataset/'
 filename = dir + file
 vid = imageio.get_reader(filename,  'ffmpeg')
@@ -18,6 +18,8 @@ size = info['size']
 print info
 num_step = int(info['duration']/config.gan_predict_interval)
 frame_per_step = num_frame / num_step
+lllast_image = None
+llast_image = None
 last_image = None
 dataset = []
 for step in range(0, num_step):
@@ -29,23 +31,22 @@ for step in range(0, num_step):
     c = []
     for color in range(3):
         temp = np.asarray(cv2.resize(image[:,:,color], (config.gan_size, config.gan_size)))
-        temp = np.asarray(np.reshape(temp, (config.gan_size, config.gan_size, 1)))
         c += [copy.deepcopy(temp)]
 
-    image = np.asarray(np.concatenate(c, axis=2))
-    image = np.transpose(image, (2, 0, 1))
+    image = np.asarray(np.add(c[0]*0.299,c[1]*0.587))
+    image = np.asarray(np.add(image,c[2]*0.114))
 
     print 'video>'+str(file)+'\t'+'step>'+str(step)+'\t'+'size>'+str(np.shape(image))
-
-    if last_image is None:
-        last_image = copy.deepcopy(image)
-        continue
+    
+    if last_image is None or llast_image is None or lllast_image is None:
+        pass
     else:
-        pair = np.asarray([last_image,image])
-
-        last_image = copy.deepcopy(image)
-
+        pair = np.asarray([lllast_image,llast_image,last_image,image])
         dataset += [copy.deepcopy(np.asarray(pair))]
+
+    lllast_image = copy.deepcopy(llast_image)
+    llast_image = copy.deepcopy(last_image)
+    last_image = copy.deepcopy(image)
 
 dataset = np.asarray(dataset)
 
