@@ -114,18 +114,18 @@ if opt.netD != '':
     netD.load_state_dict(torch.load(opt.netD))
 print(netD)
 
-input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
-noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
-fixed_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
+inputd = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
+inputd_real_part = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
+inputg = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
 one = torch.FloatTensor([1])
 mone = one * -1
 
 if opt.cuda:
     netD.cuda()
     netG.cuda()
-    input = input.cuda()
+    inputd = inputd.cuda()
+    inputg = inputg.cuda()
     one, mone = one.cuda(), mone.cuda()
-    noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
 
 # setup optimizer
 if opt.adam:
@@ -189,39 +189,60 @@ while True:
         # next dataset
         dataset_i += 1
 
-        # train D network with real
+        ######## train D network with real #######
+
+        ## data ##
         data_iteration_indexs = np.random.choice(a = range(len(dataset)),
                                                  size = config.gan_batchsize)
         data_iteration = []
         for data_iteration_index in data_iteration_indexs:
             data_iteration += [dataset[data_iteration_index]]
         data_iteration = np.asarray(data_iteration)
-        real_cpu = torch.FloatTensor(data_iteration[:,1,:,:,:])
-        # real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
 
-        
-
-        netD.zero_grad()
-        batch_size = real_cpu.size(0)
-
+        ## processed data ##
+        state_prediction_gt = torch.FloatTensor(data_iteration)
         if opt.cuda:
-            real_cpu = real_cpu.cuda()
+            state_prediction_gt = state_prediction_gt.cuda()
+        state = state_prediction_gt.narrow(1,0,3)
+        prediction_gt = state_prediction_gt.narrow(1,3,1)
 
-        input.resize_as_(real_cpu).copy_(real_cpu)
-        inputv = Variable(input)
+        ######### train D with real ########
 
-        errD_real, outputD_real = netD(inputv)
+        # reset grandient
+        netD.zero_grad()
+
+        # feed
+        inputd.resize_as_(state_prediction_gt).copy_(state_prediction_gt)
+        inputdv = Variable(inputd)
+
+        # compute
+        errD_real, outputD_real = netD(inputdv)
         errD_real.backward(one)
 
-        # output the gsa reward
-        # print(outputD_real[3,0,0,0])
+        # reset gradient
+        netD.zero_grad()
 
-        # train D network with fake
-        noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-        noisev = Variable(noise, volatile = True) # totally freeze netG
-        fake = Variable(netG(noisev).data)
-        inputv = fake
-        errD_fake, _ = netD(inputv)
+        ########### get fake #############
+
+        # feed
+        inputg.resize_as_(state).copy_(state)
+        inputgv = Variable(inputg, volatile = True) # totally freeze netG
+
+        # compute
+        prediction = netG(inputgv)
+        prediction = prediction.data
+        
+        ############ train D with fake ###########
+
+        # get state_prediction
+        state_prediction = torch.cat([state, prediction], 1)
+
+        # feed
+        inputd.resize_as_(state_prediction).copy_(state_prediction)
+        inputdv = Variable(inputd)
+
+        # compute
+        errD_fake, _ = netD(inputdv)
         errD_fake.backward(mone)
         errD = errD_real - errD_fake
         optimizerD.step()
@@ -242,16 +263,24 @@ while True:
     for p in netD.parameters():
         p.requires_grad = False
 
+    # reset grandient
     netG.zero_grad()
 
-    '''
-        in case our last batch was the tail batch of the dataloader,
-        make sure we feed a full batch of noise
-    '''
-    noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-    noisev = Variable(noise)
-    fake = netG(noisev)
-    errG, _ = netD(fake)
+    # feed
+    inputg.resize_as_(state).copy_(state)
+    inputgv = Variable(inputg)
+
+    # compute
+    prediction = netG(inputgv)
+
+    # get state_prediction, this is a verible cat 
+    state_predictionv = torch.cat([Variable(state), prediction], 1)
+
+    # feed, this state_predictionv is Variable
+    inputdv = state_predictionv
+
+    # compute
+    errG, _ = netD(inputdv)
     errG.backward(one)
     optimizerG.step()
 
@@ -273,13 +302,20 @@ while True:
     if iteration_i % 500 == 0:
 
         '''log real result'''
-        real_cpu = real_cpu.mul(0.5).add(0.5)
-        vutils.save_image(real_cpu, '{0}/real_samples.png'.format(opt.experiment))
+        state_prediction_gt_one = state_prediction_gt[0]
+        c = state_prediction_gt_one / 3.0
+        c = torch.unsqueeze(c,1)
+        state_prediction_gt_one_save = torch.cat([c,c,c],1)
+        state_prediction_gt_one_save = state_prediction_gt_one_save.mul(0.5).add(0.5)
+        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples.png'.format(opt.experiment))
 
-        '''log fake result'''
-        fake = netG(Variable(fixed_noise, volatile=True))
-        fake.data = fake.data.mul(0.5).add(0.5)
-        vutils.save_image(fake.data, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
+        '''log perdict result'''
+        state_prediction_one = state_prediction[0]
+        c = state_prediction_one / 3.0
+        c = torch.unsqueeze(c,1)
+        state_prediction_one_save = torch.cat([c,c,c],1)
+        state_prediction_one_save = state_prediction_one_save.mul(0.5).add(0.5)
+        vutils.save_image(state_prediction_one_save, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
         torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, iteration_i))
