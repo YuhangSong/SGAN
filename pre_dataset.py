@@ -7,9 +7,9 @@ import config
 import cv2
 import copy
 import subprocess
-file = '3DPinball_1.mp4'
-dataset_file = 'dataset_pong_02.npz'
-dir = '../../dataset/'
+file = config.video_name
+dataset_file = config.dataset_name
+dir = config.dataset_path
 filename = dir + file
 vid = imageio.get_reader(filename,  'ffmpeg')
 info = vid.get_meta_data()
