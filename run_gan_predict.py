@@ -29,7 +29,7 @@ parser.add_argument('--dataroot', default='../../dataset', help='path to dataset
 parser.add_argument('--workers', type=int, help='number of data loading workers', default=16)
 parser.add_argument('--batchSize', type=int, default=config.gan_batchsize, help='input batch size')
 parser.add_argument('--imageSize', type=int, default=config.gan_size, help='the height / width of the input image to network')
-parser.add_argument('--nc', type=int, default=3, help='input image channels')
+parser.add_argument('--nc', type=int, default=config.gan_nc, help='input image channels')
 parser.add_argument('--nz', type=int, default=config.gan_nz, help='size of the latent z vector')
 parser.add_argument('--ngf', type=int, default=64)
 parser.add_argument('--ndf', type=int, default=64)
@@ -196,11 +196,16 @@ while True:
         ######## train D network with real #######
 
         ## random sample from dataset ##
-        state_prediction_gt = torch.index_select(dataset,0,dataset_sampler_indexs.random_(0,opt.batchSize))
+        raw = torch.index_select(dataset,0,dataset_sampler_indexs.random_(0,opt.batchSize))
+        image = [] 
+        for image_i in range(4):
+            image += [raw.narrow(1,image_i,1)]
+        state_prediction_gt = torch.cat(image,2)
+        state_prediction_gt = torch.squeeze(state_prediction_gt,1)
         if opt.cuda:
             state_prediction_gt = state_prediction_gt.cuda()
-        state = state_prediction_gt.narrow(1,0,3)
-        prediction_gt = state_prediction_gt.narrow(1,3,1)
+        state = state_prediction_gt.narrow(1,0*nc,3*nc)
+        prediction_gt = state_prediction_gt.narrow(1,3*nc,1*nc)
 
         ######### train D with real ########
 
@@ -296,23 +301,28 @@ while True:
         errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
 
     '''log image result'''
-    if iteration_i % 500 == 0:
+    if iteration_i % 100 == 0:
+
+        '''function need for log image'''
+        def sample2image(sample):
+            if config.gan_nc is 1:
+                c = sample / 3.0
+                c = torch.unsqueeze(c,1)
+                save = torch.cat([c,c,c],1)
+            elif config.gan_nc is 3:
+                save = []
+                for image_i in range(4):
+                    save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
+                save = torch.cat(save,0)
+            
+            # save = save.mul(0.5).add(0.5)
+            return save
 
         '''log real result'''
-        state_prediction_gt_one = state_prediction_gt[0]
-        c = state_prediction_gt_one / 3.0
-        c = torch.unsqueeze(c,1)
-        state_prediction_gt_one_save = torch.cat([c,c,c],1)
-        # state_prediction_gt_one_save = state_prediction_gt_one_save.mul(0.5).add(0.5)
-        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples_{1}.png'.format(opt.experiment, iteration_i))
+        vutils.save_image(sample2image(state_prediction_gt[0]), '{0}/real_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''log perdict result'''
-        state_prediction_one = state_prediction[0]
-        c = state_prediction_one / 3.0
-        c = torch.unsqueeze(c,1)
-        state_prediction_one_save = torch.cat([c,c,c],1)
-        # state_prediction_one_save = state_prediction_one_save.mul(0.5).add(0.5)
-        vutils.save_image(state_prediction_one_save, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
+        vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
         torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, iteration_i))

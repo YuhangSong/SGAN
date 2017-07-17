@@ -22,10 +22,10 @@ class DCGAN_D(nn.Module):
         # starting main model
         main = nn.Sequential()
 
-        # input is 4 x isize x isize
-        # the first 3 channels are state, the 4th channel is prediction
-        main.add_module('initial.conv.{0}-{1}'.format(4, ndf),
-                        nn.Conv2d(4, ndf, 4, 2, 1, bias=False))
+        # input is (4*nc) x isize x isize
+        # the first (3*nc) channels are state, the 4th nc channel is prediction
+        main.add_module('initial.conv.{0}-{1}'.format(4*nc, ndf),
+                        nn.Conv2d(4*nc, ndf, 4, 2, 1, bias=False))
         main.add_module('initial.relu.{0}'.format(ndf),
                         nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ndf
@@ -88,11 +88,11 @@ class DCGAN_G(nn.Module):
         # starting main model
         main = nn.Sequential()
 
-        # input is 3 x isize x isize
+        # input is (3*nc) x isize x isize
         # which is 3 sequential states
         # initial conv
-        main.add_module('initial.conv.{0}-{1}'.format(3, ngf),
-                                               nn.Conv2d(3, ngf, 4, 2, 1, bias=False))
+        main.add_module('initial.conv.{0}-{1}'.format(3*nc, ngf),
+                                               nn.Conv2d(3*nc, ngf, 4, 2, 1, bias=False))
         main.add_module('initial.relu.{0}'.format(ngf),
                                                        nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ngf
@@ -142,9 +142,9 @@ class DCGAN_G(nn.Module):
             csize = csize * 2
 
         # layer for final output
-        main.add_module('final.{0}-{1}.convt'.format(cngf, 1),
-                        nn.ConvTranspose2d(cngf, 1, 4, 2, 1, bias=False))
-        main.add_module('final.{0}.tanht'.format(1),
+        main.add_module('final.{0}-{1}.convt'.format(cngf, nc),
+                        nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
+        main.add_module('final.{0}.tanht'.format(nc),
                         nn.Tanh())
 
         # main model done
