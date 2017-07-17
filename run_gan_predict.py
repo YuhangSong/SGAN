@@ -58,7 +58,7 @@ subprocess.call(["mkdir", "-p", opt.experiment])
 # Where to store samples and models
 if opt.experiment is None:
     opt.experiment = 'samples'
-os.system('mkdir {0}'.format(opt.experiment))
+os.system('mkdir {0}F)'.format(opt.experiment))
 
 # random seed for
 opt.manualSeed = random.randint(1, 10000) # fix seed
@@ -114,18 +114,27 @@ if opt.netD != '':
     netD.load_state_dict(torch.load(opt.netD))
 print(netD)
 
-input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
-noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
-fixed_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
+inputd = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
+inputd_real_part = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
+inputg = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
 one = torch.FloatTensor([1])
 mone = one * -1
+
+'''load dataset'''
+dataset = np.load(config.dataset_path)['dataset']
+dataset_len = np.shape(dataset)[0]
+print('dataset loaded, size: ' + str(np.shape(dataset)))
+dataset = torch.FloatTensor(dataset)
+dataset_sampler_indexs = torch.LongTensor(opt.batchSize).random_(0,dataset_len)
 
 if opt.cuda:
     netD.cuda()
     netG.cuda()
-    input = input.cuda()
+    inputd = inputd.cuda()
+    inputg = inputg.cuda()
     one, mone = one.cuda(), mone.cuda()
-    noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
+    # dataset = dataset.cuda()
+    # dataset_sampler_indexs = dataset_sampler_indexs.cuda()
 
 # setup optimizer
 if opt.adam:
@@ -134,11 +143,6 @@ if opt.adam:
 else:
     optimizerD = optim.RMSprop(netD.parameters(), lr = opt.lrD)
     optimizerG = optim.RMSprop(netG.parameters(), lr = opt.lrG)
-
-'''load dataset'''
-dataset = np.load(config.dataset_path)['dataset']
-print('dataset loaded, size: ' + str(np.shape(dataset)))
-dataset = dataset.tolist() # convert to list so that it is easily sampled
 
 iteration_i = 0
 dataset_i = 0
@@ -189,40 +193,52 @@ while True:
         # next dataset
         dataset_i += 1
 
-        # train D network with real
-        data_iteration_indexs = np.random.choice(a = range(len(dataset)),
-                                                 size = config.gan_batchsize)
-        data_iteration = []
-        for data_iteration_index in data_iteration_indexs:
-            data_iteration += [dataset[data_iteration_index]]
-        data_iteration = np.asarray(data_iteration)
-        real_cpu = torch.FloatTensor(data_iteration[:,1,:,:,:])
-        # real_cpu = torch.FloatTensor(np.ones((64,3,64,64)))
+        ######## train D network with real #######
 
-        
-
-        netD.zero_grad()
-        batch_size = real_cpu.size(0)
-
+        ## random sample from dataset ##
+        state_prediction_gt = torch.index_select(dataset,0,dataset_sampler_indexs.random_(0,opt.batchSize))
         if opt.cuda:
-            real_cpu = real_cpu.cuda()
+            state_prediction_gt = state_prediction_gt.cuda()
+        state = state_prediction_gt.narrow(1,0,3)
+        prediction_gt = state_prediction_gt.narrow(1,3,1)
 
-        input.resize_as_(real_cpu).copy_(real_cpu)
-        inputv = Variable(input)
+        ######### train D with real ########
 
-        errD_real, outputD_real = netD(inputv)
+        # reset grandient
+        netD.zero_grad()
+
+        # feed
+        inputd.resize_as_(state_prediction_gt).copy_(state_prediction_gt)
+        inputdv = Variable(inputd)
+
+        # compute
+        errD_real, outputD_real = netD(inputdv)
         errD_real.backward(one)
 
-        # output the gsa reward
-        # print(outputD_real[3,0,0,0])
+        ########### get fake #############
 
-        # train D network with fake
-        noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-        noisev = Variable(noise, volatile = True) # totally freeze netG
-        fake = Variable(netG(noisev).data)
-        inputv = fake
-        errD_fake, _ = netD(inputv)
+        # feed
+        inputg.resize_as_(state).copy_(state)
+        inputgv = Variable(inputg, volatile = True) # totally freeze netG
+
+        # compute
+        prediction = netG(inputgv)
+        prediction = prediction.data
+        
+        ############ train D with fake ###########
+
+        # get state_prediction
+        state_prediction = torch.cat([state, prediction], 1)
+
+        # feed
+        inputd.resize_as_(state_prediction).copy_(state_prediction)
+        inputdv = Variable(inputd)
+
+        # compute
+        errD_fake, outputD_fake = netD(inputdv)
         errD_fake.backward(mone)
+
+        # optmize
         errD = errD_real - errD_fake
         optimizerD.step()
 
@@ -242,17 +258,27 @@ while True:
     for p in netD.parameters():
         p.requires_grad = False
 
+    # reset grandient
     netG.zero_grad()
 
-    '''
-        in case our last batch was the tail batch of the dataloader,
-        make sure we feed a full batch of noise
-    '''
-    noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
-    noisev = Variable(noise)
-    fake = netG(noisev)
-    errG, _ = netD(fake)
+    # feed
+    inputg.resize_as_(state).copy_(state)
+    inputgv = Variable(inputg)
+
+    # compute
+    prediction = netG(inputgv)
+
+    # get state_predictionv, this is a Variable cat 
+    state_predictionv = torch.cat([Variable(state), prediction], 1)
+
+    # feed, this state_predictionv is Variable
+    inputdv = state_predictionv
+
+    # compute
+    errG, _ = netD(inputdv)
     errG.backward(one)
+
+    # optmize
     optimizerG.step()
 
     ######################################################################
@@ -273,13 +299,20 @@ while True:
     if iteration_i % 500 == 0:
 
         '''log real result'''
-        real_cpu = real_cpu.mul(0.5).add(0.5)
-        vutils.save_image(real_cpu, '{0}/real_samples.png'.format(opt.experiment))
+        state_prediction_gt_one = state_prediction_gt[0]
+        c = state_prediction_gt_one / 3.0
+        c = torch.unsqueeze(c,1)
+        state_prediction_gt_one_save = torch.cat([c,c,c],1)
+        # state_prediction_gt_one_save = state_prediction_gt_one_save.mul(0.5).add(0.5)
+        vutils.save_image(state_prediction_gt_one_save, '{0}/real_samples.png'.format(opt.experiment))
 
-        '''log fake result'''
-        fake = netG(Variable(fixed_noise, volatile=True))
-        fake.data = fake.data.mul(0.5).add(0.5)
-        vutils.save_image(fake.data, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
+        '''log perdict result'''
+        state_prediction_one = state_prediction[0]
+        c = state_prediction_one / 3.0
+        c = torch.unsqueeze(c,1)
+        state_prediction_one_save = torch.cat([c,c,c],1)
+        # state_prediction_one_save = state_prediction_one_save.mul(0.5).add(0.5)
+        vutils.save_image(state_prediction_one_save, '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
         torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, iteration_i))
