@@ -39,9 +39,9 @@ parser.add_argument('--lrG', type=float, default=0.00005, help='learning rate fo
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda'  , default=True, action='store_true', help='enables cuda')
 parser.add_argument('--ngpu'  , type=int, default=config.gan_ngpu, help='number of GPUs to use')
-parser.add_argument('--netG_Cv', default=config.logdir+'netG_Cv.pth', help="path to netG_Cv (to continue training)")
-parser.add_argument('--netG_DeCv', default=config.logdir+'netG_DeCv.pth', help="path to netG_DeCv (to continue training)")
-parser.add_argument('--netD', default=config.logdir+'netD.pth', help="path to netD (to continue training)")
+parser.add_argument('--netG_Cv', default=config.modeldir+'netG_Cv.pth', help="path to netG_Cv (to continue training)")
+parser.add_argument('--netG_DeCv', default=config.modeldir+'netG_DeCv.pth', help="path to netG_DeCv (to continue training)")
+parser.add_argument('--netD', default=config.modeldir+'netD.pth', help="path to netD (to continue training)")
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
 parser.add_argument('--clamp_upper', type=float, default=0.01)
 parser.add_argument('--Diters', type=int, default=5, help='number of D iters per each G iter')
@@ -54,12 +54,8 @@ parser.add_argument('--adam', action='store_true', help='Whether to use adam (de
 opt = parser.parse_args()
 print(opt)
 
-subprocess.call(["mkdir", "-p", opt.experiment])
-
-# Where to store samples and models
-if opt.experiment is None:
-    opt.experiment = 'samples'
-os.system('mkdir {0}F)'.format(opt.experiment))
+subprocess.call(["mkdir", "-p", config.logdir])
+subprocess.call(["mkdir", "-p", config.modeldir])
 
 # random seed for
 opt.manualSeed = random.randint(1, 10000) # fix seed
@@ -358,9 +354,9 @@ while True:
         vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
-        torch.save(netG_Cv.state_dict(), '{0}/netG_Cv.pth'.format(opt.experiment))
-        torch.save(netG_DeCv.state_dict(), '{0}/netG_DeCv.pth'.format(opt.experiment))
-        torch.save(netD.state_dict(), '{0}/netD.pth'.format(opt.experiment))
+        torch.save(netG_Cv.state_dict(), '{0}/{1}/netG_Cv.pth'.format(opt.experiment,config.gan_model_name_))
+        torch.save(netG_DeCv.state_dict(), '{0}/{1}/netG_DeCv.pth'.format(opt.experiment,config.gan_model_name_))
+        torch.save(netD.state_dict(), '{0}/{1}/netD.pth'.format(opt.experiment,config.gan_model_name_))
 
     iteration_i += 1
     ######################################################################
