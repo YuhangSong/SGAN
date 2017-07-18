@@ -1,7 +1,7 @@
 num_workers = 1
 enable_gsa = True
 
-logdir = '../../result/gmbrl_1/3DPinball_1_d01_c128_nz256_nc3_ng_4/'
+logdir = '../../result/gmbrl_1/3DPinball_1_d01_c128_nz256_nc3_ng_dct4_gctc8_gctd4_1/'
 dataset_path = '../../dataset/'
 dataset_name = '3DPinball_1_d01_c128_nc3.npz'
 video_name = '3DPinball_1.mp4'
@@ -13,3 +13,6 @@ gan_batchsize = 64
 gan_nz = 256
 gan_ngpu = 2
 gan_nc = 3
+gan_dct = 4
+gan_gctc = 8
+gan_gctd = 4
