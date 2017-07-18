@@ -39,7 +39,8 @@ parser.add_argument('--lrG', type=float, default=0.00005, help='learning rate fo
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda'  , default=True, action='store_true', help='enables cuda')
 parser.add_argument('--ngpu'  , type=int, default=config.gan_ngpu, help='number of GPUs to use')
-parser.add_argument('--netG', default='', help="path to netG (to continue training)")
+parser.add_argument('--netG_Cv', default='', help="path to netG_Cv (to continue training)")
+parser.add_argument('--netG_DeCv', default='', help="path to netG_DeCv (to continue training)")
 parser.add_argument('--netD', default='', help="path to netD (to continue training)")
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
 parser.add_argument('--clamp_upper', type=float, default=0.01)
@@ -88,26 +89,23 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 '''create netG'''
-if opt.noBN:
-    netG = dcgan.DCGAN_G_nobn(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
-elif opt.mlp_G:
-    netG = mlp.MLP_G(opt.imageSize, nz, nc, ngf, ngpu)
-else:
-    # in the paper. this is the best implementation
-    netG = dcgan.DCGAN_G(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
+netG_Cv = dcgan.DCGAN_G_Cv(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
+netG_DeCv = dcgan.DCGAN_G_DeCv(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
 
-netG.apply(weights_init)
+netG_Cv.apply(weights_init)
+netG_DeCv.apply(weights_init)
 
 # load checkpoint if needed
-if opt.netG != '':
-    netG.load_state_dict(torch.load(opt.netG))
-print(netG)
+if opt.netG_Cv != '':
+    netG_Cv.load_state_dict(torch.load(opt.netG_Cv))
+print(netG_Cv)
 
-if opt.mlp_D:
-    netD = mlp.MLP_D(opt.imageSize, nz, nc, ndf, ngpu)
-else:
-    netD = dcgan.DCGAN_D(opt.imageSize, nz, nc, ndf, ngpu, n_extra_layers)
-    netD.apply(weights_init)
+if opt.netG_DeCv != '':
+    netG_DeCv.load_state_dict(torch.load(opt.netG_DeCv))
+print(netG_DeCv)
+
+netD = dcgan.DCGAN_D(opt.imageSize, nz, nc, ndf, ngpu, n_extra_layers)
+netD.apply(weights_init)
 
 # load checkpoint if needed
 if opt.netD != '':
@@ -117,6 +115,8 @@ print(netD)
 inputd = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
 inputd_real_part = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
 inputg = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
+noise = torch.FloatTensor(opt.batchSize, nz, 1, 1)
+fixed_noise = torch.FloatTensor(opt.batchSize, nz, 1, 1).normal_(0, 1)
 one = torch.FloatTensor([1])
 mone = one * -1
 
@@ -129,10 +129,12 @@ dataset_sampler_indexs = torch.LongTensor(opt.batchSize).random_(0,dataset_len)
 
 if opt.cuda:
     netD.cuda()
-    netG.cuda()
+    netG_Cv.cuda()
+    netG_DeCv.cuda()
     inputd = inputd.cuda()
     inputg = inputg.cuda()
     one, mone = one.cuda(), mone.cuda()
+    noise, fixed_noise = noise.cuda(), fixed_noise.cuda()
     # dataset = dataset.cuda()
     # dataset_sampler_indexs = dataset_sampler_indexs.cuda()
 
@@ -142,7 +144,8 @@ if opt.adam:
     optimizerG = optim.Adam(netG.parameters(), lr=opt.lrG, betas=(opt.beta1, 0.999))
 else:
     optimizerD = optim.RMSprop(netD.parameters(), lr = opt.lrD)
-    optimizerG = optim.RMSprop(netG.parameters(), lr = opt.lrG)
+    optimizerG_Cv = optim.RMSprop(netG_Cv.parameters(), lr = opt.lrG)
+    optimizerG_DeCv = optim.RMSprop(netG_DeCv.parameters(), lr = opt.lrG)
 
 iteration_i = 0
 dataset_i = 0
@@ -226,8 +229,18 @@ while True:
         inputg.resize_as_(state).copy_(state)
         inputgv = Variable(inputg, volatile = True) # totally freeze netG
 
-        # compute
-        prediction = netG(inputgv)
+        # compute encoded
+        encodedv = netG_Cv(inputgv)
+
+        # compute noise
+        noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
+        noisev = Variable(noise, volatile = True) # totally freeze netG
+
+        # concate encodedv and noisev
+        encodedv_noisev = torch.cat([encodedv,noisev],1)
+
+        # predict
+        prediction = netG_DeCv(encodedv_noisev)
         prediction = prediction.data
         
         ############ train D with fake ###########
@@ -264,27 +277,39 @@ while True:
         p.requires_grad = False
 
     # reset grandient
-    netG.zero_grad()
+    netG_Cv.zero_grad()
+    netG_DeCv.zero_grad()
 
     # feed
     inputg.resize_as_(state).copy_(state)
     inputgv = Variable(inputg)
 
-    # compute
-    prediction = netG(inputgv)
+    # compute encodedv
+    encodedv = netG_Cv(inputgv)
+
+    # compute noisev
+    noise.resize_(opt.batchSize, nz, 1, 1).normal_(0, 1)
+    noisev = Variable(noise)
+
+    # concate encodedv and noisev
+    encodedv_noisev = torch.cat([encodedv,noisev],1)
+
+    # predict
+    prediction = netG_DeCv(encodedv_noisev)
 
     # get state_predictionv, this is a Variable cat 
-    state_predictionv = torch.cat([Variable(state), prediction], 1)
+    statev_predictionv = torch.cat([Variable(state), prediction], 1)
 
     # feed, this state_predictionv is Variable
-    inputdv = state_predictionv
+    inputdv = statev_predictionv
 
     # compute
     errG, _ = netD(inputdv)
     errG.backward(one)
 
     # optmize
-    optimizerG.step()
+    optimizerG_Cv.step()
+    optimizerG_DeCv.step()
 
     ######################################################################
     ###################### End of Update G network #######################
@@ -325,7 +350,8 @@ while True:
         vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
-        torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, iteration_i))
+        torch.save(netG_Cv.state_dict(), '{0}/netG_Cv_epoch_{1}.pth'.format(opt.experiment, iteration_i))
+        torch.save(netG_DeCv.state_dict(), '{0}/netG_DeCv_epoch_{1}.pth'.format(opt.experiment, iteration_i))
         torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, iteration_i))
 
     iteration_i += 1

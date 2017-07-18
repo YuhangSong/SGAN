@@ -68,7 +68,7 @@ class DCGAN_D(nn.Module):
         # return
         return error.view(1), output
 
-class DCGAN_G(nn.Module):
+class DCGAN_G_Cv(nn.Module):
 
     '''
         deep conv GAN: G
@@ -81,7 +81,7 @@ class DCGAN_G(nn.Module):
         '''
 
         # basic intialize
-        super(DCGAN_G, self).__init__()
+        super(DCGAN_G_Cv, self).__init__()
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
@@ -91,9 +91,9 @@ class DCGAN_G(nn.Module):
         # input is (3*nc) x isize x isize
         # which is 3 sequential states
         # initial conv
-        main.add_module('initial.conv.{0}-{1}'.format(3*nc, ngf),
+        main.add_module('initial.conv_gc.{0}-{1}'.format(3*nc, ngf),
                                                nn.Conv2d(3*nc, ngf, 4, 2, 1, bias=False))
-        main.add_module('initial.relu.{0}'.format(ngf),
+        main.add_module('initial.relu_gc.{0}'.format(ngf),
                                                        nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ngf
 
@@ -101,19 +101,57 @@ class DCGAN_G(nn.Module):
         while csize > 4:
             in_feat = cndf
             out_feat = cndf * 2
-            main.add_module('pyramid.{0}-{1}.conv'.format(in_feat, out_feat),
+            main.add_module('pyramid.{0}-{1}.conv_gc'.format(in_feat, out_feat),
                             nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
-            main.add_module('pyramid.{0}.batchnorm'.format(out_feat),
+            main.add_module('pyramid.{0}.batchnorm_gc'.format(out_feat),
                             nn.BatchNorm2d(out_feat))
-            main.add_module('pyramid.{0}.relu'.format(out_feat),
+            main.add_module('pyramid.{0}.relu_gc'.format(out_feat),
                             nn.LeakyReLU(0.2, inplace=True))
             cndf = cndf * 2  
             csize = csize / 2
 
         # conv final to nz
         # state size. K x 4 x 4
-        main.add_module('final.{0}-{1}.conv'.format(cndf, nz),
+        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
                         nn.Conv2d(cndf, nz, 4, 1, 0, bias=False))
+
+        # main model done
+        self.main = main
+
+    def forward(self, input):
+
+        '''
+            specific forward comute
+        '''
+
+        # compute output according to gpu parallel
+        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        else: 
+            output = self.main(input)
+
+        # return
+        return output
+
+class DCGAN_G_DeCv(nn.Module):
+
+    '''
+        deep conv GAN: G
+    '''
+
+    def __init__(self, isize, nz, nc, ngf, ngpu, n_extra_layers=0):
+
+        '''
+            build model
+        '''
+
+        # basic intialize
+        super(DCGAN_G_DeCv, self).__init__()
+        self.ngpu = ngpu
+        assert isize % 16 == 0, "isize has to be a multiple of 16"
+
+        # starting main model
+        main = nn.Sequential()
 
         # compute initial cngf for deconv
         cngf, tisize = ngf//2, 4
@@ -122,29 +160,29 @@ class DCGAN_G(nn.Module):
             tisize = tisize * 2
 
         # initail deconv
-        main.add_module('initial.{0}-{1}.convt'.format(nz, cngf),
-                        nn.ConvTranspose2d(nz, cngf, 4, 1, 0, bias=False))
-        main.add_module('initial.{0}.batchnormt'.format(cngf),
+        main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2, cngf),
+                        nn.ConvTranspose2d(nz*2, cngf, 4, 1, 0, bias=False))
+        main.add_module('initial.{0}.batchnorm_gd'.format(cngf),
                         nn.BatchNorm2d(cngf))
-        main.add_module('initial.{0}.relut'.format(cngf),
+        main.add_module('initial.{0}.relu_gd'.format(cngf),
                         nn.ReLU(True))
         csize, cndf = 4, cngf
 
         # deconv till
         while csize < isize//2:
-            main.add_module('pyramid.{0}-{1}.convt'.format(cngf, cngf//2),
+            main.add_module('pyramid.{0}-{1}.conv_gd'.format(cngf, cngf//2),
                             nn.ConvTranspose2d(cngf, cngf//2, 4, 2, 1, bias=False))
-            main.add_module('pyramid.{0}.batchnormt'.format(cngf//2),
+            main.add_module('pyramid.{0}.batchnorm_gd'.format(cngf//2),
                             nn.BatchNorm2d(cngf//2))
-            main.add_module('pyramid.{0}.relut'.format(cngf//2),
+            main.add_module('pyramid.{0}.relu_gd'.format(cngf//2),
                             nn.ReLU(True))
             cngf = cngf // 2
             csize = csize * 2
 
         # layer for final output
-        main.add_module('final.{0}-{1}.convt'.format(cngf, nc),
+        main.add_module('final.{0}-{1}.conv_gd'.format(cngf, nc),
                         nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
-        main.add_module('final.{0}.tanht'.format(nc),
+        main.add_module('final.{0}.tanh_gd'.format(nc),
                         nn.Tanh())
 
         # main model done
