@@ -11,7 +11,7 @@ parser.add_argument('-r', '--remotes', default=None,
                          'rewarders to use (e.g. -r vnc://localhost:5900+15900,vnc://localhost:5901+15901).')
 parser.add_argument('-e', '--env-id', type=str, default="PongDeterministic-v3",
                     help="Environment id")
-parser.add_argument('-l', '--log-dir', type=str, default="../../result/grl_1/pong_1",
+parser.add_argument('-l', '--log-dir', type=str, default="../../result/grl_1/grid_3",
                     help="Log directory path")
 parser.add_argument('-n', '--dry-run', action='store_true',
                     help="Print out commands rather than executing them")

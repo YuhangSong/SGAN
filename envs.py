@@ -10,6 +10,10 @@ from universe.wrappers import BlockingReset, GymCoreAction, EpisodeID, Unvectori
 from universe import spaces as vnc_spaces
 from universe.spaces.vnc_event import keycode
 import time
+import config
+import globalvar as GlobalVar
+import copy
+import my_env
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 universe.configure_logging()
@@ -76,6 +80,8 @@ def create_atari_env(env_id):
     env = AtariRescale42x42(env)
     env = DiagnosticsInfo(env)
     env = Unvectorize(env)
+    if config.overwirite_with_grid:
+        env.action_space.n = 4
     return env
 
 def DiagnosticsInfo(env, *args, **kwargs):
@@ -95,56 +101,33 @@ class DiagnosticsInfoI(vectorized.Filter):
         self._num_vnc_updates = 0
         self._last_episode_id = -1
 
+        '''overwirte with grid'''
+        if config.overwirite_with_grid:
+            print('overwirite_with_grid')
+            self.env = my_env.env()
+
     def _after_reset(self, observation):
-        logger.info('Resetting environment')
+        logger.info('Resetting environment from open ai')
         self._episode_reward = 0
         self._episode_length = 0
         self._all_rewards = []
+
+        '''overwirte with grid'''
+        if config.overwirite_with_grid:
+            observation = self.env.get_initial_observation()
+
         return observation
 
     def _after_step(self, observation, reward, done, info):
+
+        '''overwirte with grid'''
+        if config.overwirite_with_grid:
+            
+            action = copy.deepcopy(int(GlobalVar.get_mq_client()))
+
+            observation, reward, done = self.env.act(action)
+
         to_log = {}
-        if self._episode_length == 0:
-            self._episode_time = time.time()
-
-        self._local_t += 1
-        if info.get("stats.vnc.updates.n") is not None:
-            self._num_vnc_updates += info.get("stats.vnc.updates.n")
-
-        if self._local_t % self._log_interval == 0:
-            cur_time = time.time()
-            elapsed = cur_time - self._last_time
-            fps = self._log_interval / elapsed
-            self._last_time = cur_time
-            cur_episode_id = info.get('vectorized.episode_id', 0)
-            to_log["diagnostics/fps"] = fps
-            if self._last_episode_id == cur_episode_id:
-                to_log["diagnostics/fps_within_episode"] = fps
-            self._last_episode_id = cur_episode_id
-            if info.get("stats.gauges.diagnostics.lag.action") is not None:
-                to_log["diagnostics/action_lag_lb"] = info["stats.gauges.diagnostics.lag.action"][0]
-                to_log["diagnostics/action_lag_ub"] = info["stats.gauges.diagnostics.lag.action"][1]
-            if info.get("reward.count") is not None:
-                to_log["diagnostics/reward_count"] = info["reward.count"]
-            if info.get("stats.gauges.diagnostics.clock_skew") is not None:
-                to_log["diagnostics/clock_skew_lb"] = info["stats.gauges.diagnostics.clock_skew"][0]
-                to_log["diagnostics/clock_skew_ub"] = info["stats.gauges.diagnostics.clock_skew"][1]
-            if info.get("stats.gauges.diagnostics.lag.observation") is not None:
-                to_log["diagnostics/observation_lag_lb"] = info["stats.gauges.diagnostics.lag.observation"][0]
-                to_log["diagnostics/observation_lag_ub"] = info["stats.gauges.diagnostics.lag.observation"][1]
-
-            if info.get("stats.vnc.updates.n") is not None:
-                to_log["diagnostics/vnc_updates_n"] = info["stats.vnc.updates.n"]
-                to_log["diagnostics/vnc_updates_n_ps"] = self._num_vnc_updates / elapsed
-                self._num_vnc_updates = 0
-            if info.get("stats.vnc.updates.bytes") is not None:
-                to_log["diagnostics/vnc_updates_bytes"] = info["stats.vnc.updates.bytes"]
-            if info.get("stats.vnc.updates.pixels") is not None:
-                to_log["diagnostics/vnc_updates_pixels"] = info["stats.vnc.updates.pixels"]
-            if info.get("stats.vnc.updates.rectangles") is not None:
-                to_log["diagnostics/vnc_updates_rectangles"] = info["stats.vnc.updates.rectangles"]
-            if info.get("env_status.state_id") is not None:
-                to_log["diagnostics/env_state_id"] = info["env_status.state_id"]
 
         if reward is not None:
             self._episode_reward += reward
@@ -170,18 +153,17 @@ def _process_frame42(frame):
     # Resize by half, then down to 42x42 (essentially mipmapping). If
     # we resize directly we lose pixels that, when mapped to 42x42,
     # aren't close enough to the pixel boundary.
-    frame = cv2.resize(frame, (80, 80))
-    frame = cv2.resize(frame, (42, 42))
+    frame = cv2.resize(frame, (config.gan_size, config.gan_size))
     frame = frame.mean(2)
     frame = frame.astype(np.float32)
     frame *= (1.0 / 255.0)
-    frame = np.reshape(frame, [42, 42, 1])
+    frame = np.reshape(frame, [config.gan_size, config.gan_size, 1])
     return frame
 
 class AtariRescale42x42(vectorized.ObservationWrapper):
     def __init__(self, env=None):
         super(AtariRescale42x42, self).__init__(env)
-        self.observation_space = Box(0.0, 1.0, [42, 42, 1])
+        self.observation_space = Box(0.0, 1.0, [config.gan_size, config.gan_size, 1])
 
     def _observation(self, observation_n):
         return [_process_frame42(observation) for observation in observation_n]

@@ -7,6 +7,8 @@ import six.moves.queue as queue
 import scipy.signal
 import threading
 import distutils.version
+import config
+import globalvar as GlobalVar 
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -121,8 +123,13 @@ runner appends the policy to the queue.
         for _ in range(num_local_steps):
             fetched = policy.act(last_state, *last_features)
             action, value_, features = fetched[0], fetched[1], fetched[2:]
+
+            if config.overwirite_with_grid:
+                GlobalVar.set_mq_client(action.argmax())
+                
             # argmax to convert from one-hot
             state, reward, terminal, info = env.step(action.argmax())
+
             if render:
                 env.render()
 
@@ -140,12 +147,9 @@ runner appends the policy to the queue.
                     summary.value.add(tag=k, simple_value=float(v))
                 summary_writer.add_summary(summary, policy.global_step.eval())
                 summary_writer.flush()
-
-            timestep_limit = env.spec.tags.get('wrapper_config.TimeLimit.max_episode_steps')
-            if terminal or length >= timestep_limit:
+            
+            if terminal:
                 terminal_end = True
-                if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
-                    last_state = env.reset()
                 last_features = policy.get_initial_features()
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0

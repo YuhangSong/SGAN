@@ -1,5 +1,5 @@
 # exp time
-t = 1
+t = 10
 
 # video
 video_name_ = '3DPinball_1'
@@ -27,3 +27,11 @@ modeldir = logdir+gan_model_name_+'/'
 
 # default
 dataset_path = '../../dataset/'
+
+
+# rl part
+overwirite_with_grid = True
+action_space = 4
+grid_size = 8
+grid_target_x = 4
+grid_target_y = 4
