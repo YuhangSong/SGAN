@@ -39,9 +39,9 @@ parser.add_argument('--lrG', type=float, default=0.00005, help='learning rate fo
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--cuda'  , default=True, action='store_true', help='enables cuda')
 parser.add_argument('--ngpu'  , type=int, default=config.gan_ngpu, help='number of GPUs to use')
-parser.add_argument('--netG_Cv', default='', help="path to netG_Cv (to continue training)")
-parser.add_argument('--netG_DeCv', default='', help="path to netG_DeCv (to continue training)")
-parser.add_argument('--netD', default='', help="path to netD (to continue training)")
+parser.add_argument('--netG_Cv', default=config.logdir+'netG_Cv.pth', help="path to netG_Cv (to continue training)")
+parser.add_argument('--netG_DeCv', default=config.logdir+'netG_DeCv.pth', help="path to netG_DeCv (to continue training)")
+parser.add_argument('--netD', default=config.logdir+'netD.pth', help="path to netD (to continue training)")
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
 parser.add_argument('--clamp_upper', type=float, default=0.01)
 parser.add_argument('--Diters', type=int, default=5, help='number of D iters per each G iter')
@@ -88,28 +88,36 @@ def weights_init(m):
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
 
-'''create netG'''
+'''create models'''
 netG_Cv = dcgan.DCGAN_G_Cv(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
 netG_DeCv = dcgan.DCGAN_G_DeCv(opt.imageSize, nz, nc, ngf, ngpu, n_extra_layers)
+netD = dcgan.DCGAN_D(opt.imageSize, nz, nc, ndf, ngpu, n_extra_layers)
 
+'''init models'''
 netG_Cv.apply(weights_init)
 netG_DeCv.apply(weights_init)
-
-# load checkpoint if needed
-if opt.netG_Cv != '':
-    netG_Cv.load_state_dict(torch.load(opt.netG_Cv))
-print(netG_Cv)
-
-if opt.netG_DeCv != '':
-    netG_DeCv.load_state_dict(torch.load(opt.netG_DeCv))
-print(netG_DeCv)
-
-netD = dcgan.DCGAN_D(opt.imageSize, nz, nc, ndf, ngpu, n_extra_layers)
 netD.apply(weights_init)
 
-# load checkpoint if needed
-if opt.netD != '':
+# do auto checkpoint
+try:
+    netG_Cv.load_state_dict(torch.load(opt.netG_Cv))
+    print('Previous checkpoint for netG_Cv founded')
+except Exception, e:
+    print('Previous checkpoint for netG_Cv unfounded')
+try:
+    netG_DeCv.load_state_dict(torch.load(opt.netG_DeCv))
+    print('Previous checkpoint for netG_DeCv founded')
+except Exception, e:
+    print('Previous checkpoint for netG_DeCv unfounded')
+try:
     netD.load_state_dict(torch.load(opt.netD))
+    print('Previous checkpoint for netD founded')
+except Exception, e:
+    print('Previous checkpoint for netD unfounded')
+
+'''print the models'''
+print(netG_Cv)
+print(netG_DeCv)
 print(netD)
 
 inputd = torch.FloatTensor(opt.batchSize, 4, opt.imageSize, opt.imageSize)
@@ -350,9 +358,9 @@ while True:
         vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(opt.experiment, iteration_i))
 
         '''do checkpointing'''
-        torch.save(netG_Cv.state_dict(), '{0}/netG_Cv_epoch_{1}.pth'.format(opt.experiment, iteration_i))
-        torch.save(netG_DeCv.state_dict(), '{0}/netG_DeCv_epoch_{1}.pth'.format(opt.experiment, iteration_i))
-        torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, iteration_i))
+        torch.save(netG_Cv.state_dict(), '{0}/netG_Cv.pth'.format(opt.experiment))
+        torch.save(netG_DeCv.state_dict(), '{0}/netG_DeCv.pth'.format(opt.experiment))
+        torch.save(netD.state_dict(), '{0}/netD.pth'.format(opt.experiment))
 
     iteration_i += 1
     ######################################################################
