@@ -19,32 +19,6 @@ It contains a basic implementation of the [A3C algorithm](https://arxiv.org/abs/
 * [numpy](https://pypi.python.org/pypi/numpy)
 * [scipy](https://pypi.python.org/pypi/scipy)
 
-# Getting Started one line
-
-```
-
-conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/ && conda config --set show_channel_urls yes && conda create --name gsa_1 python=3.5 -y && source activate gsa_1 && git clone https://github.com/YuhangSong2017/go.git && cd go && tar -C /usr/local -xzf go1.7.4.linux-amd64.tar.gz && echo "export PATH=$PATH:/usr/local/go/bin" >> /etc/profile && source /etc/profile && sudo apt-get install -y tmux htop cmake libjpeg-dev && pip install "gym[atari]" && pip install universe && pip install six && pip install tensorflow-gpu && conda install -y numpy && conda install -y scipy
-
-# try more times
-conda install --channel https://conda.anaconda.org/menpo opencv3 -y
-
-# for wgan
-conda create --name wgan_1 python=3.5 -y && source activate wgan_1 && pip install http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp35-cp35m-linux_x86_64.whl && pip install torchvision && pip install lmdb
-
-python main.py --dataset lsun --dataroot [lsun-train-folder] --cuda
-python main.py --mlp_G --ngf 512
-
-# dowload lsun dataset
-conda create -n lsun_1 python=2.7 -y && source activate lsun_1 && git clone https://github.com/fyu/lsun.git && cd lsun && python2.7 download.py
-
-python train.py --num-workers 2 --env-id PongDeterministic-v3 --log-dir /tmp/pong
-
-# gmbrl
-conda install matplotlib imageio -y && conda install -c loopbio -c conda-forge -c pkgw-forge ffmpeg-feature ffmpeg gtk2 opencv
-
-
-```
-
 # Getting Started
 
 ```

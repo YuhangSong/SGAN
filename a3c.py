@@ -7,10 +7,6 @@ import six.moves.queue as queue
 import scipy.signal
 import threading
 import distutils.version
-import config
-import subprocess
-import time
-import cv2
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -18,13 +14,11 @@ def discount(x, gamma):
 
 def process_rollout(rollout, gamma, lambda_=1.0):
     """
-    given a rollout, compute its returns and the advantage
-    """
+given a rollout, compute its returns and the advantage
+"""
     batch_si = np.asarray(rollout.states)
-    batch_gsa_si = np.asarray(rollout.gsa_state)
     batch_a = np.asarray(rollout.actions)
     rewards = np.asarray(rollout.rewards)
-    marks = np.asarray(rollout.marks)
     vpred_t = np.asarray(rollout.values + [rollout.r])
 
     rewards_plus_v = np.asarray(rollout.rewards + [rollout.r])
@@ -35,55 +29,49 @@ def process_rollout(rollout, gamma, lambda_=1.0):
     batch_adv = discount(delta_t, gamma * lambda_)
 
     features = rollout.features[0]
-    return Batch(batch_si, batch_gsa_si, batch_a, batch_adv, batch_r, rollout.terminal, features, marks)
+    return Batch(batch_si, batch_a, batch_adv, batch_r, rollout.terminal, features)
 
-Batch = namedtuple("Batch", ["si", "gsa_si", "a", "adv", "r", "terminal", "features", "marks"])
+Batch = namedtuple("Batch", ["si", "a", "adv", "r", "terminal", "features"])
 
 class PartialRollout(object):
     """
-    a piece of a complete rollout.  We run our agent, and process its experience
-    once it has processed enough steps.
-    """
+a piece of a complete rollout.  We run our agent, and process its experience
+once it has processed enough steps.
+"""
     def __init__(self):
         self.states = []
-        self.gsa_state = []
         self.actions = []
         self.rewards = []
         self.values = []
         self.r = 0.0
         self.terminal = False
         self.features = []
-        self.marks = []
 
-    def add(self, state, gsa_state, action, reward, value, terminal, features, mark):
+    def add(self, state, action, reward, value, terminal, features):
         self.states += [state]
-        self.gsa_state += [gsa_state]
         self.actions += [action]
         self.rewards += [reward]
         self.values += [value]
         self.terminal = terminal
         self.features += [features]
-        self.marks += [mark]
 
     def extend(self, other):
         assert not self.terminal
         self.states.extend(other.states)
-        self.gsa_state.extend(other.gsa_state)
         self.actions.extend(other.actions)
         self.rewards.extend(other.rewards)
         self.values.extend(other.values)
         self.r = other.r
         self.terminal = other.terminal
         self.features.extend(other.features)
-        self.marks.extend(other.marks)
 
 class RunnerThread(threading.Thread):
     """
-    One of the key distinctions between a normal environment and a universe environment
-    is that a universe environment is _real time_.  This means that there should be a thread
-    that would constantly interact with the environment and tell it what to do.  This thread is here.
-    """
-    def __init__(self, env, policy, num_local_steps, visualise, task):
+One of the key distinctions between a normal environment and a universe environment
+is that a universe environment is _real time_.  This means that there should be a thread
+that would constantly interact with the environment and tell it what to do.  This thread is here.
+"""
+    def __init__(self, env, policy, num_local_steps, visualise):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(5)
         self.num_local_steps = num_local_steps
@@ -94,7 +82,6 @@ class RunnerThread(threading.Thread):
         self.sess = None
         self.summary_writer = None
         self.visualise = visualise
-        self.task = task
 
     def start_runner(self, sess, summary_writer):
         self.sess = sess
@@ -106,7 +93,7 @@ class RunnerThread(threading.Thread):
             self._run()
 
     def _run(self):
-        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise, self.task)
+        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise)
         while True:
             # the timeout variable exists because apparently, if one worker dies, the other workers
             # won't die with it, unless the timeout is set to some large number.  This is an empirical
@@ -114,48 +101,18 @@ class RunnerThread(threading.Thread):
 
             self.queue.put(next(rollout_provider), timeout=600.0)
 
-def to_agent(frame):
 
-    # Resize by half, then down to 42x42 (essentially mipmapping). If
-    # we resize directly we lose pixels that, when mapped to 42x42,
-    # aren't close enough to the pixel boundary.
-    frame = cv2.resize(frame, (80, 80))
-    frame = cv2.resize(frame, (42, 42))
-    frame = frame.mean(2)
-    frame = frame.astype(np.float32)
-    frame *= (1.0 / 255.0)
-    frame = np.reshape(frame, [42, 42, 1])
 
-    return frame
-
-def to_gsa(frame):
-
-    # Resize by half, then down to 42x42 (essentially mipmapping). If
-    # we resize directly we lose pixels that, when mapped to 42x42,
-    # aren't close enough to the pixel boundary.
-    frame = cv2.resize(frame, (80, 80))
-    frame = cv2.resize(frame, (config.gsa_size, config.gsa_size))
-    frame = frame.astype(np.float32)
-    frame *= (1.0 / 255.0)
-    frame = np.reshape(frame, [config.gsa_size, config.gsa_size, 3])
-    frame = np.transpose(frame,(2,0,1))
-
-    return frame
-
-def env_runner(env, policy, num_local_steps, summary_writer, render, task):
+def env_runner(env, policy, num_local_steps, summary_writer, render):
     """
-    The logic of the thread runner.  In brief, it constantly keeps on running
-    the policy, and as long as the rollout exceeds a certain length, the thread
-    runner appends the policy to the queue.
-    """
-    last_frame = env.reset()
-    last_state = to_agent(last_frame)
-    last_gsa_state = to_gsa(last_frame)
-
+The logic of the thread runner.  In brief, it constantly keeps on running
+the policy, and as long as the rollout exceeds a certain length, the thread
+runner appends the policy to the queue.
+"""
+    last_state = env.reset()
     last_features = policy.get_initial_features()
     length = 0
     rewards = 0
-    episode = 0
 
     while True:
         terminal_end = False
@@ -165,24 +122,16 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
             fetched = policy.act(last_state, *last_features)
             action, value_, features = fetched[0], fetched[1], fetched[2:]
             # argmax to convert from one-hot
-            frame, reward, terminal, info = env.step(action.argmax())
-
-            state = to_agent(frame)
-            gsa_state = to_gsa(frame)
-
+            state, reward, terminal, info = env.step(action.argmax())
             if render:
                 env.render()
 
             # collect the experience
-            mark = [task, episode, length]
-            rollout.add(last_state, last_gsa_state, action, reward, value_, terminal, last_features, mark)
-
-            # move to next step
+            rollout.add(last_state, action, reward, value_, terminal, last_features)
             length += 1
             rewards += reward
 
             last_state = state
-            last_gsa_state = gsa_state
             last_features = features
 
             if info:
@@ -196,14 +145,11 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
             if terminal or length >= timestep_limit:
                 terminal_end = True
                 if length >= timestep_limit or not env.metadata.get('semantics.autoreset'):
-                    last_frame = env.reset()
-                    last_state = to_agent(last_frame)
-                    last_gsa_state = to_gsa(last_frame)
+                    last_state = env.reset()
                 last_features = policy.get_initial_features()
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0
-                episode += 1
                 break
 
         if not terminal_end:
@@ -215,15 +161,14 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, task):
 class A3C(object):
     def __init__(self, env, task, visualise):
         """
-        An implementation of the A3C algorithm that is reasonably well-tuned for the VNC environments.
-        Below, we will have a modest amount of complexity due to the way TensorFlow handles data parallelism.
-        But overall, we'll define the model, specify its inputs, and describe how the policy gradients step
-        should be computed.
-        """
+An implementation of the A3C algorithm that is reasonably well-tuned for the VNC environments.
+Below, we will have a modest amount of complexity due to the way TensorFlow handles data parallelism.
+But overall, we'll define the model, specify its inputs, and describe how the policy gradients step
+should be computed.
+"""
 
         self.env = env
         self.task = task
-        self.waiting_interval = 0.0
         worker_device = "/job:worker/task:{}/cpu:0".format(task)
         with tf.device(tf.train.replica_device_setter(1, worker_device=worker_device)):
             with tf.variable_scope("global"):
@@ -261,7 +206,7 @@ class A3C(object):
             # on the one hand;  but on the other hand, we get less frequent parameter updates, which
             # slows down learning.  In this code, we found that making local steps be much
             # smaller than 20 makes the algorithm more difficult to tune and to get to work.
-            self.runner = RunnerThread(env, pi, 20, visualise, self.task)
+            self.runner = RunnerThread(env, pi, 20, visualise)
 
 
             grads = tf.gradients(self.loss, pi.var_list)
@@ -304,8 +249,8 @@ class A3C(object):
 
     def pull_batch_from_queue(self):
         """
-        self explanatory:  take a rollout from the queue of the thread runner.
-        """
+self explanatory:  take a rollout from the queue of the thread runner.
+"""
         rollout = self.runner.queue.get(timeout=600.0)
         while not rollout.terminal:
             try:
@@ -316,44 +261,14 @@ class A3C(object):
 
     def process(self, sess):
         """
-        process grabs a rollout that's been produced by the thread runner,
-        and updates the parameters.  The update is then sent to the parameter
-        server.
-        """
+process grabs a rollout that's been produced by the thread runner,
+and updates the parameters.  The update is then sent to the parameter
+server.
+"""
 
         sess.run(self.sync)  # copy weights from shared to local
         rollout = self.pull_batch_from_queue()
         batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
-
-        if config.enable_gsa:
-
-            for i in range(np.shape(batch.si)[0]):
-                file = config.real_state_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__requiring'+'.npz'
-                np.savez(file,
-                         state=batch.gsa_si[i])
-
-            time.sleep(self.waiting_interval)
-
-            success = True
-
-            for i in range(np.shape(batch.si)[0]):
-
-                try:
-                    file = config.waiting_reward_dir+'task_'+str(self.task)+'_episode_'+str(self.local_steps)+'_step_'+str(i)+'__waiting'+'.npz'
-                    gsa_reward = np.load(file)['gsa_reward'][0]
-                    
-                except Exception, e:
-                    print(str(Exception)+": "+str(e)) 
-                    success = False
-                
-            if success:
-                self.waiting_interval -= config.adjust_interval_down
-            else:
-                self.waiting_interval += config.adjust_interval_up
-
-        print(self.waiting_interval)
-
-
 
         should_compute_summary = self.task == 0 and self.local_steps % 11 == 0
 

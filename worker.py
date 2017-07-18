@@ -87,8 +87,8 @@ def run(args, server):
 
 def cluster_spec(num_workers, num_ps):
     """
-    More tensorflow setup for data parallelism
-    """
+More tensorflow setup for data parallelism
+"""
     cluster = {}
     port = 12222
 
@@ -108,8 +108,8 @@ def cluster_spec(num_workers, num_ps):
 
 def main(_):
     """
-    Setting up Tensorflow for data parallel work
-    """
+Setting up Tensorflow for data parallel work
+"""
 
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbosity', default=0, help='Set verbosity.')
