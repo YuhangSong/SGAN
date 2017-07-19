@@ -1,5 +1,5 @@
 # exp time
-t = 14
+t = 19
 
 # mode
 run_on = 'agent' # agent, video
@@ -29,6 +29,7 @@ gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+
 # generate logdir according to config
 logdir = '../../result/gmbrl_1/'+dataset_name_+'/'+gan_model_name_+'/'
 modeldir = logdir+gan_model_name_+'/'
+datadir = logdir+'data/'
 
 if run_on is 'agent':
     """
@@ -39,3 +40,5 @@ if run_on is 'agent':
     grid_size = 8
     grid_target_x = 4
     grid_target_y = 4
+    gan_worker_com_internal = 10
+    gan_recent_dataset = 10
