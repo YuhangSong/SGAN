@@ -1,5 +1,5 @@
 # exp time
-t = 10
+t = 14
 
 # mode
 run_on = 'agent' # agent, video

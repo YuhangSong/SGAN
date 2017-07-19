@@ -203,7 +203,7 @@ while True:
         ######## train D network with real #######
 
         ## random sample from dataset ##
-        raw = torch.index_select(dataset,0,dataset_sampler_indexs.random_(0,opt.batchSize))
+        raw = torch.index_select(dataset,0,dataset_sampler_indexs.random_(0,dataset_len))
         image = [] 
         for image_i in range(4):
             image += [raw.narrow(1,image_i,1)]

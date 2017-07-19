@@ -2,8 +2,11 @@ import numpy as np
 import config
 def get_grid_observation(x, y):
     observation = np.zeros((config.gan_size,config.gan_size))
-    observation[x/config.grid_size*config.gan_size:(x+1)/config.grid_size*config.gan_size,y/config.grid_size*config.gan_size:(y+1)/config.grid_size*config.gan_size] = 1.0
-    observation = np.expand_dims(observation,2)
+    observation[x*(config.gan_size/config.grid_size):(x+1)*(config.gan_size/config.grid_size),y*(config.gan_size/config.grid_size):(y+1)*(config.gan_size/config.grid_size)] = 1.0
+    observation = np.expand_dims(a=observation,
+                                 axis=0)
+    observation = np.concatenate((observation,observation,observation),
+                                 axis=0)
     return observation
 class env():
     def __init__(self):
@@ -35,6 +38,7 @@ class env():
     def get_initial_observation(self):
         self.reset()
         self.update_observation()
+        print('--------------------------------------')
         return self.observation
 
     def act(self, action):

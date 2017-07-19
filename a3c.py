@@ -95,7 +95,7 @@ class RunnerThread(threading.Thread):
     is that a universe environment is _real time_.  This means that there should be a thread
     that would constantly interact with the environment and tell it what to do.  This thread is here.
     """
-    def __init__(self, env, policy, num_local_steps, visualise):
+    def __init__(self, env, policy, num_local_steps, visualise, gan_runner):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(5)
         self.num_local_steps = num_local_steps
@@ -106,6 +106,7 @@ class RunnerThread(threading.Thread):
         self.sess = None
         self.summary_writer = None
         self.visualise = visualise
+        self.gan_runner = gan_runner
 
     def start_runner(self, sess, summary_writer):
         self.sess = sess
@@ -117,7 +118,7 @@ class RunnerThread(threading.Thread):
             self._run()
 
     def _run(self):
-        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise)
+        rollout_provider = env_runner(self.env, self.policy, self.num_local_steps, self.summary_writer, self.visualise, self.gan_runner)
         while True:
             # the timeout variable exists because apparently, if one worker dies, the other workers
             # won't die with it, unless the timeout is set to some large number.  This is an empirical
@@ -148,6 +149,7 @@ class GanRunnerThread(threading.Thread):
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
+        self.dataset_limit = 500
 
         '''random seed for torch'''
         self.manualSeed = random.randint(1, 10000) # fix seed
@@ -209,12 +211,9 @@ class GanRunnerThread(threading.Thread):
         self.one = torch.FloatTensor([1])
         self.mone = self.one * -1
 
-        '''load dataset'''
-        self.dataset = np.load('../../dataset/'+'3DPinball_1_d01_c128_nc3.npz')['dataset']
-        self.dataset_len = np.shape(self.dataset)[0]
-        print('dataset loaded, size: ' + str(np.shape(self.dataset)))
-        self.dataset = torch.FloatTensor(self.dataset)
-        self.dataset_sampler_indexs = torch.LongTensor(self.batchSize).random_(0,self.dataset_len)
+        '''dataset intialize'''
+        self.dataset = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset_sampler_indexs = torch.LongTensor(self.batchSize)
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -235,223 +234,245 @@ class GanRunnerThread(threading.Thread):
 
         self.iteration_i = 0
 
-    def start_runner(self):
-        self.start()
+    def push_data(self, data):
+        data = torch.FloatTensor(data)
+
+        self.dataset = torch.cat(seq=[self.dataset,data],
+                                 dim=0)
+
+        if self.dataset.size()[0] > self.dataset_limit:
+            self.dataset = self.dataset.narrow(dimension=0,
+                                               start=self.dataset.size()[0]-self.dataset_limit,
+                                               length=self.dataset_limit)
 
     def run(self):
 
         while True:
-            ######################################################################
-            ########################### Update D network #########################
-            ######################################################################
+            while self.dataset.size()[0] >= self.batchSize:
+                ######################################################################
+                ########################### Update D network #########################
+                ######################################################################
 
-            '''
-                when train D network, paramters of D network in trained,
-                reset requires_grad of D network to true.
-                (they are set to False below in netG update)
-            '''
-            for p in self.netD.parameters():
-                p.requires_grad = True
-
-            '''
-                train the discriminator Diters times
-                Diters is set to 100 only on the first 25 generator iterations or
-                very sporadically (once every 500 generator iterations).
-                This helps to start with the critic at optimum even in the first iterations.
-                There shouldn't be a major difference in performance, but it can help,
-                especially when visualizing learning curves (since otherwise you'd see the
-                loss going up until the critic is properly trained).
-                This is also why the first 25 iterations take significantly longer than
-                the rest of the training as well.
-            '''
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
-                Diters = 100
-            else:
-                Diters = self.Diters_
-
-            '''
-                start interation training of D network
-                D network is trained for sevrel steps when 
-                G network is trained for one time
-            '''
-            j = 0
-            while j < Diters:
-                j += 1
-
-                # clamp parameters to a cube
+                '''
+                    when train D network, paramters of D network in trained,
+                    reset requires_grad of D network to true.
+                    (they are set to False below in netG update)
+                '''
                 for p in self.netD.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+                    p.requires_grad = True
 
-                ######## train D network with real #######
+                '''
+                    train the discriminator Diters times
+                    Diters is set to 100 only on the first 25 generator iterations or
+                    very sporadically (once every 500 generator iterations).
+                    This helps to start with the critic at optimum even in the first iterations.
+                    There shouldn't be a major difference in performance, but it can help,
+                    especially when visualizing learning curves (since otherwise you'd see the
+                    loss going up until the critic is properly trained).
+                    This is also why the first 25 iterations take significantly longer than
+                    the rest of the training as well.
+                '''
+                if self.iteration_i < 25 or self.iteration_i % 500 == 0:
+                    Diters = 100
+                else:
+                    Diters = self.Diters_
 
-                ## random sample from dataset ##
-                raw = torch.index_select(self.dataset,0,self.dataset_sampler_indexs.random_(0,self.batchSize))
-                image = [] 
-                for image_i in range(4):
-                    image += [raw.narrow(1,image_i,1)]
-                state_prediction_gt = torch.cat(image,2)
-                state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                if self.cuda:
-                    state_prediction_gt = state_prediction_gt.cuda()
-                state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
-                prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
+                '''
+                    start interation training of D network
+                    D network is trained for sevrel steps when 
+                    G network is trained for one time
+                '''
+                j = 0
+                while j < Diters:
+                    j += 1
 
-                ######### train D with real ########
+                    # clamp parameters to a cube
+                    for p in self.netD.parameters():
+                        p.data.clamp_(self.clamp_lower, self.clamp_upper)
+
+                    ######## train D network with real #######
+
+                    ## random sample from dataset ##
+                    raw = torch.index_select(self.dataset,0,self.dataset_sampler_indexs.random_(0,self.dataset.size()[0]))
+                    image = [] 
+                    for image_i in range(4):
+                        image += [raw.narrow(1,image_i,1)]
+                    state_prediction_gt = torch.cat(image,2)
+                    state_prediction_gt = torch.squeeze(state_prediction_gt,1)
+                    if self.cuda:
+                        state_prediction_gt = state_prediction_gt.cuda()
+                    state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
+                    prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
+
+                    ######### train D with real ########
+
+                    # reset grandient
+                    self.netD.zero_grad()
+
+                    # feed
+                    self.inputd.resize_as_(state_prediction_gt).copy_(state_prediction_gt)
+                    inputdv = Variable(self.inputd)
+
+                    # compute
+                    errD_real, outputD_real = self.netD(inputdv)
+                    errD_real.backward(self.one)
+
+                    ########### get fake #############
+
+                    # feed
+                    self.inputg.resize_as_(state).copy_(state)
+                    inputgv = Variable(self.inputg, volatile = True) # totally freeze netG
+
+                    # compute encoded
+                    encodedv = self.netG_Cv(inputgv)
+
+                    # compute noise
+                    self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
+                    noisev = Variable(self.noise, volatile = True) # totally freeze netG
+
+                    # concate encodedv and noisev
+                    encodedv_noisev = torch.cat([encodedv,noisev],1)
+
+                    # predict
+                    prediction = self.netG_DeCv(encodedv_noisev)
+                    prediction = prediction.data
+                    
+                    ############ train D with fake ###########
+
+                    # get state_prediction
+                    state_prediction = torch.cat([state, prediction], 1)
+
+                    # feed
+                    self.inputd.resize_as_(state_prediction).copy_(state_prediction)
+                    inputdv = Variable(self.inputd)
+
+                    # compute
+                    errD_fake, outputD_fake = self.netD(inputdv)
+                    errD_fake.backward(self.mone)
+
+                    # optmize
+                    errD = errD_real - errD_fake
+                    self.optimizerD.step()
+
+                ######################################################################
+                ####################### End of Update D network ######################
+                ######################################################################
+
+                ######################################################################
+                ########################## Update G network ##########################
+                ######################################################################
+
+                '''
+                    when train G networks, paramters in p network is freezed
+                    to avoid computation on grad
+                    this is reset to true when training D network
+                '''
+                for p in self.netD.parameters():
+                    p.requires_grad = False
 
                 # reset grandient
-                self.netD.zero_grad()
-
-                # feed
-                self.inputd.resize_as_(state_prediction_gt).copy_(state_prediction_gt)
-                inputdv = Variable(self.inputd)
-
-                # compute
-                errD_real, outputD_real = self.netD(inputdv)
-                errD_real.backward(self.one)
-
-                ########### get fake #############
+                self.netG_Cv.zero_grad()
+                self.netG_DeCv.zero_grad()
 
                 # feed
                 self.inputg.resize_as_(state).copy_(state)
-                inputgv = Variable(self.inputg, volatile = True) # totally freeze netG
+                inputgv = Variable(self.inputg)
 
-                # compute encoded
+                # compute encodedv
                 encodedv = self.netG_Cv(inputgv)
 
-                # compute noise
+                # compute noisev
                 self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
-                noisev = Variable(self.noise, volatile = True) # totally freeze netG
+                noisev = Variable(self.noise)
 
                 # concate encodedv and noisev
                 encodedv_noisev = torch.cat([encodedv,noisev],1)
 
                 # predict
                 prediction = self.netG_DeCv(encodedv_noisev)
-                prediction = prediction.data
-                
-                ############ train D with fake ###########
 
-                # get state_prediction
-                state_prediction = torch.cat([state, prediction], 1)
+                # get state_predictionv, this is a Variable cat 
+                statev_predictionv = torch.cat([Variable(state), prediction], 1)
 
-                # feed
-                self.inputd.resize_as_(state_prediction).copy_(state_prediction)
-                inputdv = Variable(self.inputd)
+                # feed, this state_predictionv is Variable
+                inputdv = statev_predictionv
 
                 # compute
-                errD_fake, outputD_fake = self.netD(inputdv)
-                errD_fake.backward(self.mone)
+                errG, _ = self.netD(inputdv)
+                errG.backward(self.one)
 
                 # optmize
-                errD = errD_real - errD_fake
-                self.optimizerD.step()
+                self.optimizerG_Cv.step()
+                self.optimizerG_DeCv.step()
 
-            ######################################################################
-            ####################### End of Update D network ######################
-            ######################################################################
-
-            ######################################################################
-            ########################## Update G network ##########################
-            ######################################################################
-
-            '''
-                when train G networks, paramters in p network is freezed
-                to avoid computation on grad
-                this is reset to true when training D network
-            '''
-            for p in self.netD.parameters():
-                p.requires_grad = False
-
-            # reset grandient
-            self.netG_Cv.zero_grad()
-            self.netG_DeCv.zero_grad()
-
-            # feed
-            self.inputg.resize_as_(state).copy_(state)
-            inputgv = Variable(self.inputg)
-
-            # compute encodedv
-            encodedv = self.netG_Cv(inputgv)
-
-            # compute noisev
-            self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
-            noisev = Variable(self.noise)
-
-            # concate encodedv and noisev
-            encodedv_noisev = torch.cat([encodedv,noisev],1)
-
-            # predict
-            prediction = self.netG_DeCv(encodedv_noisev)
-
-            # get state_predictionv, this is a Variable cat 
-            statev_predictionv = torch.cat([Variable(state), prediction], 1)
-
-            # feed, this state_predictionv is Variable
-            inputdv = statev_predictionv
-
-            # compute
-            errG, _ = self.netD(inputdv)
-            errG.backward(self.one)
-
-            # optmize
-            self.optimizerG_Cv.step()
-            self.optimizerG_DeCv.step()
-
-            ######################################################################
-            ###################### End of Update G network #######################
-            ######################################################################
+                ######################################################################
+                ###################### End of Update G network #######################
+                ######################################################################
 
 
-            ######################################################################
-            ########################### One Iteration ### ########################
-            ######################################################################
+                ######################################################################
+                ########################### One Iteration ### ########################
+                ######################################################################
 
-            '''log result'''
-            print('[iteration_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-                % (self.iteration_i,
-                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+                '''log result'''
+                print('[iteration_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
+                    % (self.iteration_i,
+                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
 
-            '''log image result'''
-            if self.iteration_i % 100 == 0:
+                '''log image result'''
+                if self.iteration_i % 100 == 0:
 
-                '''function need for log image'''
-                def sample2image(sample):
-                    if config.gan_nc is 1:
-                        c = sample / 3.0
-                        c = torch.unsqueeze(c,1)
-                        save = torch.cat([c,c,c],1)
-                    elif config.gan_nc is 3:
-                        save = []
-                        for image_i in range(4):
-                            save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
-                        save = torch.cat(save,0)
-                    
-                    # save = save.mul(0.5).add(0.5)
-                    return save
+                    '''function need for log image'''
+                    def sample2image(sample):
+                        if config.gan_nc is 1:
+                            c = sample / 3.0
+                            c = torch.unsqueeze(c,1)
+                            save = torch.cat([c,c,c],1)
+                        elif config.gan_nc is 3:
+                            save = []
+                            for image_i in range(4):
+                                save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
+                            save = torch.cat(save,0)
+                        
+                        # save = save.mul(0.5).add(0.5)
+                        return save
 
-                '''log real result'''
-                vutils.save_image(sample2image(state_prediction_gt[0]), '{0}/real_samples_{1}.png'.format(self.experiment, self.iteration_i))
+                    '''log real result'''
+                    vutils.save_image(sample2image(state_prediction_gt[0]), '{0}/real_samples_{1}.png'.format(self.experiment, self.iteration_i))
 
-                '''log perdict result'''
-                vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(self.experiment, self.iteration_i))
+                    '''log perdict result'''
+                    vutils.save_image(sample2image(state_prediction[0]), '{0}/fake_samples_{1}.png'.format(self.experiment, self.iteration_i))
 
-                '''do checkpointing'''
-                torch.save(self.netG_Cv.state_dict(), '{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_))
-                torch.save(self.netG_DeCv.state_dict(), '{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_))
-                torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
+                    '''do checkpointing'''
+                    torch.save(self.netG_Cv.state_dict(), '{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_))
+                    torch.save(self.netG_DeCv.state_dict(), '{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_))
+                    torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
 
-            self.iteration_i += 1
-            ######################################################################
-            ######################### End One in Iteration  ######################
-            ######################################################################
+                self.iteration_i += 1
+                ######################################################################
+                ######################### End One in Iteration  ######################
+                ######################################################################
 
-def env_runner(env, policy, num_local_steps, summary_writer, render):
+def rbg2gray(rgb):
+    gray = rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114  # Gray = R*0.299 + G*0.587 + B*0.114
+    gray = np.expand_dims(gray,2)
+    return gray
+
+def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner):
     """
     The logic of the thread runner.  In brief, it constantly keeps on running
     the policy, and as long as the rollout exceeds a certain length, the thread
     runner appends the policy to the queue.
     """
-    last_state = env.reset()
+
+    '''create image recorder'''
+    lllast_image = None
+    llast_image = None
+    last_image = None
+    image = None
+
+    last_image = env.reset()
+    last_state = rbg2gray(last_image)
     last_features = policy.get_initial_features()
     length = 0
     rewards = 0
@@ -468,7 +489,23 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 GlobalVar.set_mq_client(action.argmax())
                 
             # argmax to convert from one-hot
-            state, reward, terminal, info = env.step(action.argmax())
+            image, reward, terminal, info = env.step(action.argmax())
+
+            if last_image is None or llast_image is None or lllast_image is None:
+                pass
+            else:
+                data = [lllast_image,llast_image,last_image,image]
+                data = np.asarray(data)
+                gan_runner.push_data(np.expand_dims(data,0))
+
+            lllast_image = copy.deepcopy(llast_image)
+            llast_image = copy.deepcopy(last_image)
+            last_image = copy.deepcopy(image)
+
+            
+            state = rbg2gray(image)
+
+            # gan_runner.push_data(state_rgb)
 
             if render:
                 env.render()
@@ -494,6 +531,11 @@ def env_runner(env, policy, num_local_steps, summary_writer, render):
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0
+                '''reset image recorder'''
+                lllast_image = None
+                llast_image = None
+                last_image = None
+                image = None
                 break
 
         if not terminal_end:
@@ -513,6 +555,9 @@ class A3C(object):
 
         self.env = env
         self.task = task
+
+        '''create gan_runner'''
+        self.gan_runner = GanRunnerThread()
 
         ######################################################################
         ############################## A3C Model #############################
@@ -555,7 +600,7 @@ class A3C(object):
             # on the one hand;  but on the other hand, we get less frequent parameter updates, which
             # slows down learning.  In this code, we found that making local steps be much
             # smaller than 20 makes the algorithm more difficult to tune and to get to work.
-            self.runner = RunnerThread(env, pi, 20, visualise)
+            self.runner = RunnerThread(env, pi, 20, visualise, self.gan_runner)
 
 
             grads = tf.gradients(self.loss, pi.var_list)
@@ -594,18 +639,9 @@ class A3C(object):
 
         ######################################################################
 
-        ######################################################################
-        ############################## GAN Runner############################
-        ######################################################################
-
-        '''create gan_runner'''
-        self.gan_runner = GanRunnerThread()
-
-        ######################################################################
-
     def start(self, sess, summary_writer):
         self.runner.start_runner(sess, summary_writer)
-        self.gan_runner.start_runner()
+        self.gan_runner.start()
         self.summary_writer = summary_writer
 
     def pull_batch_from_queue(self):
