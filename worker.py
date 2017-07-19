@@ -89,7 +89,7 @@ def cluster_spec(num_workers, num_ps):
 More tensorflow setup for data parallelism
 """
     cluster = {}
-    port = 12222
+    port = 4132
 
     all_ps = []
     host = '127.0.0.1'

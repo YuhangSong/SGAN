@@ -52,6 +52,23 @@ class env():
             self.done = False
 
             ########################## update state #########################
+
+            '''randomlize action'''
+            action_dic = range(config.action_space)
+
+            action_dic_p = np.zeros((config.action_space))
+            for i in range(len(action_dic_p)):
+                distance = abs(i-self.action)
+                if distance > (config.action_space/2):
+                    distance = distance - (config.action_space/2)
+                action_dic_p[i] = config.grid_action_random_discounter**(distance)
+            action_dic_p = action_dic_p / np.sum(action_dic_p)
+
+            self.action = np.random.choice(a=action_dic, 
+                                           p=action_dic_p)
+
+            self.action = int(self.action)
+
             if self.action is 0:
                 self.cur_x += 1
             elif self.action is 1:
@@ -61,7 +78,7 @@ class env():
             elif self.action is 3:
                 self.cur_y -= 1
             else:
-                print(exit)
+                print(s)
 
             if self.cur_x >= config.grid_size:
                 self.cur_x = config.grid_size-1

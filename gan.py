@@ -100,8 +100,8 @@ class gan():
         self.inputd_real_part = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputg = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
         self.inputg_action = torch.FloatTensor(self.batchSize, 1, 1, 1)
-        self.noise = torch.FloatTensor(self.batchSize, self.nz, 1, 1)
-        self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz, 1, 1).normal_(0, 1)
+        self.noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1)
+        self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
         self.one = torch.FloatTensor([1])
         self.mone = self.one * -1
 
@@ -223,7 +223,7 @@ class gan():
                 encodedv = self.netG_Cv(inputgv)
 
                 # compute noise
-                self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
+                self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
                 noisev = Variable(self.noise, volatile = True) # totally freeze netG
 
                 # feed
@@ -231,7 +231,10 @@ class gan():
                 inputg_actionv = Variable(self.inputg_action, volatile = True) # totally freeze netG
 
                 # concate encodedv, noisev, action
-                encodedv_noisev_actionv = torch.cat([encodedv,noisev,inputg_actionv],1)
+                concated = [inputg_actionv] * (self.nz/2)
+                concated += [encodedv]
+                concated += [noisev]
+                encodedv_noisev_actionv = torch.cat(concated,1)
 
                 # print(encodedv_noisev_actionv.size()) # (64L, 512L, 1L, 1L)
 
@@ -284,7 +287,7 @@ class gan():
             encodedv = self.netG_Cv(inputgv)
 
             # compute noisev
-            self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
+            self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
             noisev = Variable(self.noise)
 
             # feed
@@ -292,7 +295,10 @@ class gan():
             inputg_actionv = Variable(self.inputg_action)
 
             # concate encodedv and noisev
-            encodedv_noisev_actionv = torch.cat([encodedv,noisev,inputg_actionv],1)
+            concated = [inputg_actionv] * (self.nz/2)
+            concated += [encodedv]
+            concated += [noisev]
+            encodedv_noisev_actionv = torch.cat(concated,1)
 
             # predict
             prediction = self.netG_DeCv(encodedv_noisev_actionv)

@@ -1,5 +1,6 @@
 # exp time
-t = 29
+t = 5
+lable = 'sto_noise_action_half'
 
 # mode
 run_on = 'agent' # agent, video
@@ -24,10 +25,10 @@ gan_ngpu = 2
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
-gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+'_gctc'+str(gan_gctc)+'_gctd'+str(gan_gctd)+'_t'+str(t)
+gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+'_gctc'+str(gan_gctc)+'_gctd'+str(gan_gctd)
 
 # generate logdir according to config
-logdir = '../../result/gmbrl_1/'+dataset_name_+'/'+gan_model_name_+'/'
+logdir = '../../result/gmbrl_1/'+dataset_name_+'/'+gan_model_name_+'_l'+lable+'_t'+str(t)+'/'
 modeldir = logdir+gan_model_name_+'/'
 datadir = logdir+'data/'
 
@@ -40,6 +41,7 @@ if run_on is 'agent':
     grid_size = 8
     grid_target_x = 4
     grid_target_y = 4
+    grid_action_random_discounter = 0.3
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*10
+    gan_save_image_internal = 60*5
     gan_recent_dataset = 10

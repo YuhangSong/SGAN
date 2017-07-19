@@ -161,8 +161,8 @@ class DCGAN_G_DeCv(nn.Module):
             tisize = tisize * 2
 
         # initail deconv
-        main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2+1, cngf),
-                        nn.ConvTranspose2d(nz*2+1, cngf, config.gan_gctd, 1, 0, bias=False))
+        main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2, cngf),
+                        nn.ConvTranspose2d(nz*2, cngf, config.gan_gctd, 1, 0, bias=False))
         main.add_module('initial.{0}.batchnorm_gd'.format(cngf),
                         nn.BatchNorm2d(cngf))
         main.add_module('initial.{0}.relu_gd'.format(cngf),
