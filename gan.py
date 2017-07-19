@@ -126,6 +126,7 @@ class gan():
         self.optimizerG_DeCv = optim.RMSprop(self.netG_DeCv.parameters(), lr = self.lrG)
 
         self.iteration_i = 0
+        last_log_time = time.time()
 
     def train(self):
         """
@@ -309,12 +310,14 @@ class gan():
                 errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
 
             '''log image result and save models'''
-            if self.iteration_i % 100 == 0:
+            if (time.time()-last_log_time) > config.gan_worker_com_internal:
 
                 self.save_sample(state_prediction_gt[0],'real')
                 self.save_sample(state_prediction[0],'fake')
 
                 self.save_models()
+
+                last_log_time = time.time()
 
             self.iteration_i += 1
             ######################################################################
