@@ -2,6 +2,8 @@ import argparse
 import os
 import sys
 from six.moves import shlex_quote
+import config
+import subprocess
 
 parser = argparse.ArgumentParser(description="Run commands")
 parser.add_argument('-w', '--num-workers', default=1, type=int,
@@ -11,7 +13,7 @@ parser.add_argument('-r', '--remotes', default=None,
                          'rewarders to use (e.g. -r vnc://localhost:5900+15900,vnc://localhost:5901+15901).')
 parser.add_argument('-e', '--env-id', type=str, default="PongDeterministic-v3",
                     help="Environment id")
-parser.add_argument('-l', '--log-dir', type=str, default="../../result/grl_1/grid_3",
+parser.add_argument('-l', '--log-dir', type=str, default=config.logdir,
                     help="Log directory path")
 parser.add_argument('-n', '--dry-run', action='store_true',
                     help="Print out commands rather than executing them")
@@ -93,8 +95,12 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
 
     return cmds, notes
 
+def prepare_dir():
+    subprocess.call(["mkdir", "-p", config.logdir])
+    subprocess.call(["mkdir", "-p", config.modeldir])
 
 def run():
+    prepare_dir()
     args = parser.parse_args()
     cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
     if args.dry_run:

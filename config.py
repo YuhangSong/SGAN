@@ -1,16 +1,21 @@
 # exp time
 t = 10
 
-# video
-video_name_ = '3DPinball_1'
-video_name = video_name_+'.mp4'
+# mode
+run_on = 'agent' # agent, video
 
-# dataset
-gan_predict_interval = 0.1
 gan_size = 128
 gan_nc = 3
-dataset_name_ = video_name_+'_d'+str(gan_predict_interval).replace('.','')+'_c'+str(gan_size)+'_nc'+str(gan_nc)
-dataset_name = dataset_name_+'.npz'
+
+if run_on is 'video':
+    dataset_path = '../../dataset/'
+    video_name_ = '3DPinball_1'
+    video_name = video_name_+'.mp4'
+    gan_predict_interval = 0.1
+    dataset_name_ = video_name_+'_d'+str(gan_predict_interval).replace('.','')+'_c'+str(gan_size)+'_nc'+str(gan_nc)
+    dataset_name = dataset_name_+'.npz'
+elif run_on is 'agent':
+    dataset_name_ = 'agent'
 
 # gan model
 gan_batchsize = 64
@@ -25,13 +30,12 @@ gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+
 logdir = '../../result/gmbrl_1/'+dataset_name_+'/'+gan_model_name_+'/'
 modeldir = logdir+gan_model_name_+'/'
 
-# default
-dataset_path = '../../dataset/'
-
-
-# rl part
-overwirite_with_grid = True
-action_space = 4
-grid_size = 8
-grid_target_x = 4
-grid_target_y = 4
+if run_on is 'agent':
+    """
+    config rl env here
+    """ 
+    overwirite_with_grid = True
+    action_space = 4
+    grid_size = 8
+    grid_target_x = 4
+    grid_target_y = 4
