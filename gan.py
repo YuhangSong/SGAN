@@ -57,7 +57,7 @@ class gan():
         self.experiment = config.logdir
         self.dataset_limit = 500
 
-        self.empty_dataset = np.zeros((0, 4, self.nc, self.imageSize, self.imageSize))
+        self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
         '''random seed for torch'''
         self.manualSeed = random.randint(1, 10000) # fix seed
@@ -99,13 +99,15 @@ class gan():
         self.inputd = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputd_real_part = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputg = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
+        self.inputg_action = torch.FloatTensor(self.batchSize, 1, 1, 1)
         self.noise = torch.FloatTensor(self.batchSize, self.nz, 1, 1)
         self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz, 1, 1).normal_(0, 1)
         self.one = torch.FloatTensor([1])
         self.mone = self.one * -1
 
         '''dataset intialize'''
-        self.dataset = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset        = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset_action = torch.FloatTensor(np.zeros((1, 1, 1, 1)))
         self.dataset_sampler_indexs = torch.LongTensor(self.batchSize)
 
         '''convert tesors to cuda type'''
@@ -115,6 +117,7 @@ class gan():
             self.netG_DeCv.cuda()
             self.inputd = self.inputd.cuda()
             self.inputg = self.inputg.cuda()
+            self.inputg_action = self.inputg_action.cuda()
             self.one, self.mone = self.one.cuda(), self.mone.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
             # self.dataset = self.dataset.cuda()
@@ -126,18 +129,18 @@ class gan():
         self.optimizerG_DeCv = optim.RMSprop(self.netG_DeCv.parameters(), lr = self.lrG)
 
         self.iteration_i = 0
-        last_log_time = time.time()
+        self.last_save_model_time = 0
+        self.last_save_image = 0
 
     def train(self):
         """
         train one iteraction
         """
 
-        print('On data set: '+str(self.dataset.size()))
-
         if self.dataset.size()[0] >= self.batchSize:
 
             '''only train when have enough dataset'''
+            print('Train on dataset: '+str(int(self.dataset.size()[0])))
 
             ######################################################################
             ########################### Update D network #########################
@@ -183,14 +186,17 @@ class gan():
                 ######## train D network with real #######
 
                 ## random sample from dataset ##
-                raw = torch.index_select(self.dataset,0,self.dataset_sampler_indexs.random_(0,self.dataset.size()[0]))
-                image = [] 
+                index = self.dataset_sampler_indexs.random_(0,self.dataset.size()[0])
+                raw = torch.index_select(self.dataset,0,index)
+                action = torch.index_select(self.dataset_action,0,index)
+                image = []
                 for image_i in range(4):
                     image += [raw.narrow(1,image_i,1)]
                 state_prediction_gt = torch.cat(image,2)
                 state_prediction_gt = torch.squeeze(state_prediction_gt,1)
                 if self.cuda:
                     state_prediction_gt = state_prediction_gt.cuda()
+                    action = action.cuda()
                 state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
                 prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
 
@@ -220,11 +226,17 @@ class gan():
                 self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
                 noisev = Variable(self.noise, volatile = True) # totally freeze netG
 
-                # concate encodedv and noisev
-                encodedv_noisev = torch.cat([encodedv,noisev],1)
+                # feed
+                self.inputg_action.resize_as_(action).copy_(action)
+                inputg_actionv = Variable(self.inputg_action, volatile = True) # totally freeze netG
+
+                # concate encodedv, noisev, action
+                encodedv_noisev_actionv = torch.cat([encodedv,noisev,inputg_actionv],1)
+
+                # print(encodedv_noisev_actionv.size()) # (64L, 512L, 1L, 1L)
 
                 # predict
-                prediction = self.netG_DeCv(encodedv_noisev)
+                prediction = self.netG_DeCv(encodedv_noisev_actionv)
                 prediction = prediction.data
                 
                 ############ train D with fake ###########
@@ -275,11 +287,15 @@ class gan():
             self.noise.resize_(self.batchSize, self.nz, 1, 1).normal_(0, 1)
             noisev = Variable(self.noise)
 
+            # feed
+            self.inputg_action.resize_as_(action).copy_(action)
+            inputg_actionv = Variable(self.inputg_action)
+
             # concate encodedv and noisev
-            encodedv_noisev = torch.cat([encodedv,noisev],1)
+            encodedv_noisev_actionv = torch.cat([encodedv,noisev,inputg_actionv],1)
 
             # predict
-            prediction = self.netG_DeCv(encodedv_noisev)
+            prediction = self.netG_DeCv(encodedv_noisev_actionv)
 
             # get state_predictionv, this is a Variable cat 
             statev_predictionv = torch.cat([Variable(state), prediction], 1)
@@ -310,19 +326,26 @@ class gan():
                 errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
 
             '''log image result and save models'''
-            if (time.time()-last_log_time) > config.gan_worker_com_internal:
+            if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
+                self.save_models()
+                self.last_save_model_time = time.time()
 
+            if (time.time()-self.last_save_image) > config.gan_save_image_internal:
                 self.save_sample(state_prediction_gt[0],'real')
                 self.save_sample(state_prediction[0],'fake')
-
-                self.save_models()
-
-                last_log_time = time.time()
+                self.last_save_image = time.time()
 
             self.iteration_i += 1
             ######################################################################
             ######################### End One in Iteration  ######################
             ######################################################################
+
+        else:
+
+            '''dataset not enough'''
+            print('Dataset not enough: '+str(int(self.dataset.size()[0])))
+
+            time.sleep(config.gan_worker_com_internal)
 
     def push_data(self, data):
         """
@@ -331,8 +354,10 @@ class gan():
 
         data = torch.FloatTensor(data)
 
-        self.dataset = torch.cat(seq=[self.dataset,data],
-                                 dim=0)
+        self.dataset        = torch.cat(seq=[self.dataset,        data[:,0:4,:,:,:]],
+                                        dim=0)
+        self.dataset_action = torch.cat(seq=[self.dataset_action, np.squeeze(data[:,4:5,0:1,0:1,0:1],4)],
+                                        dim=0)
 
         if self.dataset.size()[0] > self.dataset_limit:
             self.dataset = self.dataset.narrow(dimension=0,

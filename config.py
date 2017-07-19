@@ -1,5 +1,5 @@
 # exp time
-t = 20
+t = 29
 
 # mode
 run_on = 'agent' # agent, video
@@ -41,4 +41,5 @@ if run_on is 'agent':
     grid_target_x = 4
     grid_target_y = 4
     gan_worker_com_internal = 10
+    gan_save_image_internal = 60*10
     gan_recent_dataset = 10

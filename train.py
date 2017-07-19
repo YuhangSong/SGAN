@@ -58,13 +58,10 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         cmds_map += [new_cmd(session,
             "w-%d" % i, base_cmd + ["--job-name", "worker", "--task", str(i), "--remotes", remotes[i]], mode, logdir, shell)]
 
-    cmds_map += [new_cmd(session, "tb", ["tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
-
-    # if mode == 'tmux':
-    #     cmds_map += [new_cmd(session, "htop", ["htop"], mode, logdir, shell)]
-
     '''cmd for worker that trains gan'''
     cmds_map += [new_cmd(session, "gan", [sys.executable, 'worker_train_gan.py'], mode, logdir, shell)]
+
+    cmds_map += [new_cmd(session, "tb", [str(sys.executable).split('python')[0]+"tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
 
     windows = [v[0] for v in cmds_map]
 

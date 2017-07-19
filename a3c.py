@@ -171,7 +171,7 @@ class GanRunnerThread(threading.Thread):
             print(str(Exception)+": "+str(e))
 
     def reset_dateset(self):
-        self.dataset = self.gan.empty_dataset
+        self.dataset = self.gan.empty_dataset_with_aux
 
     def run(self):
 
@@ -221,7 +221,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
             if last_image is None or llast_image is None or lllast_image is None:
                 pass
             else:
-                data = [lllast_image,llast_image,last_image,image]
+                aux = np.zeros(np.shape(image))
+                aux[0:1,0:1,0:1] = (1.0*action.argmax()) / config.action_space
+                data = [lllast_image,llast_image,last_image,image,aux]
                 data = np.asarray(data)
                 gan_runner.push_data(np.expand_dims(data,0))
 
