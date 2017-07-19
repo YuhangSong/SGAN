@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+from a3c import A3C
 import cv2
 import go_vncdriver
 import tensorflow as tf
@@ -7,7 +7,6 @@ import logging
 import sys, signal
 import time
 import os
-from a3c import A3C
 from envs import create_env
 import distutils.version
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')

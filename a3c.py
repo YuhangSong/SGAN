@@ -1,16 +1,4 @@
 from __future__ import print_function
-from collections import namedtuple
-import numpy as np
-import tensorflow as tf
-from model import LSTMPolicy
-import six.moves.queue as queue
-import scipy.signal
-import threading
-import distutils.version
-import config
-import globalvar as GlobalVar
-import argparse
-import random
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -21,6 +9,19 @@ import torchvision.datasets as dset
 import torchvision.transforms as transforms
 import torchvision.utils as vutils
 from torch.autograd import Variable
+from collections import namedtuple
+import numpy as np
+import go_vncdriver
+import tensorflow as tf
+from model import LSTMPolicy
+import six.moves.queue as queue
+import scipy.signal
+import threading
+import distutils.version
+import config
+import globalvar as GlobalVar
+import argparse
+import random
 import os
 import copy
 import wgan_models.dcgan as dcgan
@@ -29,6 +30,7 @@ import support_lib
 import config
 import subprocess
 import time
+import multiprocessing
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -291,8 +293,8 @@ class GanRunnerThread(threading.Thread):
                 state_prediction_gt = torch.squeeze(state_prediction_gt,1)
                 if self.cuda:
                     state_prediction_gt = state_prediction_gt.cuda()
-                state = state_prediction_gt.narrow(1,0*nc,3*nc)
-                prediction_gt = state_prediction_gt.narrow(1,3*nc,1*nc)
+                state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
+                prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
 
                 ######### train D with real ########
 
