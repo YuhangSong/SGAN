@@ -45,3 +45,7 @@ if run_on is 'agent':
     gan_worker_com_internal = 10
     gan_save_image_internal = 60*5
     gan_recent_dataset = 10
+    lower_gan_worker = 0.0
+    lower_env_worker = 0.0
+    agent_learning = False
+    agent_acting = False    

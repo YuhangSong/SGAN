@@ -106,9 +106,8 @@ class gan():
         self.mone = self.one * -1
 
         '''dataset intialize'''
-        self.dataset        = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
-        self.dataset_action = torch.FloatTensor(np.zeros((1, 1, 1, 1)))
-        self.dataset_sampler_indexs = torch.LongTensor(self.batchSize)
+        self.dataset_image        = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset_aux = torch.FloatTensor(np.zeros((1, 1, 1, 1)))
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -120,8 +119,8 @@ class gan():
             self.inputg_action = self.inputg_action.cuda()
             self.one, self.mone = self.one.cuda(), self.mone.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
-            # self.dataset = self.dataset.cuda()
-            # self.dataset_sampler_indexs = self.dataset_sampler_indexs.cuda()
+            self.dataset_image = self.dataset_image.cuda()
+            self.dataset_aux = self.dataset_aux.cuda()
 
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
@@ -137,10 +136,10 @@ class gan():
         train one iteraction
         """
 
-        if self.dataset.size()[0] >= self.batchSize:
+        if self.dataset_image.size()[0] >= self.batchSize:
 
             '''only train when have enough dataset'''
-            print('Train on dataset: '+str(int(self.dataset.size()[0])))
+            print('Train on dataset: '+str(int(self.dataset_image.size()[0])))
 
             ######################################################################
             ########################### Update D network #########################
@@ -186,17 +185,10 @@ class gan():
                 ######## train D network with real #######
 
                 ## random sample from dataset ##
-                index = self.dataset_sampler_indexs.random_(0,self.dataset.size()[0])
-                raw = torch.index_select(self.dataset,0,index)
-                action = torch.index_select(self.dataset_action,0,index)
-                image = []
-                for image_i in range(4):
-                    image += [raw.narrow(1,image_i,1)]
-                state_prediction_gt = torch.cat(image,2)
+                raw    = self.dataset_image.narrow(       0, self.dataset_image.size()[0]        - self.batchSize, self.batchSize)
+                action = self.dataset_aux.narrow(0, self.dataset_aux.size()[0] - self.batchSize, self.batchSize)
+                state_prediction_gt = torch.cat([raw.narrow(1,0,1),raw.narrow(1,1,1),raw.narrow(1,2,1),raw.narrow(1,3,1)],2)
                 state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                if self.cuda:
-                    state_prediction_gt = state_prediction_gt.cuda()
-                    action = action.cuda()
                 state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
                 prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
 
@@ -349,7 +341,7 @@ class gan():
         else:
 
             '''dataset not enough'''
-            print('Dataset not enough: '+str(int(self.dataset.size()[0])))
+            print('Dataset not enough: '+str(int(self.dataset_image.size()[0])))
 
             time.sleep(config.gan_worker_com_internal)
 
@@ -358,17 +350,30 @@ class gan():
         push data to dataset which is a torch tensor
         """
 
-        data = torch.FloatTensor(data)
+        data = torch.FloatTensor(data).cuda()
+        data_image = data[:,0:4,:,:,:]
+        data_aux = torch.squeeze(data[:,4:5,0:1,0:1,0:1],4)
 
-        self.dataset        = torch.cat(seq=[self.dataset,        data[:,0:4,:,:,:]],
-                                        dim=0)
-        self.dataset_action = torch.cat(seq=[self.dataset_action, np.squeeze(data[:,4:5,0:1,0:1,0:1],4)],
-                                        dim=0)
+        if self.dataset_image.size()[0] <= 1:
+            self.dataset_image = data_image
+            self.dataset_aux = data_aux
+        else:
+            insert_position = np.random.randint(1, 
+                                                high=self.dataset_image.size()[0]-2,
+                                                size=None)
 
-        if self.dataset.size()[0] > self.dataset_limit:
-            self.dataset = self.dataset.narrow(dimension=0,
-                                               start=self.dataset.size()[0]-self.dataset_limit,
-                                               length=self.dataset_limit)
+            self.dataset_image = torch.cat(seq=[self.dataset_image.narrow(0,0,insert_position), data_image, self.dataset_image.narrow(0,insert_position,self.dataset_image.size()[0]-insert_position)],
+                                           dim=0)
+            self.dataset_aux   = torch.cat(seq=[self.dataset_aux.narrow(  0,0,insert_position), data_aux,   self.dataset_aux.narrow(  0,insert_position,self.dataset_aux.size()[0]-insert_position)],
+                                           dim=0)
+
+            if self.dataset_image.size()[0] > self.dataset_limit:
+                self.dataset_image        = self.dataset_image.narrow(       dimension=0,
+                                                                 start=self.dataset_image.size()[0]        - self.dataset_limit,
+                                                                 length=self.dataset_limit)
+                self.dataset_aux = self.dataset_aux.narrow(dimension=0,
+                                                                 start=self.dataset_aux.size()[0] - self.dataset_limit,
+                                                                 length=self.dataset_limit)
 
     def load_models(self):
         '''do auto checkpoint'''

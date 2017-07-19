@@ -49,6 +49,7 @@ class GanTrainer():
 
             '''if it is time to load'''
             print('Try loading data...')
+            data = None
             try:
                 data = np.load(config.datadir+'data.npz')['data'] # load data
                 if np.shape(data)[0] is 0:
@@ -56,12 +57,14 @@ class GanTrainer():
                 else:
                     print('Data loaded: '+str(np.shape(data)))
                 self.last_load_time = time.time() # record last load time
-                self.gan.push_data(data) # push data to gan
                 np.savez(config.datadir+'data.npz',
                          data=self.gan.empty_dataset_with_aux)
             except Exception, e:
                 print('Load failed')
-                # print(str(Exception)+": "+str(e))
+                print(str(Exception)+": "+str(e))
+
+            if data is not None:
+                self.gan.push_data(data) # push data to gan
 
     def run(self):
 
@@ -70,6 +73,7 @@ class GanTrainer():
             '''keep running'''
             self.load_data()
             self.gan.train()
+            time.sleep(config.lower_gan_worker)
 
 if __name__ == "__main__":
     trainer = GanTrainer()

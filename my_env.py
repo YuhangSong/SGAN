@@ -1,5 +1,6 @@
 import numpy as np
 import config
+import time
 def get_grid_observation(x, y):
     observation = np.ones((config.gan_size,config.gan_size))
     observation[x*(config.gan_size/config.grid_size):(x+1)*(config.gan_size/config.grid_size),y*(config.gan_size/config.grid_size):(y+1)*(config.gan_size/config.grid_size)] = 0.0
@@ -88,6 +89,8 @@ class env():
                 self.cur_x = 0
             if self.cur_y < 0:
                 self.cur_y = 0
+
+            time.sleep(config.lower_env_worker)
 
             ###########################################################
 

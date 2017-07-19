@@ -201,6 +201,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
     last_image = env.reset()
     last_state = rbg2gray(last_image)
     last_features = policy.get_initial_features()
+    fetched = policy.act(last_state, *last_features)
     length = 0
     rewards = 0
 
@@ -209,8 +210,20 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
         rollout = PartialRollout()
 
         for _ in range(num_local_steps):
-            fetched = policy.act(last_state, *last_features)
-            action, value_, features = fetched[0], fetched[1], fetched[2:]
+
+            if config.agent_acting:
+                '''act from model'''
+                fetched = policy.act(last_state, *last_features)
+                action, value_, features = fetched[0], fetched[1], fetched[2:]
+            else:
+                '''genrate random action'''
+                action_ = np.random.randint(0, 
+                                            high=config.action_space-1,
+                                            size=None)
+                action = np.zeros((config.action_space))
+                action[action_] = 1.0
+                value_ = 0.0
+                features = np.zeros((2,1,256))
 
             if config.overwirite_with_grid:
                 GlobalVar.set_mq_client(action.argmax())
@@ -251,8 +264,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 summary = tf.Summary()
                 for k, v in info.items():
                     summary.value.add(tag=k, simple_value=float(v))
-                summary_writer.add_summary(summary, policy.global_step.eval())
-                summary_writer.flush()
+                if config.agent_acting:
+                    summary_writer.add_summary(summary, policy.global_step.eval())
+                    summary_writer.flush()
             
             if terminal:
                 terminal_end = True
@@ -268,7 +282,10 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 break
 
         if not terminal_end:
-            rollout.r = policy.value(last_state, *last_features)
+            if config.agent_acting:
+                rollout.r = policy.value(last_state, *last_features)
+            else:
+                rollout.r = 0.0
 
         # once we have enough experience, yield it, and have the ThreadRunner place it on a queue
         yield rollout
@@ -292,7 +309,7 @@ class A3C(object):
         ############################## A3C Model #############################
         ######################################################################
 
-        worker_device = "/job:worker/task:{}/cpu:0".format(task)
+        worker_device = "/job:worker/task:{}".format(task)
         with tf.device(tf.train.replica_device_setter(1, worker_device=worker_device)):
             with tf.variable_scope("global"):
                 self.network = LSTMPolicy(env.observation_space.shape, env.action_space.n)
@@ -358,11 +375,11 @@ class A3C(object):
             self.sync = tf.group(*[v1.assign(v2) for v1, v2 in zip(pi.var_list, self.network.var_list)])
 
             grads_and_vars = list(zip(grads, self.network.var_list))
-            inc_step = self.global_step.assign_add(tf.shape(pi.x)[0])
+            self.inc_step = self.global_step.assign_add(tf.shape(pi.x)[0])
 
             # each worker has a different set of adam optimizer parameters
             opt = tf.train.AdamOptimizer(1e-4)
-            self.train_op = tf.group(opt.apply_gradients(grads_and_vars), inc_step)
+            self.train_op = tf.group(opt.apply_gradients(grads_and_vars))
             self.summary_writer = None
             self.local_steps = 0
 
@@ -399,9 +416,14 @@ class A3C(object):
         should_compute_summary = self.task == 0 and self.local_steps % 11 == 0
 
         if should_compute_summary:
-            fetches = [self.summary_op, self.train_op, self.global_step]
+            fetches = [self.summary_op, self.global_step]
         else:
-            fetches = [self.train_op, self.global_step]
+            fetches = [self.global_step]
+
+        fetches += [self.inc_step]
+
+        if config.agent_learning:
+            fetches += [self.train_op]
 
         feed_dict = {
             self.local_network.x: batch.si,
@@ -415,6 +437,6 @@ class A3C(object):
         fetched = sess.run(fetches, feed_dict=feed_dict)
 
         if should_compute_summary:
-            self.summary_writer.add_summary(tf.Summary.FromString(fetched[0]), fetched[-1])
+            self.summary_writer.add_summary(tf.Summary.FromString(fetched[0]), fetched[1])
             self.summary_writer.flush()
         self.local_steps += 1

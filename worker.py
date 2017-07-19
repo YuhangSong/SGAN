@@ -45,7 +45,8 @@ def run(args, server):
         logger.info("Initializing all parameters.")
         ses.run(init_all_op)
 
-    config = tf.ConfigProto(device_filters=["/job:ps", "/job:worker/task:{}/cpu:0".format(args.task)])
+    config = tf.ConfigProto(device_filters=["/job:ps", "/job:worker/task:{}".format(args.task)])
+    config.gpu_options.allow_growth=True
     logdir = os.path.join(args.log_dir, 'train')
 
     if use_tf12_api:
@@ -138,12 +139,16 @@ Setting up Tensorflow for data parallel work
     signal.signal(signal.SIGTERM, shutdown)
 
     if args.job_name == "worker":
+        config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=2)
+        config.gpu_options.allow_growth=True
         server = tf.train.Server(cluster, job_name="worker", task_index=args.task,
-                                 config=tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=2))
+                                 config=config)
         run(args, server)
     else:
+        config = tf.ConfigProto(device_filters=["/job:ps"])
+        config.gpu_options.allow_growth=True
         server = tf.train.Server(cluster, job_name="ps", task_index=args.task,
-                                 config=tf.ConfigProto(device_filters=["/job:ps"]))
+                                 config=config)
         while True:
             time.sleep(1000)
 
