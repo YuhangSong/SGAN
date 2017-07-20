@@ -1,5 +1,5 @@
 # exp time
-t = 5
+t = 6
 lable = 'sto_noise_action_half'
 
 # mode
