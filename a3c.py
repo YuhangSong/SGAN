@@ -153,21 +153,34 @@ class GanRunnerThread(threading.Thread):
 
         '''Try saving data'''
         try:
+
+            '''
+            load previous data from disk, since there may 
+            still data that has not been take by the gan yet
+            '''
             previous_data = np.load(config.datadir+'data.npz')['data'] # load data
             print('Previous data found: '+str(np.shape(previous_data)))
+            '''push these previous data to dataset'''
             self.push_data(previous_data)
 
             '''
-            cat data to recent, this is only for similated env
+            cat dataset to recent, this is only for similated env
             since the env is so fast
             '''
-            self.dataset=self.dataset[np.shape(self.dataset)[0]-config.gan_recent_dataset:np.shape(self.dataset)[0]]
+            if config.gan_recent_dataset is not -1:
+                self.dataset=self.dataset[np.shape(self.dataset)[0]-config.gan_recent_dataset:np.shape(self.dataset)[0]]
 
-            print('Save data: '+str(np.shape(self.dataset)))
+            '''save dataset'''
             np.savez(config.datadir+'data.npz',
                      data=self.dataset)
+            print('Save data: '+str(np.shape(self.dataset)))
+
+            '''after saved, reset it'''
             self.reset_dateset()
+
         except Exception, e:
+
+            print('Save failed!')
             print(str(Exception)+": "+str(e))
 
     def reset_dateset(self):
@@ -201,7 +214,6 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
     last_image = env.reset()
     last_state = rbg2gray(last_image)
     last_features = policy.get_initial_features()
-    fetched = policy.act(last_state, *last_features)
     length = 0
     rewards = 0
 
@@ -218,9 +230,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
             else:
                 '''genrate random action'''
                 action_ = np.random.randint(0, 
-                                            high=config.action_space-1,
+                                            high=env.action_space.n-1,
                                             size=None)
-                action = np.zeros((config.action_space))
+                action = np.zeros((env.action_space.n))
                 action[action_] = 1.0
                 value_ = 0.0
                 features = np.zeros((2,1,256))
@@ -235,7 +247,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 pass
             else:
                 aux = np.zeros(np.shape(image))
-                aux[0:1,0:1,0:1] = (1.0*action.argmax()) / config.action_space
+                aux[0:1,0:1,0:config.gan_nz] = (1.0*action.argmax()) / env.action_space.n
                 data = [lllast_image,llast_image,last_image,image,aux]
                 data = np.asarray(data)
                 gan_runner.push_data(np.expand_dims(data,0))

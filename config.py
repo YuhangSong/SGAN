@@ -1,6 +1,6 @@
 # exp time
-t = 6
-lable = 'sto_noise_action_half'
+t = 3
+lable = 'add_action_to_d'
 
 # mode
 run_on = 'agent' # agent, video
@@ -43,9 +43,13 @@ if run_on is 'agent':
     grid_target_y = 4
     grid_action_random_discounter = 0.3
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*5
+    gan_save_image_internal = 60*1
+    '''since'''
     gan_recent_dataset = 10
     lower_gan_worker = 0.0
     lower_env_worker = 0.0
     agent_learning = False
-    agent_acting = False    
+    agent_acting = False
+
+    gan_recent_dataset = -1
+    gan_worker_com_internal = 1
