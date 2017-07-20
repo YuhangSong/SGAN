@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.parallel
+import config
 
 class DCGAN_D(nn.Module):
 
@@ -31,7 +32,7 @@ class DCGAN_D(nn.Module):
         csize, cndf = isize / 2, ndf
 
         # keep conv till
-        while csize > 4:
+        while csize > config.gan_dct:
             in_feat = cndf
             out_feat = cndf * 2
             main.add_module('pyramid.{0}-{1}.conv'.format(in_feat, out_feat),
@@ -45,7 +46,7 @@ class DCGAN_D(nn.Module):
 
         # state size K x 4 x 4
         main.add_module('final.{0}-{1}.conv'.format(cndf, 1),
-                        nn.Conv2d(cndf, 1, 4, 1, 0, bias=False))
+                        nn.Conv2d(cndf, 1, config.gan_dct, 1, 0, bias=False))
 
         # main model done
         self.main = main
@@ -98,7 +99,7 @@ class DCGAN_G_Cv(nn.Module):
         csize, cndf = isize / 2, ngf
 
         # conv till
-        while csize > 4:
+        while csize > config.gan_gctc:
             in_feat = cndf
             out_feat = cndf * 2
             main.add_module('pyramid.{0}-{1}.conv_gc'.format(in_feat, out_feat),
@@ -113,7 +114,7 @@ class DCGAN_G_Cv(nn.Module):
         # conv final to nz
         # state size. K x 4 x 4
         main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, 4, 1, 0, bias=False))
+                        nn.Conv2d(cndf, nz, config.gan_gctc, 1, 0, bias=False))
 
         # main model done
         self.main = main
@@ -154,19 +155,19 @@ class DCGAN_G_DeCv(nn.Module):
         main = nn.Sequential()
 
         # compute initial cngf for deconv
-        cngf, tisize = ngf//2, 4
+        cngf, tisize = ngf//2, config.gan_gctd
         while tisize != isize:
             cngf = cngf * 2
             tisize = tisize * 2
 
         # initail deconv
         main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2, cngf),
-                        nn.ConvTranspose2d(nz*2, cngf, 4, 1, 0, bias=False))
+                        nn.ConvTranspose2d(nz*2, cngf, config.gan_gctd, 1, 0, bias=False))
         main.add_module('initial.{0}.batchnorm_gd'.format(cngf),
                         nn.BatchNorm2d(cngf))
         main.add_module('initial.{0}.relu_gd'.format(cngf),
                         nn.ReLU(True))
-        csize, cndf = 4, cngf
+        csize, cndf = config.gan_gctd, cngf
 
         # deconv till
         while csize < isize//2:

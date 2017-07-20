@@ -6,7 +6,7 @@ import config
 import subprocess
 
 parser = argparse.ArgumentParser(description="Run commands")
-parser.add_argument('-w', '--num-workers', default=config.num_workers, type=int,
+parser.add_argument('-w', '--num-workers', default=1, type=int,
                     help="Number of workers")
 parser.add_argument('-r', '--remotes', default=None,
                     help='The address of pre-existing VNC servers and '
@@ -39,7 +39,6 @@ def new_cmd(session, name, cmd, mode, logdir, shell):
 def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash', mode='tmux', visualise=False):
     # for launching the TF workers and for launching tensorboard
     base_cmd = [
-        'CUDA_VISIBLE_DEVICES=',
         sys.executable, 'worker.py',
         '--log-dir', logdir,
         '--env-id', env_id,
@@ -59,12 +58,10 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         cmds_map += [new_cmd(session,
             "w-%d" % i, base_cmd + ["--job-name", "worker", "--task", str(i), "--remotes", remotes[i]], mode, logdir, shell)]
 
-    cmds_map += [new_cmd(session, "tb", ["tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
-    if mode == 'tmux':
-        cmds_map += [new_cmd(session, "htop", ["htop"], mode, logdir, shell)]
+    '''cmd for worker that trains gan'''
+    cmds_map += [new_cmd(session, "gan", [sys.executable, 'worker_train_gan.py'], mode, logdir, shell)]
 
-    if config.enable_gsa:
-        cmds_map += [new_cmd(session,"wgan", ["source", "activate", "song_1"], mode, logdir, shell)]
+    cmds_map += [new_cmd(session, "tb", [str(sys.executable).split('python')[0]+"tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
 
     windows = [v[0] for v in cmds_map]
 
@@ -73,7 +70,6 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
         "mkdir -p {}".format(logdir),
         "echo {} {} > {}/cmd.sh".format(sys.executable, ' '.join([shlex_quote(arg) for arg in sys.argv if arg != '-n']), logdir),
     ]
-
     if mode == 'nohup' or mode == 'child':
         cmds += ["echo '#!/bin/sh' >{}/kill.sh".format(logdir)]
         notes += ["Run `source {}/kill.sh` to kill the job".format(logdir)]
@@ -97,23 +93,15 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     for window, cmd in cmds_map:
         cmds += [cmd]
 
-    if config.enable_gsa:
-        cmds_map = [new_cmd(session,"wgan", ["python", "run_wgan.py"], mode, logdir, shell)]
-        for window, cmd in cmds_map:
-            cmds += [cmd]
-
     return cmds, notes
 
-def rm_and_mkdir(dir):
-    subprocess.call(["rm", "-r", dir])
-    subprocess.call(["mkdir", "-p", dir])
-
-def setup_dir():
-    rm_and_mkdir(config.real_state_dir)
-    rm_and_mkdir(config.waiting_reward_dir)
+def prepare_dir():
+    subprocess.call(["mkdir", "-p", config.logdir])
+    subprocess.call(["mkdir", "-p", config.modeldir])
+    subprocess.call(["mkdir", "-p", config.datadir])
 
 def run():
-    setup_dir()
+    prepare_dir()
     args = parser.parse_args()
     cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
     if args.dry_run:

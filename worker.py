@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+from a3c import A3C
 import cv2
 import go_vncdriver
 import tensorflow as tf
@@ -7,7 +7,6 @@ import logging
 import sys, signal
 import time
 import os
-from a3c import A3C
 from envs import create_env
 import distutils.version
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
@@ -46,7 +45,8 @@ def run(args, server):
         logger.info("Initializing all parameters.")
         ses.run(init_all_op)
 
-    config = tf.ConfigProto(device_filters=["/job:ps", "/job:worker/task:{}/cpu:0".format(args.task)])
+    config = tf.ConfigProto(device_filters=["/job:ps", "/job:worker/task:{}".format(args.task)])
+    config.gpu_options.allow_growth=True
     logdir = os.path.join(args.log_dir, 'train')
 
     if use_tf12_api:
@@ -87,10 +87,10 @@ def run(args, server):
 
 def cluster_spec(num_workers, num_ps):
     """
-    More tensorflow setup for data parallelism
-    """
+More tensorflow setup for data parallelism
+"""
     cluster = {}
-    port = 12222
+    port = 4132
 
     all_ps = []
     host = '127.0.0.1'
@@ -108,8 +108,8 @@ def cluster_spec(num_workers, num_ps):
 
 def main(_):
     """
-    Setting up Tensorflow for data parallel work
-    """
+Setting up Tensorflow for data parallel work
+"""
 
     parser = argparse.ArgumentParser(description=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbosity', default=0, help='Set verbosity.')
@@ -139,12 +139,16 @@ def main(_):
     signal.signal(signal.SIGTERM, shutdown)
 
     if args.job_name == "worker":
+        config = tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=2)
+        config.gpu_options.allow_growth=True
         server = tf.train.Server(cluster, job_name="worker", task_index=args.task,
-                                 config=tf.ConfigProto(intra_op_parallelism_threads=1, inter_op_parallelism_threads=2))
+                                 config=config)
         run(args, server)
     else:
+        config = tf.ConfigProto(device_filters=["/job:ps"])
+        config.gpu_options.allow_growth=True
         server = tf.train.Server(cluster, job_name="ps", task_index=args.task,
-                                 config=tf.ConfigProto(device_filters=["/job:ps"]))
+                                 config=config)
         while True:
             time.sleep(1000)
 
