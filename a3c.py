@@ -167,8 +167,9 @@ class GanRunnerThread(threading.Thread):
             cat dataset to recent, this is only for similated env
             since the env is so fast
             '''
-            if config.gan_recent_dataset is not -1:
-                self.dataset=self.dataset[np.shape(self.dataset)[0]-config.gan_recent_dataset:np.shape(self.dataset)[0]]
+            if config.gan_recent_dataset > -1:
+                if np.shape(self.dataset)[0] > config.gan_recent_dataset:
+                    self.dataset=self.dataset[(np.shape(self.dataset)[0]-config.gan_recent_dataset):np.shape(self.dataset)[0]]
 
             '''save dataset'''
             np.savez(config.datadir+'data.npz',

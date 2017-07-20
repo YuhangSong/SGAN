@@ -51,6 +51,9 @@ class DCGAN_D(nn.Module):
         # main model done
         self.main = main
 
+        # cat_layer
+        self.cat_layer = torch.nn.Linear(nz+nz/2, 1)
+
     def forward(self, input_image, input_aux):
 
         '''
@@ -63,9 +66,10 @@ class DCGAN_D(nn.Module):
         else: 
             output_encoded = self.main(input_image)
 
-        print(output_encoded.size())
-        print(input_aux.size())
-        print(s)
+        cated = torch.cat([output_encoded, input_aux], 1)
+        cated = torch.squeeze(cated,2)
+        cated = torch.squeeze(cated,2)
+        output = self.cat_layer(cated)
 
         # compute error
         error = output.mean(0)

@@ -110,7 +110,7 @@ class gan():
         self.mone = self.one * -1
 
         '''dataset intialize'''
-        self.dataset_image        = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.nz/2)))
 
         '''convert tesors to cuda type'''
@@ -119,6 +119,7 @@ class gan():
             self.netG_Cv.cuda()
             self.netG_DeCv.cuda()
             self.inputd_image = self.inputd_image.cuda()
+            self.inputd_aux = self.inputd_aux.cuda()
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
             self.one, self.mone = self.one.cuda(), self.mone.cuda()
@@ -190,13 +191,13 @@ class gan():
                 # image part
                 image = self.dataset_image.narrow(0, self.dataset_image.size()[0]-self.batchSize, self.batchSize)
                 state_prediction_gt = torch.cat([image.narrow(1,0,1),image.narrow(1,1,1),image.narrow(1,2,1),image.narrow(1,3,1)],2)
+
                 self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                self.state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
-                self.prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
+                self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
+                self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
+
                 # aux part
                 self.aux = self.dataset_aux.narrow(0, self.dataset_aux.size()[0] - self.batchSize, self.batchSize)
-                print(self.aux)
-                print(s)
 
                 ################# train D with real #################
 
@@ -208,6 +209,8 @@ class gan():
                 inputd_image_v = Variable(self.inputd_image)
                 self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
                 inputd_aux_v = Variable(self.inputd_aux)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
                 # compute
                 errD_real, outputD_real = self.netD(inputd_image_v, inputd_aux_v)
@@ -245,13 +248,15 @@ class gan():
                 ################# train D with fake #################
 
                 # get state_prediction
-                state_prediction = torch.cat([self.state, prediction], 1)
+                self.state_prediction = torch.cat([self.state, prediction], 1)
 
                 # feed
-                self.inputd_image.resize_as_(state_prediction).copy_(state_prediction)
+                self.inputd_image.resize_as_(self.state_prediction).copy_(self.state_prediction)
                 inputd_image_v = Variable(self.inputd_image)
                 self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
                 inputd_aux_v = Variable(self.inputd_aux)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
                 # compute
                 errD_fake, outputD_fake = self.netD(inputd_image_v, inputd_aux_v)
@@ -290,7 +295,7 @@ class gan():
 
             # feed aux
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
-            inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze netG
+            inputg_aux_v = Variable(self.inputg_aux)
             inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
             inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
 
@@ -314,6 +319,8 @@ class gan():
             # feed
             self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
             inputd_aux_v = Variable(self.inputd_aux)
+            inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+            inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
             # compute
             errG, _ = self.netD(inputd_image_v, inputd_aux_v)
