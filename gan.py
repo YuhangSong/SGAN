@@ -57,6 +57,7 @@ class gan():
         self.clamp_upper = 0.01
         self.experiment = config.logdir
         self.dataset_limit = 500
+        self.aux_size = config.gan_aux_size
 
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
@@ -103,16 +104,16 @@ class gan():
         '''feed interface initialize'''
         # input of d
         self.inputd_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
-        self.inputd_aux = torch.FloatTensor(self.batchSize, self.nz/2)
+        self.inputd_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         # input of c
         self.inputc_image = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
-        self.inputc_aux = torch.FloatTensor(self.batchSize*2, self.nz/2)
+        self.inputc_aux = torch.FloatTensor(self.batchSize*2, self.aux_size)
         # input of g
         self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
-        self.inputg_aux = torch.FloatTensor(self.batchSize, self.nz/2)
+        self.inputg_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         # noise
-        self.noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1)
-        self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
+        self.noise = torch.FloatTensor(self.batchSize, self.aux_size, 1, 1)
+        self.fixed_noise = torch.FloatTensor(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
         # constent
         self.one = torch.FloatTensor([1])
         self.zero = torch.FloatTensor([0])
@@ -122,7 +123,7 @@ class gan():
 
         '''dataset intialize'''
         self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
-        self.dataset_aux = torch.FloatTensor(np.zeros((1, self.nz/2)))
+        self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -214,11 +215,10 @@ class gan():
                 # image part
                 image = self.dataset_image.narrow(0, self.dataset_image.size()[0]-self.batchSize, self.batchSize)
                 state_prediction_gt = torch.cat([image.narrow(1,0,1),image.narrow(1,1,1),image.narrow(1,2,1),image.narrow(1,3,1)],2)
-
+                # image part to
                 self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
                 self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
                 self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
-
                 # aux part
                 self.aux = self.dataset_aux.narrow(0, self.dataset_aux.size()[0] - self.batchSize, self.batchSize)
 
@@ -257,7 +257,7 @@ class gan():
                 inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
 
                 # feed noise
-                self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
+                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
                 noise_v = Variable(self.noise, volatile = True) # totally freeze netG
 
                 # concate encoded_v, noise_v, action
@@ -358,7 +358,7 @@ class gan():
             inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
 
             # feed noise
-            self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
+            self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
             noise_v = Variable(self.noise)
 
             # concate encoded_v, noise_v, action
@@ -426,7 +426,7 @@ class gan():
                 inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
 
                 # feed noise
-                self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
+                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
                 noise_v = Variable(self.noise)
 
                 # concate encoded_v, noise_v, action
@@ -484,7 +484,7 @@ class gan():
 
         data_image = data[:,0:4,:,:,:]
 
-        data_aux = data[:,4:5,0:1,0:1,0:self.nz]
+        data_aux = data[:,4:5,0:1,0:1,0:self.aux_size]
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)

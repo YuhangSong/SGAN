@@ -1,6 +1,6 @@
 # exp time
-t = 2
-lable = 'add_c_run_samples'
+t = 4
+lable = 'action_dis'
 
 # mode
 run_on = 'agent' # agent, video
@@ -21,6 +21,7 @@ elif run_on is 'agent':
 # gan model
 gan_batchsize = 64
 gan_nz = 256
+gan_aux_size = gan_nz/2
 gan_ngpu = 2
 gan_dct = 4
 gan_gctc = 4

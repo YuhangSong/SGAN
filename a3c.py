@@ -254,7 +254,7 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 pass
             else:
                 aux = np.zeros(np.shape(image))
-                aux[0:1,0:1,0:config.gan_nz] = (1.0*action.argmax()) / env.action_space.n
+                aux[0:1,0:1,action.argmax()*config.gan_aux_size/env.action_space.n:(action.argmax()+1)*config.gan_aux_size/env.action_space.n] = 1.0
                 data = [lllast_image,llast_image,last_image,image,aux]
                 data = np.asarray(data)
                 gan_runner.push_data(np.expand_dims(data,0))
