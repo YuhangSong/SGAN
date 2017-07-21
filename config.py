@@ -1,5 +1,5 @@
 # exp time
-t = 4
+t = 7
 lable = 'add_c'
 
 # mode
@@ -43,7 +43,7 @@ if run_on is 'agent':
     grid_target_y = 4
     grid_action_random_discounter = 0.3
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*1
+    gan_save_image_internal = 60*5
     '''since'''
     gan_recent_dataset = 10
     lower_gan_worker = 0.0
@@ -51,5 +51,5 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_recent_dataset = 64
-    gan_worker_com_internal = 1
+    # gan_recent_dataset = 64
+    # gan_worker_com_internal = 1

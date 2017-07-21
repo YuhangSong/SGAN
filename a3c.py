@@ -140,37 +140,43 @@ class GanRunnerThread(threading.Thread):
         '''dataset intialize'''
         self.reset_dateset()
 
-        '''bootstrap'''
-        np.savez(config.datadir+'data.npz',
-                 data=self.dataset)
-
-
     def push_data(self, data):
         self.dataset = np.concatenate((self.dataset,data),
                                       axis=0)
 
     def save_dataset(self):
 
-        '''Try saving data'''
-        try:
+        print('Try loading previous data')
 
+        previous_data = None
+        try:
             '''
             load previous data from disk, since there may 
             still data that has not been take by the gan yet
             '''
             previous_data = np.load(config.datadir+'data.npz')['data'] # load data
             print('Previous data found: '+str(np.shape(previous_data)))
-            '''push these previous data to dataset'''
+        except Exception, e:
+            print('Loading previous data failed')
+            print(str(Exception)+": "+str(e))
+
+        if previous_data is not None:
+            '''
+            push these previous data to dataset
+            '''
             self.push_data(previous_data)
 
-            '''
-            cat dataset to recent, this is only for similated env
-            since the env is so fast
-            '''
-            if config.gan_recent_dataset > -1:
-                if np.shape(self.dataset)[0] > config.gan_recent_dataset:
-                    self.dataset=self.dataset[(np.shape(self.dataset)[0]-config.gan_recent_dataset):np.shape(self.dataset)[0]]
+        '''
+        cat dataset to recent, this is only for similated env
+        since the env is so fast
+        '''
+        if config.gan_recent_dataset > -1:
+            if np.shape(self.dataset)[0] > config.gan_recent_dataset:
+                self.dataset=self.dataset[(np.shape(self.dataset)[0]-config.gan_recent_dataset):np.shape(self.dataset)[0]]
 
+        print('Try saving data...')
+        
+        try:
             '''save dataset'''
             np.savez(config.datadir+'data.npz',
                      data=self.dataset)

@@ -44,26 +44,24 @@ class GanTrainer():
         self.last_load_time = time.time() # record last_load_time as initialize time
 
     def load_data(self):
-        self.load_time = time.time() # get this load time
-        if (self.load_time-self.last_load_time) >= config.gan_worker_com_internal:
+        
+        if (time.time()-self.last_load_time) >= config.gan_worker_com_internal:
 
             '''if it is time to load'''
             print('Try loading data...')
+
             data = None
             try:
                 data = np.load(config.datadir+'data.npz')['data'] # load data
-                if np.shape(data)[0] is 0:
-                    return
-                else:
-                    print('Data loaded: '+str(np.shape(data)))
-                self.last_load_time = time.time() # record last load time
-                np.savez(config.datadir+'data.npz',
-                         data=self.gan.empty_dataset_with_aux)
             except Exception, e:
                 print('Load failed')
                 print(str(Exception)+": "+str(e))
 
+            '''delete any way too avoid futher bug'''
+            subprocess.call(["rm", "-r", config.datadir+'data.npz'])
+
             if data is not None:
+                self.last_load_time = time.time() # record last load time
                 self.gan.push_data(data) # push data to gan
 
     def run(self):

@@ -408,8 +408,8 @@ class gan():
                 self.last_save_model_time = time.time()
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
-                self.save_sample(self.state_prediction_gt[0],'real_'+str(outputc[0].data.float()).replace('.','').split('[')[0])
-                self.save_sample(self.state_prediction[0],'fake'+str(outputc[self.batchSize].data.float()).replace('.','').split('[')[0])
+                self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc[0].data.cpu().numpy()[0])).replace('.',''))
+                self.save_sample(self.state_prediction[0],'fake'+('%.5f'%(outputc[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
                 self.last_save_image_time = time.time()
 
             self.iteration_i += 1
@@ -429,6 +429,9 @@ class gan():
         """
         push data to dataset which is a torch tensor
         """
+
+        if np.shape(data)[0] is 0:
+            return
 
         data = torch.FloatTensor(data).cuda()
 
@@ -463,22 +466,22 @@ class gan():
     def load_models(self):
         '''do auto checkpoint'''
         try:
-            self.netD.load_state_dict(torch.load(config.modeldir+'netD.pth'))
+            self.netD.load_state_dict(torch.load('{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netD founded')
         except Exception, e:
             print('Previous checkpoint for netD unfounded')
         try:
-            self.netC.load_state_dict(torch.load(config.modeldir+'netC.pth'))
+            self.netC.load_state_dict(torch.load(config.modeldir+'netC.pth''{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netC founded')
         except Exception, e:
             print('Previous checkpoint for netC unfounded')
         try:
-            self.netG_Cv.load_state_dict(torch.load(config.modeldir+'netG_Cv.pth'))
+            self.netG_Cv.load_state_dict(torch.load('{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netG_Cv founded')
         except Exception, e:
             print('Previous checkpoint for netG_Cv unfounded')
         try:
-            self.netG_DeCv.load_state_dict(torch.load(config.modeldir+'netG_DeCv.pth'))
+            self.netG_DeCv.load_state_dict(torch.load('{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netG_DeCv founded')
         except Exception, e:
             print('Previous checkpoint for netG_DeCv unfounded')
