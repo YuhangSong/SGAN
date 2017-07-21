@@ -1,6 +1,6 @@
 # exp time
-t = 7
-lable = 'add_c'
+t = 2
+lable = 'add_c_run_samples'
 
 # mode
 run_on = 'agent' # agent, video

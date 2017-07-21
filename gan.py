@@ -512,13 +512,14 @@ class gan():
 
     def load_models(self):
         '''do auto checkpoint'''
+        print('Trying load models')
         try:
             self.netD.load_state_dict(torch.load('{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netD founded')
         except Exception, e:
             print('Previous checkpoint for netD unfounded')
         try:
-            self.netC.load_state_dict(torch.load(config.modeldir+'netC.pth''{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_)))
+            self.netC.load_state_dict(torch.load('{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_)))
             print('Previous checkpoint for netC founded')
         except Exception, e:
             print('Previous checkpoint for netC unfounded')
