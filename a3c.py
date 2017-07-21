@@ -155,10 +155,10 @@ class GanRunnerThread(threading.Thread):
             still data that has not been take by the gan yet
             '''
             previous_data = np.load(config.datadir+'data.npz')['data'] # load data
-            print('Previous data found: '+str(np.shape(previous_data)))
+            print('Previous data loaded: '+str(np.shape(previous_data)))
         except Exception, e:
             print('Loading previous data failed')
-            print(str(Exception)+": "+str(e))
+            # print(str(Exception)+": "+str(e))
 
         if previous_data is not None:
             '''
@@ -188,7 +188,7 @@ class GanRunnerThread(threading.Thread):
         except Exception, e:
 
             print('Save failed!')
-            print(str(Exception)+": "+str(e))
+            # print(str(Exception)+": "+str(e))
 
     def reset_dateset(self):
         self.dataset = self.gan.empty_dataset_with_aux

@@ -53,9 +53,10 @@ class GanTrainer():
             data = None
             try:
                 data = np.load(config.datadir+'data.npz')['data'] # load data
+                print('Load data: '+str(np.shape(data)))
             except Exception, e:
                 print('Load failed')
-                print(str(Exception)+": "+str(e))
+                # print(str(Exception)+": "+str(e))
 
             '''delete any way too avoid futher bug'''
             subprocess.call(["rm", "-r", config.datadir+'data.npz'])

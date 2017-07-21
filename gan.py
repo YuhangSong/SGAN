@@ -408,8 +408,55 @@ class gan():
                 self.last_save_model_time = time.time()
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
+
+                # feed
+                multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
+                # print(s)
+                self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
+                inputg_image_v = Variable(self.inputg_image)
+
+                # compute encoded_v
+                encoded_v = self.netG_Cv(inputg_image_v)
+
+                # feed aux
+                multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
+                self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
+                inputg_aux_v = Variable(self.inputg_aux)
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+
+                # feed noise
+                self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
+                noise_v = Variable(self.noise)
+
+                # concate encoded_v, noise_v, action
+                concated = [encoded_v,inputg_aux_v,noise_v]
+                encoded_v_noise_v_action_v = torch.cat(concated,1)
+
+                # predict
+                prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+
+                # get state_predictionv, this is a Variable cat 
+                state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
+
+                state_prediction = state_v_prediction_v.data
+
+                state_prediction_gt_ = torch.cat([self.state_prediction_gt[0:1],state_prediction],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'distri')
+
+                state_prediction_mean = torch.sum(state_prediction,0)/(state_prediction.size()[0])
+                state_prediction_gt_ = torch.cat([self.state_prediction_gt[0:1],state_prediction_mean],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'mean')
+
                 self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc[0].data.cpu().numpy()[0])).replace('.',''))
-                self.save_sample(self.state_prediction[0],'fake'+('%.5f'%(outputc[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+                self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+
                 self.last_save_image_time = time.time()
 
             self.iteration_i += 1
@@ -503,12 +550,14 @@ class gan():
                 save = torch.cat([c,c,c],1)
             elif config.gan_nc is 3:
                 save = []
-                for image_i in range(4):
+                for image_i in range(sample.size()[0]/config.gan_nc):
                     save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
                 save = torch.cat(save,0)
             
             # save = save.mul(0.5).add(0.5)
             return save
 
+        number_rows = 4
+
         '''log real result'''
-        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i))
+        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
