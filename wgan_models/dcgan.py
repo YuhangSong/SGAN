@@ -25,9 +25,9 @@ class DCGAN_D(nn.Module):
 
         # input is (4*nc) x isize x isize
         # the first (3*nc) channels are state, the 4th nc channel is prediction
-        main.add_module('initial.conv.{0}-{1}'.format(4*nc, ndf),
+        main.add_module('initial.conv_d.{0}-{1}'.format(4*nc, ndf),
                         nn.Conv2d(4*nc, ndf, 4, 2, 1, bias=False))
-        main.add_module('initial.relu.{0}'.format(ndf),
+        main.add_module('initial.relu_d.{0}'.format(ndf),
                         nn.LeakyReLU(0.2, inplace=True))
         csize, cndf = isize / 2, ndf
 
@@ -35,17 +35,17 @@ class DCGAN_D(nn.Module):
         while csize > config.gan_dct:
             in_feat = cndf
             out_feat = cndf * 2
-            main.add_module('pyramid.{0}-{1}.conv'.format(in_feat, out_feat),
+            main.add_module('pyramid.{0}-{1}.conv_d'.format(in_feat, out_feat),
                             nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
-            main.add_module('pyramid.{0}.batchnorm'.format(out_feat),
+            main.add_module('pyramid.{0}.batchnorm_d'.format(out_feat),
                             nn.BatchNorm2d(out_feat))
-            main.add_module('pyramid.{0}.relu'.format(out_feat),
+            main.add_module('pyramid.{0}.relu_d'.format(out_feat),
                             nn.LeakyReLU(0.2, inplace=True))
             cndf = cndf * 2
             csize = csize / 2
 
         # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv'.format(cndf, nz),
+        main.add_module('final.{0}-{1}.conv_d'.format(cndf, nz),
                         nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
 
         # main model done
@@ -76,6 +76,83 @@ class DCGAN_D(nn.Module):
 
         # return
         return error.view(1), output
+
+class DCGAN_C(nn.Module):
+
+    '''
+        deep conv GAN: D
+    '''
+
+    def __init__(self, isize, nz, nc, ndf, ngpu, n_extra_layers=0):
+
+        '''
+            build the model
+        '''
+
+        # basic init
+        super(DCGAN_C, self).__init__()
+        self.ngpu = ngpu
+        assert isize % 16 == 0, "isize has to be a multiple of 16"
+
+        # starting main model
+        main = nn.Sequential()
+
+        # input is (4*nc) x isize x isize
+        # the first (3*nc) channels are state, the 4th nc channel is prediction
+        main.add_module('initial.conv_c.{0}-{1}'.format(4*nc, ndf),
+                        nn.Conv2d(4*nc, ndf, 4, 2, 1, bias=False))
+        main.add_module('initial.relu_c.{0}'.format(ndf),
+                        nn.LeakyReLU(0.2, inplace=True))
+        csize, cndf = isize / 2, ndf
+
+        # keep conv till
+        while csize > config.gan_dct:
+            in_feat = cndf
+            out_feat = cndf * 2
+            main.add_module('pyramid.{0}-{1}.conv_c'.format(in_feat, out_feat),
+                            nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
+            main.add_module('pyramid.{0}.batchnorm_c'.format(out_feat),
+                            nn.BatchNorm2d(out_feat))
+            main.add_module('pyramid.{0}.relu_c'.format(out_feat),
+                            nn.LeakyReLU(0.2, inplace=True))
+            cndf = cndf * 2
+            csize = csize / 2
+
+        # state size K x 4 x 4
+        main.add_module('final.{0}-{1}.conv_c'.format(cndf, nz),
+                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
+
+        # main model done
+        self.main = main
+
+        out = nn.Sequential()
+        out.add_module('cat_linear',
+                        nn.Linear(nz+nz/2, 1))
+        out.add_module('sigmoid_out',
+                        nn.Sigmoid())
+        self.out = out
+
+    def forward(self, input_image, input_aux):
+
+        '''
+            specific return when comute forward
+        '''
+
+        # compute output according to GPU parallel
+        if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
+        else: 
+            output_encoded = self.main(input_image)
+
+        # cat them
+        cated = torch.cat([output_encoded, input_aux], 1)
+        cated = torch.squeeze(cated,2)
+        cated = torch.squeeze(cated,2)
+
+        # output layer
+        output = self.out(cated)
+
+        return output
 
 class DCGAN_G_Cv(nn.Module):
 

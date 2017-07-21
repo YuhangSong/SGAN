@@ -49,9 +49,10 @@ class gan():
         self.n_extra_layers = 0
         self.imageSize = config.gan_size
         self.lrD = 0.00005
+        self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.Diters_ = 5
+        self.DCiters_ = 5
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
@@ -83,22 +84,29 @@ class gan():
         self.netG_Cv = dcgan.DCGAN_G_Cv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
         self.netG_DeCv = dcgan.DCGAN_G_DeCv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
         self.netD = dcgan.DCGAN_D(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
+        self.netC = dcgan.DCGAN_C(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
 
         '''init models'''
         self.netG_Cv.apply(weights_init)
         self.netG_DeCv.apply(weights_init)
         self.netD.apply(weights_init)
+        self.netC.apply(weights_init)
 
         self.load_models()
 
         '''print the models'''
+        print(self.netD)
+        print(self.netC)
         print(self.netG_Cv)
         print(self.netG_DeCv)
-        print(self.netD)
 
+        '''feed interface initialize'''
         # input of d
         self.inputd_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputd_aux = torch.FloatTensor(self.batchSize, self.nz/2)
+        # input of c
+        self.inputc_image = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
+        self.inputc_aux = torch.FloatTensor(self.batchSize*2, self.nz/2)
         # input of g
         self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
         self.inputg_aux = torch.FloatTensor(self.batchSize, self.nz/2)
@@ -107,7 +115,10 @@ class gan():
         self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
         # constent
         self.one = torch.FloatTensor([1])
+        self.zero = torch.FloatTensor([0])
         self.mone = self.one * -1
+        self.one_zero = torch.FloatTensor(np.concatenate((np.ones((self.batchSize)),np.zeros((self.batchSize))),0))
+        self.one_zero = Variable(self.one_zero)
 
         '''dataset intialize'''
         self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
@@ -115,20 +126,29 @@ class gan():
 
         '''convert tesors to cuda type'''
         if self.cuda:
+
             self.netD.cuda()
+            self.netC.cuda()
             self.netG_Cv.cuda()
             self.netG_DeCv.cuda()
+
             self.inputd_image = self.inputd_image.cuda()
             self.inputd_aux = self.inputd_aux.cuda()
+            self.inputc_image = self.inputc_image.cuda()
+            self.inputc_aux = self.inputc_aux.cuda()
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
-            self.one, self.mone = self.one.cuda(), self.mone.cuda()
-            self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
+
             self.dataset_image = self.dataset_image.cuda()
             self.dataset_aux = self.dataset_aux.cuda()
 
+            self.one, self.mone, self.zero = self.one.cuda(), self.mone.cuda(), self.zero.cuda()
+            self.one_zero = self.one_zero.cuda()
+            self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
+
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
+        self.optimizerC = optim.RMSprop(self.netC.parameters(), lr = self.lrC)
         self.optimizerG_Cv = optim.RMSprop(self.netG_Cv.parameters(), lr = self.lrG)
         self.optimizerG_DeCv = optim.RMSprop(self.netG_DeCv.parameters(), lr = self.lrG)
 
@@ -159,8 +179,8 @@ class gan():
                 p.requires_grad = True
 
             '''
-                train the discriminator Diters times
-                Diters is set to 100 only on the first 25 generator iterations or
+                train the discriminator DCiters times
+                DCiters is set to 100 only on the first 25 generator iterations or
                 very sporadically (once every 500 generator iterations).
                 This helps to start with the critic at optimum even in the first iterations.
                 There shouldn't be a major difference in performance, but it can help,
@@ -170,9 +190,9 @@ class gan():
                 the rest of the training as well.
             '''
             if self.iteration_i < 25 or self.iteration_i % 500 == 0:
-                Diters = 100
+                DCiters = 100
             else:
-                Diters = self.Diters_
+                DCiters = self.DCiters_
 
             '''
                 start interation training of D network
@@ -180,11 +200,14 @@ class gan():
                 G network is trained for one time
             '''
             j = 0
-            while j < Diters:
+            while j < DCiters:
                 j += 1
 
                 # clamp parameters to a cube
                 for p in self.netD.parameters():
+                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+                # clamp parameters to a cube
+                for p in self.netC.parameters():
                     p.data.clamp_(self.clamp_lower, self.clamp_upper)
 
                 ################# load a trained batch #####################
@@ -216,7 +239,9 @@ class gan():
                 errD_real, outputD_real = self.netD(inputd_image_v, inputd_aux_v)
                 errD_real.backward(self.one)
 
-                ################# get fake #################
+                #####################################################
+
+                ###################### get fake #####################
 
                 # feed
                 self.inputg_image.resize_as_(self.state).copy_(self.state)
@@ -244,6 +269,8 @@ class gan():
                 # predict
                 prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
                 prediction = prediction_v.data
+
+                #####################################################
                 
                 ################# train D with fake #################
 
@@ -264,7 +291,38 @@ class gan():
 
                 # optmize
                 errD = errD_real - errD_fake
+
+                #####################################################
+
                 self.optimizerD.step()
+
+                ############# train C with real & fake ##############
+
+                # reset grandient
+                self.netC.zero_grad()
+
+                # feed real
+
+                self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
+                self.inputc_image.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
+                inputc_image_v = Variable(self.inputc_image)
+
+                self.aux_ = torch.cat([self.aux, self.aux], 0)
+                self.inputc_aux.resize_as_(self.aux_).copy_(self.aux_)
+                inputc_aux_v = Variable(self.inputc_aux)
+                inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
+                inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
+
+                # compute
+                outputc = self.netC(inputc_image_v, inputc_aux_v)
+
+                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.one_zero)
+
+                lossc.backward()
+
+                #####################################################
+
+                self.optimizerC.step()
 
             ######################################################################
             ####################### End of Update D network ######################
@@ -350,11 +408,12 @@ class gan():
                 self.last_save_model_time = time.time()
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
-                self.save_sample(self.state_prediction_gt[0],'real')
-                self.save_sample(self.state_prediction[0],'fake')
+                self.save_sample(self.state_prediction_gt[0],'real_'+str(outputc[0].data.float()).replace('.','').split('[')[0])
+                self.save_sample(self.state_prediction[0],'fake'+str(outputc[self.batchSize].data.float()).replace('.','').split('[')[0])
                 self.last_save_image_time = time.time()
 
             self.iteration_i += 1
+
             ######################################################################
             ######################### End One in Iteration  ######################
             ######################################################################
@@ -388,21 +447,31 @@ class gan():
                                                 high=self.dataset_image.size()[0]-2,
                                                 size=None)
 
-            self.dataset_image = torch.cat(seq=[self.dataset_image.narrow(0,0,insert_position), data_image, self.dataset_image.narrow(0,insert_position,self.dataset_image.size()[0]-insert_position)],
+            self.dataset_image = torch.cat(seq=[self.dataset_image.narrow(0,0,insert_position), data_image, self.dataset_image.narrow(0,insert_position, self.dataset_image.size()[0] - insert_position)],
                                            dim=0)
-            self.dataset_aux   = torch.cat(seq=[self.dataset_aux.narrow(  0,0,insert_position), data_aux,   self.dataset_aux.narrow(  0,insert_position,self.dataset_aux.size()[0]-insert_position)],
-                                           dim=0)
+            self.dataset_aux = torch.cat(seq=[self.dataset_aux.narrow(  0,0,insert_position), data_aux, self.dataset_aux.narrow(0,insert_position, self.dataset_aux.size()[0] - insert_position)],
+                                         dim=0)
 
             if self.dataset_image.size()[0] > self.dataset_limit:
-                self.dataset_image        = self.dataset_image.narrow(       dimension=0,
-                                                                 start=self.dataset_image.size()[0]        - self.dataset_limit,
-                                                                 length=self.dataset_limit)
+                self.dataset_image = self.dataset_image.narrow(dimension=0,
+                                                               start=self.dataset_image.size()[0] - self.dataset_limit,
+                                                               length=self.dataset_limit)
                 self.dataset_aux = self.dataset_aux.narrow(dimension=0,
-                                                                 start=self.dataset_aux.size()[0] - self.dataset_limit,
-                                                                 length=self.dataset_limit)
+                                                           start=self.dataset_aux.size()[0] - self.dataset_limit,
+                                                           length=self.dataset_limit)
 
     def load_models(self):
         '''do auto checkpoint'''
+        try:
+            self.netD.load_state_dict(torch.load(config.modeldir+'netD.pth'))
+            print('Previous checkpoint for netD founded')
+        except Exception, e:
+            print('Previous checkpoint for netD unfounded')
+        try:
+            self.netC.load_state_dict(torch.load(config.modeldir+'netC.pth'))
+            print('Previous checkpoint for netC founded')
+        except Exception, e:
+            print('Previous checkpoint for netC unfounded')
         try:
             self.netG_Cv.load_state_dict(torch.load(config.modeldir+'netG_Cv.pth'))
             print('Previous checkpoint for netG_Cv founded')
@@ -413,17 +482,13 @@ class gan():
             print('Previous checkpoint for netG_DeCv founded')
         except Exception, e:
             print('Previous checkpoint for netG_DeCv unfounded')
-        try:
-            self.netD.load_state_dict(torch.load(config.modeldir+'netD.pth'))
-            print('Previous checkpoint for netD founded')
-        except Exception, e:
-            print('Previous checkpoint for netD unfounded')
 
     def save_models(self):
         '''do checkpointing'''
+        torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
+        torch.save(self.netC.state_dict(), '{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_))
         torch.save(self.netG_Cv.state_dict(), '{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_))
         torch.save(self.netG_DeCv.state_dict(), '{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_))
-        torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
 
     def save_sample(self,sample,name):
 

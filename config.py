@@ -1,6 +1,6 @@
 # exp time
 t = 4
-lable = 'add_action_to_d'
+lable = 'add_c'
 
 # mode
 run_on = 'agent' # agent, video
@@ -51,5 +51,5 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    # gan_recent_dataset = 64
-    # gan_worker_com_internal = 1
+    gan_recent_dataset = 64
+    gan_worker_com_internal = 1
