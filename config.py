@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd05_c05'
+lable = 'd09_c01'
 
 # mode
 run_on = 'agent' # agent, video
@@ -22,7 +22,7 @@ elif run_on is 'agent':
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 2
+gan_ngpu = 1 
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
@@ -52,7 +52,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.5
+    gan_gloss_c_porpotion = 0.1
 
     # gan_recent_dataset = 64
     # gan_worker_com_internal = 1
