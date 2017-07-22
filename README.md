@@ -1,9 +1,9 @@
 # universe-starter-agent
 
 # Quik setup enviroment
-'''
+```
 ~/anaconda3/bin/conda create -n gmbrl_3 python=2 -y && source ~/.bashrc && source activate gmbrl_3 && wget http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torchvision && pip install tensorflow && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy
-'''
+```
 
 The codebase implements a starter agent that can solve a number of `universe` environments.
 It contains a basic implementation of the [A3C algorithm](https://arxiv.org/abs/1602.01783), adapted for real-time environments.
