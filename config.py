@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd05_c05'
+lable = 'd05_c05_auto_loss'
 
 # mode
 run_on = 'agent' # agent, video
@@ -44,7 +44,7 @@ if run_on is 'agent':
     grid_target_y = 4
     grid_action_random_discounter = 0.3
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*5
+    gan_save_image_internal = 60*1
     '''since'''
     gan_recent_dataset = 10
     lower_gan_worker = 0.0
@@ -54,6 +54,6 @@ if run_on is 'agent':
 
     gan_gloss_c_porpotion = 0.5
 
-    # gan_recent_dataset = 64
-    # gan_worker_com_internal = 1
+    gan_recent_dataset = 64
+    gan_worker_com_internal = 1
 

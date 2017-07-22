@@ -31,6 +31,9 @@ import config
 import subprocess
 import time
 import multiprocessing
+import matplotlib  
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 class gan():
@@ -130,6 +133,13 @@ class gan():
         self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
+        '''recorders'''
+        self.recorder_loss_g_from_d = torch.FloatTensor(0)
+        self.recorder_loss_g_from_c = torch.FloatTensor(0)
+        self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
+        self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
+        self.recorder_loss_g = torch.FloatTensor(0)
+
         '''convert tesors to cuda type'''
         if self.cuda:
 
@@ -158,6 +168,12 @@ class gan():
             self.ones = self.ones.cuda()
             self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
+
+            self.recorder_loss_g_from_d = self.recorder_loss_g_from_d.cuda()
+            self.recorder_loss_g_from_c = self.recorder_loss_g_from_c.cuda()
+            self.recorder_loss_g_from_d_maped = self.recorder_loss_g_from_d.cuda()
+            self.recorder_loss_g_from_c_maped = self.recorder_loss_g_from_c.cuda()
+            self.recorder_loss_g = self.recorder_loss_g.cuda()
 
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
@@ -404,6 +420,10 @@ class gan():
 
             # compute
             errG_from_D, _ = self.netD(inputd_image_v, inputd_aux_v)
+            self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D.data],0)
+
+            errG_from_D_maped = torch.mul(torch.exp(errG_from_D),(1-config.gan_gloss_c_porpotion))
+            self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_maped.data],0)
 
             if config.gan_gloss_c_porpotion is not 0.0:
 
@@ -420,11 +440,17 @@ class gan():
                 lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
 
                 errG_from_C = lossc
+                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C.data],0)
+
+                errG_from_C_maped = torch.mul(torch.exp(errG_from_C),(config.gan_gloss_c_porpotion))
+                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_maped.data],0)
 
             if config.gan_gloss_c_porpotion is not 0.0:
-                errG = errG_from_D*(1-config.gan_gloss_c_porpotion) + errG_from_C*(config.gan_gloss_c_porpotion)
+                errG = errG_from_D_maped + errG_from_C_maped
             else:
                 errG = errG_from_D
+
+            self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data],0)
 
             errG.backward(self.one)
 
@@ -500,6 +526,23 @@ class gan():
 
                 self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                 self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+
+                '''log'''
+                plt.figure()
+                plt.plot(self.recorder_loss_g_from_d.cpu().numpy())
+                plt.savefig(self.experiment+'/recorder_loss_g_from_d.jpg')
+                plt.figure()
+                plt.plot(self.recorder_loss_g_from_c.cpu().numpy())
+                plt.savefig(self.experiment+'/recorder_loss_g_from_c.jpg')
+                plt.figure()
+                plt.figure()
+                plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy())
+                plt.savefig(self.experiment+'/recorder_loss_g_from_d_maped.jpg')
+                plt.figure()
+                plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy())
+                plt.savefig(self.experiment+'/recorder_loss_g_from_c_maped.jpg')
+                plt.plot(self.recorder_loss_g.cpu().numpy())
+                plt.savefig(self.experiment+'/recorder_loss_g.jpg')
 
                 self.last_save_image_time = time.time()
 
