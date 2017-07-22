@@ -52,7 +52,7 @@ class DCGAN_D(nn.Module):
         self.main = main
 
         # cat_layer
-        self.cat_layer = torch.nn.Linear(nz+nz/2, 1)
+        self.cat_layer = torch.nn.Linear(nz+config.gan_aux_size, 1)
 
     def forward(self, input_image, input_aux):
 
@@ -127,7 +127,7 @@ class DCGAN_C(nn.Module):
 
         out = nn.Sequential()
         out.add_module('cat_linear',
-                        nn.Linear(nz+nz/2, 1))
+                        nn.Linear(nz+config.gan_aux_size, 1))
         out.add_module('sigmoid_out',
                         nn.Sigmoid())
         self.out = out

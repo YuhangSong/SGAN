@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd_c'
+lable = 'd05_c05'
 
 # mode
 run_on = 'agent' # agent, video
@@ -52,5 +52,8 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_recent_dataset = 64
-    gan_worker_com_internal = 1
+    gan_gloss_c_porpotion = 0.5
+
+    # gan_recent_dataset = 64
+    # gan_worker_com_internal = 1
+

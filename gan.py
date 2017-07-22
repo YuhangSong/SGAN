@@ -106,8 +106,10 @@ class gan():
         self.inputd_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputd_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         # input of c
-        self.inputc_image = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
-        self.inputc_aux = torch.FloatTensor(self.batchSize*2, self.aux_size)
+        self.inputc_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
+        self.inputc_aux = torch.FloatTensor(self.batchSize, self.aux_size)
+        self.inputc_image_2 = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
+        self.inputc_aux_2 = torch.FloatTensor(self.batchSize*2, self.aux_size)
         # input of g
         self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
         self.inputg_aux = torch.FloatTensor(self.batchSize, self.aux_size)
@@ -116,10 +118,13 @@ class gan():
         self.fixed_noise = torch.FloatTensor(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
         # constent
         self.one = torch.FloatTensor([1])
+        self.one_v = Variable(self.one)
         self.zero = torch.FloatTensor([0])
         self.mone = self.one * -1
-        self.one_zero = torch.FloatTensor(np.concatenate((np.ones((self.batchSize)),np.zeros((self.batchSize))),0))
-        self.one_zero = Variable(self.one_zero)
+        self.ones_zeros = torch.FloatTensor(np.concatenate((np.ones((self.batchSize)),np.zeros((self.batchSize))),0))
+        self.ones_zeros_v = Variable(self.ones_zeros)
+        self.ones = torch.FloatTensor(np.ones((self.batchSize)))
+        self.ones_v = Variable(self.ones)
 
         '''dataset intialize'''
         self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
@@ -137,14 +142,21 @@ class gan():
             self.inputd_aux = self.inputd_aux.cuda()
             self.inputc_image = self.inputc_image.cuda()
             self.inputc_aux = self.inputc_aux.cuda()
+            self.inputc_image_2 = self.inputc_image_2.cuda()
+            self.inputc_aux_2 = self.inputc_aux_2.cuda()
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
 
             self.dataset_image = self.dataset_image.cuda()
             self.dataset_aux = self.dataset_aux.cuda()
 
-            self.one, self.mone, self.zero = self.one.cuda(), self.mone.cuda(), self.zero.cuda()
-            self.one_zero = self.one_zero.cuda()
+            self.one = self.one.cuda()
+            self.mone = self.mone.cuda()
+            self.zero = self.zero.cuda()
+            self.ones_zeros = self.ones_zeros.cuda()
+            self.ones_zeros_v = self.ones_zeros_v.cuda()
+            self.ones = self.ones.cuda()
+            self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
 
         '''create optimizer'''
@@ -178,6 +190,10 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = True
+                
+            if config.gan_gloss_c_porpotion is not 0.0:
+                for p in self.netC.parameters():
+                    p.requires_grad = True
 
             '''
                 train the discriminator DCiters times
@@ -304,19 +320,21 @@ class gan():
                 # feed real
 
                 self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
-                self.inputc_image.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
-                inputc_image_v = Variable(self.inputc_image)
+                self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
+                inputc_image_v = Variable(self.inputc_image_2)
 
-                self.aux_ = torch.cat([self.aux, self.aux], 0)
-                self.inputc_aux.resize_as_(self.aux_).copy_(self.aux_)
-                inputc_aux_v = Variable(self.inputc_aux)
+                self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
+                self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
+                inputc_aux_v = Variable(self.inputc_aux_2)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
 
                 # compute
                 outputc = self.netC(inputc_image_v, inputc_aux_v)
 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.one_zero)
+                outputc_gt_ = outputc
+
+                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
 
                 lossc.backward()
 
@@ -339,6 +357,10 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = False
+
+            if config.gan_gloss_c_porpotion is not 0.0:
+                for p in self.netC.parameters():
+                    p.requires_grad = False
 
             # reset grandient
             self.netG_Cv.zero_grad()
@@ -381,7 +403,29 @@ class gan():
             inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
             # compute
-            errG, _ = self.netD(inputd_image_v, inputd_aux_v)
+            errG_from_D, _ = self.netD(inputd_image_v, inputd_aux_v)
+
+            if config.gan_gloss_c_porpotion is not 0.0:
+
+                inputc_image_v = inputd_image_v
+
+                self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
+                inputc_aux_v = Variable(self.inputc_aux)
+                inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
+                inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
+
+                # compute
+                outputc = self.netC(inputc_image_v, inputc_aux_v)
+
+                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
+
+                errG_from_C = lossc
+
+            if config.gan_gloss_c_porpotion is not 0.0:
+                errG = errG_from_D*(1-config.gan_gloss_c_porpotion) + errG_from_C*(config.gan_gloss_c_porpotion)
+            else:
+                errG = errG_from_D
+
             errG.backward(self.one)
 
             # optmize
@@ -454,8 +498,8 @@ class gan():
                     state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
                 self.save_sample(state_prediction_gt_channelled,'mean')
 
-                self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc[0].data.cpu().numpy()[0])).replace('.',''))
-                self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+                self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
+                self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
 
                 self.last_save_image_time = time.time()
 
