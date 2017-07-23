@@ -113,6 +113,7 @@ class gan():
         self.inputc_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputc_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         self.inputc_image_2 = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
+        self.inputc_image_1 = torch.FloatTensor(self.batchSize*1, 4, self.imageSize, self.imageSize)
         self.inputc_aux_2 = torch.FloatTensor(self.batchSize*2, self.aux_size)
         # input of g
         self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
@@ -156,6 +157,7 @@ class gan():
             self.inputc_image = self.inputc_image.cuda()
             self.inputc_aux = self.inputc_aux.cuda()
             self.inputc_image_2 = self.inputc_image_2.cuda()
+            self.inputc_image_1 = self.inputc_image_1.cuda()
             self.inputc_aux_2 = self.inputc_aux_2.cuda()
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
@@ -343,8 +345,6 @@ class gan():
                 # reset grandient
                 self.netC.zero_grad()
 
-                # feed real
-
                 self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
                 self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
                 inputc_image_v = Variable(self.inputc_image_2)
@@ -356,11 +356,11 @@ class gan():
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
 
                 # compute
-                outputc = self.netC(inputc_image_v, inputc_aux_v)
+                outputc_gt_ = self.netC(inputc_image_v, inputc_aux_v)
 
-                outputc_gt_ = outputc
- 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
+                lossc = torch.nn.functional.binary_cross_entropy(outputc_gt_.narrow(0,self.batchSize,self.batchSize),outputc_gt_.narrow(0,0,self.batchSize))
+
+                lossc = -lossc
 
                 lossc.backward()
 
@@ -442,17 +442,22 @@ class gan():
 
             if config.gan_gloss_c_porpotion is not 0.0:
 
-                inputc_image_v = inputd_image_v
+                self.inputc_image_1.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
+                inputc_image_v = torch.cat([Variable(self.inputc_image_1),inputd_image_v],0)
 
-                self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
-                inputc_aux_v = Variable(self.inputc_aux)
+                self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
+                self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
+                inputc_aux_v = Variable(self.inputc_aux_2)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
 
                 # compute
-                outputc = self.netC(inputc_image_v, inputc_aux_v)
+                outputc_gt_ = self.netC(inputc_image_v, inputc_aux_v)
 
-                errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
+                lossc = torch.nn.functional.binary_cross_entropy(outputc_gt_.narrow(0,self.batchSize,self.batchSize),outputc_gt_.narrow(0,0,self.batchSize))
+
+                errG_from_C_v = lossc
+
                 self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data],0)
 
                 # avoid grandient
