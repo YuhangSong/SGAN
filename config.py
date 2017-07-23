@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd05_c05_auto_loss'
+lable = 'd05_c05_auto_loss_fix_exp'
 
 # mode
 run_on = 'agent' # agent, video
@@ -54,6 +54,6 @@ if run_on is 'agent':
 
     gan_gloss_c_porpotion = 0.5
 
-    gan_recent_dataset = 64
-    gan_worker_com_internal = 1
+    # gan_recent_dataset = 64
+    # gan_worker_com_internal = 1
 
