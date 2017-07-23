@@ -59,7 +59,7 @@ class gan():
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
-        self.dataset_limit = 500
+        self.dataset_limit = 1000
         self.aux_size = config.gan_aux_size
 
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
@@ -139,6 +139,8 @@ class gan():
         self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
         self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
         self.recorder_loss_g = torch.FloatTensor(0)
+
+        self.indexs_selector = torch.LongTensor(self.batchSize)
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -244,15 +246,20 @@ class gan():
                     p.data.clamp_(self.clamp_lower, self.clamp_upper)
 
                 ################# load a trained batch #####################
-                # image part
-                image = self.dataset_image.narrow(0, self.dataset_image.size()[0]-self.batchSize, self.batchSize)
+
+                # generate indexs
+                indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0]).cuda()
+
+                # indexing image
+                image = self.dataset_image.index_select(0,indexs)
                 state_prediction_gt = torch.cat([image.narrow(1,0,1),image.narrow(1,1,1),image.narrow(1,2,1),image.narrow(1,3,1)],2)
                 # image part to
                 self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
                 self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
                 self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
-                # aux part
-                self.aux = self.dataset_aux.narrow(0, self.dataset_aux.size()[0] - self.batchSize, self.batchSize)
+                
+                # indexing aux
+                self.aux = self.dataset_aux.index_select(0,indexs)
 
                 ################# train D with real #################
 
@@ -529,20 +536,17 @@ class gan():
 
                 '''log'''
                 plt.figure()
-                plt.plot(self.recorder_loss_g_from_d.cpu().numpy())
-                plt.savefig(self.experiment+'/recorder_loss_g_from_d.jpg')
+                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),label='loss_d')
+                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),label='loss_c')
+                plt.legend(handles=[line_loss_d, line_loss_c])
+                plt.savefig(self.experiment+'/loss_d_c.jpg')
+
                 plt.figure()
-                plt.plot(self.recorder_loss_g_from_c.cpu().numpy())
-                plt.savefig(self.experiment+'/recorder_loss_g_from_c.jpg')
-                plt.figure()
-                plt.figure()
-                plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy())
-                plt.savefig(self.experiment+'/recorder_loss_g_from_d_maped.jpg')
-                plt.figure()
-                plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy())
-                plt.savefig(self.experiment+'/recorder_loss_g_from_c_maped.jpg')
-                plt.plot(self.recorder_loss_g.cpu().numpy())
-                plt.savefig(self.experiment+'/recorder_loss_g.jpg')
+                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),label='loss_g_from_d_maped')
+                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),label='loss_g_from_c_maped')
+                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),label='loss_g')
+                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
+                plt.savefig(self.experiment+'/loss_g.jpg')
 
                 self.last_save_image_time = time.time()
 
@@ -580,13 +584,10 @@ class gan():
             self.dataset_image = data_image
             self.dataset_aux = data_aux
         else:
-            insert_position = np.random.randint(1, 
-                                                high=self.dataset_image.size()[0]-2,
-                                                size=None)
 
-            self.dataset_image = torch.cat(seq=[self.dataset_image.narrow(0,0,insert_position), data_image, self.dataset_image.narrow(0,insert_position, self.dataset_image.size()[0] - insert_position)],
+            self.dataset_image = torch.cat(seq=[self.dataset_image, data_image],
                                            dim=0)
-            self.dataset_aux = torch.cat(seq=[self.dataset_aux.narrow(  0,0,insert_position), data_aux, self.dataset_aux.narrow(0,insert_position, self.dataset_aux.size()[0] - insert_position)],
+            self.dataset_aux = torch.cat(seq=[self.dataset_aux, data_aux],
                                          dim=0)
 
             if self.dataset_image.size()[0] > self.dataset_limit:
