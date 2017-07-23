@@ -59,7 +59,7 @@ class gan():
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
-        self.dataset_limit = 1000
+        self.dataset_limit = config.gan_dataset_limit
         self.aux_size = config.gan_aux_size
 
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
@@ -536,15 +536,15 @@ class gan():
 
                 '''log'''
                 plt.figure()
-                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),label='loss_d')
-                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),label='loss_c')
+                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),alpha=0.5,label='loss_d')
+                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),alpha=0.5,label='loss_c')
                 plt.legend(handles=[line_loss_d, line_loss_c])
                 plt.savefig(self.experiment+'/loss_d_c.jpg')
 
                 plt.figure()
-                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),label='loss_g_from_d_maped')
-                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),label='loss_g_from_c_maped')
-                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),label='loss_g')
+                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
+                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
+                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
                 plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
                 plt.savefig(self.experiment+'/loss_g.jpg')
 
@@ -650,3 +650,9 @@ class gan():
 
         '''log real result'''
         vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+
+    def if_dataset_full(self):
+        if self.dataset_image.size()[0] >= self.dataset_limit:
+            return True
+        else:
+            return False

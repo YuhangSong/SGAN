@@ -17,8 +17,14 @@ class env():
 
     def reset(self):
         ################# reset state ################
-        self.cur_x = 0
-        self.cur_y = 0
+        if config.grid_type is 'normal':
+            '''normal grid, reset to start point'''
+            self.cur_x = 0
+            self.cur_y = 0
+        elif config.grid_type is 'simple_one_move':
+            '''simple one move, reset to middle'''
+            self.cur_x = config.grid_size/2-1
+            self.cur_y = config.grid_size/2-1
         ##############################################
         self.step = 0
         self.done = True
@@ -102,6 +108,15 @@ class env():
             else:
                 self.reward = 0.0
                 if self.step > self.step_limit:
+                    self.will_reset = True
+
+            if config.grid_type is 'simple_one_move':
+                '''simple one move, overwrite'''
+                if self.step <=2:
+                    self.cur_x = config.grid_size/2-1
+                    self.cur_y = config.grid_size/2-1
+                    self.will_reset = False
+                else:
                     self.will_reset = True
 
         self.update_observation()

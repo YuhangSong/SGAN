@@ -69,10 +69,19 @@ class GanTrainer():
 
         while True:
 
+            need_load_data = True
+            if config.gan_dataset_full_no_update:
+                if self.gan.if_dataset_full():
+                    need_load_data = False
+
             '''keep running'''
-            self.load_data()
+            if need_load_data:
+                self.load_data()
+                
             self.gan.train()
+
             time.sleep(config.lower_gan_worker)
+
 
 if __name__ == "__main__":
     trainer = GanTrainer()

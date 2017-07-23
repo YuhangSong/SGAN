@@ -239,6 +239,9 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 action_ = np.random.randint(0, 
                                             high=env.action_space.n-1,
                                             size=None)
+                if config.grid_type is 'simple_one_move':
+                    '''overwrite action_'''
+                    action_ = 0
                 action = np.zeros((env.action_space.n))
                 action[action_] = 1.0
                 value_ = 0.0
@@ -250,18 +253,26 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
             # argmax to convert from one-hot
             image, reward, terminal, info = env.step(action.argmax())
 
-            if last_image is None or llast_image is None or lllast_image is None:
-                pass
-            else:
-                aux = np.zeros(np.shape(image))
-                aux[0:1,0:1,action.argmax()*config.gan_aux_size/env.action_space.n:(action.argmax()+1)*config.gan_aux_size/env.action_space.n] = 1.0
-                data = [lllast_image,llast_image,last_image,image,aux]
-                data = np.asarray(data)
-                gan_runner.push_data(np.expand_dims(data,0))
+            if not terminal:
+                if last_image is None or llast_image is None or lllast_image is None:
+                    pass
+                else:
+                    aux = np.zeros(np.shape(image))
+                    aux[0:1,0:1,action.argmax()*config.gan_aux_size/env.action_space.n:(action.argmax()+1)*config.gan_aux_size/env.action_space.n] = 1.0
+                    data = [lllast_image,llast_image,last_image,image,aux]
+                    data = np.asarray(data)
+                    gan_runner.push_data(np.expand_dims(data,0))
 
-            lllast_image = copy.deepcopy(llast_image)
-            llast_image = copy.deepcopy(last_image)
-            last_image = copy.deepcopy(image)
+                lllast_image = copy.deepcopy(llast_image)
+                llast_image = copy.deepcopy(last_image)
+                last_image = copy.deepcopy(image)
+            else:
+                '''reset image recorder'''
+                lllast_image = None
+                llast_image = None
+                '''if reset, the returned state is a inital state,
+                it is useable'''
+                last_image = copy.deepcopy(image)
 
             
             state = rbg2gray(image)
@@ -293,11 +304,6 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
                 print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
                 length = 0
                 rewards = 0
-                '''reset image recorder'''
-                lllast_image = None
-                llast_image = None
-                last_image = None
-                image = None
                 break
 
         if not terminal_end:

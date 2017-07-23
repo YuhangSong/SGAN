@@ -69,7 +69,12 @@ class DCGAN_D(nn.Module):
         cated = torch.cat([output_encoded, input_aux], 1)
         cated = torch.squeeze(cated,2)
         cated = torch.squeeze(cated,2)
-        output = self.cat_layer(cated)
+
+        # compute output according to GPU parallel
+        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        else: 
+            output = self.cat_layer(cated)
 
         # compute error
         error = output.mean(0)
@@ -125,12 +130,12 @@ class DCGAN_C(nn.Module):
         # main model done
         self.main = main
 
-        out = nn.Sequential()
-        out.add_module('cat_linear',
+        cat_layer = nn.Sequential()
+        cat_layer.add_module('cat_linear',
                         nn.Linear(nz+config.gan_aux_size, 1))
-        out.add_module('sigmoid_out',
+        cat_layer.add_module('sigmoid_out',
                         nn.Sigmoid())
-        self.out = out
+        self.cat_layer = cat_layer
 
     def forward(self, input_image, input_aux):
 
@@ -149,8 +154,11 @@ class DCGAN_C(nn.Module):
         cated = torch.squeeze(cated,2)
         cated = torch.squeeze(cated,2)
 
-        # output layer
-        output = self.out(cated)
+        # compute output according to GPU parallel
+        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        else: 
+            output = self.cat_layer(cated)
 
         return output
 
