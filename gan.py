@@ -61,6 +61,7 @@ class gan():
         self.experiment = config.logdir
         self.dataset_limit = config.gan_dataset_limit
         self.aux_size = config.gan_aux_size
+        
 
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
@@ -235,7 +236,9 @@ class gan():
                 G network is trained for one time
             '''
             j = 0
+            # DCiters = 2 # debuging
             while j < DCiters:
+
                 j += 1
 
                 # clamp parameters to a cube
@@ -356,7 +359,7 @@ class gan():
                 outputc = self.netC(inputc_image_v, inputc_aux_v)
 
                 outputc_gt_ = outputc
-
+ 
                 lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
 
                 lossc.backward()
@@ -425,12 +428,17 @@ class gan():
             inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
             inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
-            # compute
-            errG_from_D, _ = self.netD(inputd_image_v, inputd_aux_v)
-            self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D.data],0)
+            # compute errG_from_D_v
+            '''it is from -4 to 4 about
+            if the generated one is more real, it would be smaller'''
+            errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
+            self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data],0)
 
-            errG_from_D_maped = torch.mul(torch.exp(errG_from_D),(1-config.gan_gloss_c_porpotion))
-            self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_maped.data],0)
+            # avoid grandient
+            errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
+
+            errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
+            self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data],0)
 
             if config.gan_gloss_c_porpotion is not 0.0:
 
@@ -444,18 +452,19 @@ class gan():
                 # compute
                 outputc = self.netC(inputc_image_v, inputc_aux_v)
 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
+                errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
+                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data],0)
 
-                errG_from_C = lossc
-                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C.data],0)
+                # avoid grandient
+                errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
 
-                errG_from_C_maped = torch.mul(torch.exp(errG_from_C),(config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_maped.data],0)
+                errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
+                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data],0)
 
             if config.gan_gloss_c_porpotion is not 0.0:
-                errG = errG_from_D_maped + errG_from_C_maped
+                errG = errG_from_D_v_maped + errG_from_C_v_maped
             else:
-                errG = errG_from_D
+                errG = errG_from_D_v
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data],0)
 
