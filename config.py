@@ -22,7 +22,7 @@ elif run_on is 'agent':
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 2
+gan_ngpu = 4
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
