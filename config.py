@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2'
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_if_auto_dc_realy_works'
 
 # mode
 run_on = 'agent' # agent, video
@@ -55,8 +55,8 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.5
-    auto_d_c_factor = 2
+    gan_gloss_c_porpotion = 0.0
+    auto_d_c_factor = 1.0
 
     # gan_recent_dataset = 64
     # gan_worker_com_internal = 1
