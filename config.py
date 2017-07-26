@@ -1,6 +1,6 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_new_cg_relation'
+t = 2
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_add_rn'
 
 # mode
 run_on = 'agent' # agent, video
@@ -24,8 +24,8 @@ gan_nz = 256
 gan_aux_size = gan_nz/2
 gan_ngpu = 2
 gan_dct = 4
-gan_gctc = 4
-gan_gctd = 4
+gan_gctc = 8
+gan_gctd = gan_gctc
 gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+'_gctc'+str(gan_gctc)+'_gctd'+str(gan_gctd)
 
 # generate logdir according to config
@@ -45,7 +45,7 @@ if run_on is 'agent':
     grid_target_y = 4
     grid_action_random_discounter = 0.5
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*1
+    gan_save_image_internal = 60*5
     gan_dataset_limit = 1000
     gan_dataset_full_no_update = True
     '''since'''

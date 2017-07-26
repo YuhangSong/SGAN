@@ -113,7 +113,6 @@ class gan():
         self.inputc_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.inputc_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         self.inputc_image_2 = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
-        self.inputc_image_1 = torch.FloatTensor(self.batchSize*1, 4, self.imageSize, self.imageSize)
         self.inputc_aux_2 = torch.FloatTensor(self.batchSize*2, self.aux_size)
         # input of g
         self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
@@ -157,7 +156,6 @@ class gan():
             self.inputc_image = self.inputc_image.cuda()
             self.inputc_aux = self.inputc_aux.cuda()
             self.inputc_image_2 = self.inputc_image_2.cuda()
-            self.inputc_image_1 = self.inputc_image_1.cuda()
             self.inputc_aux_2 = self.inputc_aux_2.cuda()
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
@@ -294,19 +292,23 @@ class gan():
                 # compute encoded
                 encoded_v = self.netG_Cv(inputg_image_v)
 
+                number_rn = encoded_v.size()[2]*encoded_v.size()[2]
+                encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1],number_rn).permute(0,2,1)
+
                 # feed aux
                 self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
                 inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze netG
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,1)
+                inputg_aux_v = inputg_aux_v.repeat(1,number_rn,1)  
 
                 # feed noise
-                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
+                self.noise.resize_(self.batchSize, 1, self.aux_size).normal_(0, 1)
                 noise_v = Variable(self.noise, volatile = True) # totally freeze netG
+                noise_v = noise_v.repeat(1,number_rn,1)
 
                 # concate encoded_v, noise_v, action
                 concated = [encoded_v,inputg_aux_v,noise_v]
-                encoded_v_noise_v_action_v = torch.cat(concated,1)
+                encoded_v_noise_v_action_v = torch.cat(concated,2)
 
                 # print(encoded_v_noise_v_actionv.size()) # (64L, 512L, 1L, 1L)
 
@@ -345,6 +347,8 @@ class gan():
                 # reset grandient
                 self.netC.zero_grad()
 
+                # feed real
+
                 self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
                 self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
                 inputc_image_v = Variable(self.inputc_image_2)
@@ -356,11 +360,11 @@ class gan():
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
 
                 # compute
-                outputc_gt_ = self.netC(inputc_image_v, inputc_aux_v)
+                outputc = self.netC(inputc_image_v, inputc_aux_v)
 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc_gt_.narrow(0,self.batchSize,self.batchSize),outputc_gt_.narrow(0,0,self.batchSize))
-
-                lossc = -lossc
+                outputc_gt_ = outputc
+ 
+                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
 
                 lossc.backward()
 
@@ -394,24 +398,30 @@ class gan():
 
             # feed
             self.inputg_image.resize_as_(self.state).copy_(self.state)
-            inputg_image_v = Variable(self.inputg_image)
+            inputg_image_v = Variable(self.inputg_image) # totally freeze netG
 
-            # compute encoded_v
+            # compute encoded
             encoded_v = self.netG_Cv(inputg_image_v)
+
+            number_rn = encoded_v.size()[2]*encoded_v.size()[2]
+            encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1],number_rn).permute(0,2,1)
 
             # feed aux
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
-            inputg_aux_v = Variable(self.inputg_aux)
-            inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
-            inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+            inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
+            inputg_aux_v = torch.unsqueeze(inputg_aux_v,1)
+            inputg_aux_v = inputg_aux_v.repeat(1,number_rn,1)  
 
             # feed noise
-            self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
-            noise_v = Variable(self.noise)
+            self.noise.resize_(self.batchSize, 1, self.aux_size).normal_(0, 1)
+            noise_v = Variable(self.noise) # totally freeze netG
+            noise_v = noise_v.repeat(1,number_rn,1)
 
             # concate encoded_v, noise_v, action
             concated = [encoded_v,inputg_aux_v,noise_v]
-            encoded_v_noise_v_action_v = torch.cat(concated,1)
+            encoded_v_noise_v_action_v = torch.cat(concated,2)
+
+            # print(encoded_v_noise_v_actionv.size()) # (64L, 512L, 1L, 1L)
 
             # predict
             prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
@@ -442,22 +452,17 @@ class gan():
 
             if config.gan_gloss_c_porpotion is not 0.0:
 
-                self.inputc_image_1.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
-                inputc_image_v = torch.cat([Variable(self.inputc_image_1),inputd_image_v],0)
+                inputc_image_v = inputd_image_v
 
-                self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
-                self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
-                inputc_aux_v = Variable(self.inputc_aux_2)
+                self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
+                inputc_aux_v = Variable(self.inputc_aux)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
                 inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
 
                 # compute
-                outputc_gt_ = self.netC(inputc_image_v, inputc_aux_v)
+                outputc = self.netC(inputc_image_v, inputc_aux_v)
 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc_gt_.narrow(0,self.batchSize,self.batchSize),outputc_gt_.narrow(0,0,self.batchSize))
-
-                errG_from_C_v = lossc
-
+                errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
                 self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data],0)
 
                 # avoid grandient
@@ -502,27 +507,33 @@ class gan():
 
                 # feed
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
-                # print(s)
+
                 self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
                 inputg_image_v = Variable(self.inputg_image)
 
                 # compute encoded_v
                 encoded_v = self.netG_Cv(inputg_image_v)
 
+                number_rn = encoded_v.size()[2]*encoded_v.size()[2]
+                encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1],number_rn).permute(0,2,1)
+
                 # feed aux
                 multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
                 self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
-                inputg_aux_v = Variable(self.inputg_aux)
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+                inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,1)
+                inputg_aux_v = inputg_aux_v.repeat(1,number_rn,1)  
 
                 # feed noise
-                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
-                noise_v = Variable(self.noise)
+                self.noise.resize_(self.batchSize, 1, self.aux_size).normal_(0, 1)
+                noise_v = Variable(self.noise) # totally freeze netG
+                noise_v = noise_v.repeat(1,number_rn,1)
 
                 # concate encoded_v, noise_v, action
                 concated = [encoded_v,inputg_aux_v,noise_v]
-                encoded_v_noise_v_action_v = torch.cat(concated,1)
+                encoded_v_noise_v_action_v = torch.cat(concated,2)
+
+                # print(encoded_v_noise_v_actionv.size()) # (64L, 512L, 1L, 1L)
 
                 # predict
                 prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)

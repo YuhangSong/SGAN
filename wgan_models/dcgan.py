@@ -1,7 +1,94 @@
 import torch
 import torch.nn as nn
 import torch.nn.parallel
+from torch.autograd import Variable
+import torch.nn.functional as F
+import numpy as np
 import config
+
+class rn_layer(nn.Module):
+
+    """docstring for rn_layer"""
+    def __init__(self, num, lenth, aux_lenth=0, size=256, output_size=256):
+        super(rn_layer, self).__init__()
+
+        # settings
+        self.num = num
+        self.lenth = lenth
+        self.aux_lenth = aux_lenth
+        self.size = size
+        self.output_size = output_size
+
+        # NNs
+        self.g_fc1 = nn.Linear((self.lenth+1)*2+self.aux_lenth, self.size).cuda()
+        self.g_fc2 = nn.Linear(self.size, self.size).cuda()
+        self.g_fc3 = nn.Linear(self.size, self.size).cuda()
+        self.g_fc4 = nn.Linear(self.size, self.output_size).cuda()
+        self.f_fc1 = nn.Linear(self.size, self.size).cuda()
+        self.f_fc2 = nn.Linear(self.size, self.size).cuda()
+        self.f_fc3 = nn.Linear(self.size, self.output_size).cuda()
+
+        # prepare coord tensor
+        self.coord_tensor = torch.FloatTensor(config.gan_batchsize, num, 1).cuda()
+        self.coord_tensor = Variable(self.coord_tensor)
+        np_coord_tensor = np.zeros((config.gan_batchsize, self.num, 1))
+        for i in range(self.num):
+            np_coord_tensor[:,i,:] = np.array([i])
+        self.coord_tensor.data.copy_(torch.from_numpy(np_coord_tensor))
+
+    def forward(self, x_aux):
+
+        # 0: batch
+        # 1: number
+        # 2: feature
+
+        batch_size = x_aux.size()[0]
+
+        # coordinate tensor is cutted to fit in a
+        # smaller batch resulted from gpu para
+        coord_tensor_batch = self.coord_tensor.narrow(0,0,batch_size)
+
+        x = x_aux.narrow(2,0,self.lenth)
+        x = torch.cat([x, coord_tensor_batch],2)
+
+        # add coordinates
+        x_aux = torch.cat([x_aux, coord_tensor_batch],2)
+
+        # cast all pairs against each other i
+        x_i = torch.unsqueeze(x,1)
+        x_i = x_i.repeat(1,self.num,1,1)
+
+        # cast all pairs against each other j
+        x_j = torch.unsqueeze(x_aux,2)
+        x_j = x_j.repeat(1,1,self.num,1)
+
+        # concatenate all together
+        x_full = torch.cat([x_i,x_j],3)
+
+        # reshape for passing through network
+        x_ = x_full.view(x_full.size()[0]*x_full.size()[1]*x_full.size()[2],x_full.size()[3])
+
+        x_ = self.g_fc1(x_)        
+        x_ = F.relu(x_)
+        x_ = self.g_fc2(x_)
+        x_ = F.relu(x_)
+        x_ = self.g_fc3(x_)
+        x_ = F.relu(x_)
+        x_ = self.g_fc4(x_)
+        x_ = F.relu(x_)
+
+        # reshape again and sum
+        x_g = x_.view(batch_size,x_.size()[0]/batch_size,self.output_size)
+        x_g = x_g.sum(1).squeeze()
+
+        x_f = self.f_fc1(x_g)
+        x_f = F.relu(x_f)
+        x_f = self.f_fc2(x_f)
+        x_f = F.relu(x_f)
+        x_f = F.dropout(x_f)
+        x_f = self.f_fc3(x_f)
+
+        return x_f
 
 class DCGAN_D(nn.Module):
 
@@ -204,10 +291,10 @@ class DCGAN_G_Cv(nn.Module):
             cndf = cndf * 2  
             csize = csize / 2
 
-        # conv final to nz
-        # state size. K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_gctc, 1, 0, bias=False))
+        # # conv final to nz
+        # # state size. K x 4 x 4
+        # main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
+        #                 nn.Conv2d(cndf, nz, config.gan_gctc, 1, 0, bias=False))
 
         # main model done
         self.main = main
@@ -244,6 +331,13 @@ class DCGAN_G_DeCv(nn.Module):
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
+        # rn layer
+        self.rn = rn_layer(num=config.gan_gctc*config.gan_gctc,
+                           lenth=512,
+                           aux_lenth=config.gan_aux_size*2,
+                           size=nz,
+                           output_size=nz)
+
         # starting main model
         main = nn.Sequential()
 
@@ -254,8 +348,8 @@ class DCGAN_G_DeCv(nn.Module):
             tisize = tisize * 2
 
         # initail deconv
-        main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2, cngf),
-                        nn.ConvTranspose2d(nz*2, cngf, config.gan_gctd, 1, 0, bias=False))
+        main.add_module('initial.{0}-{1}.conv_gd'.format(nz, cngf),
+                        nn.ConvTranspose2d(nz, cngf, config.gan_gctd, 1, 0, bias=False))
         main.add_module('initial.{0}.batchnorm_gd'.format(cngf),
                         nn.BatchNorm2d(cngf))
         main.add_module('initial.{0}.relu_gd'.format(cngf),
@@ -282,17 +376,26 @@ class DCGAN_G_DeCv(nn.Module):
         # main model done
         self.main = main
 
-    def forward(self, input):
+    def forward(self, x):
 
         '''
             specific forward comute
         '''
 
         # compute output according to gpu parallel
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
         else: 
-            output = self.main(input)
+            x = self.rn(x)
+
+        x = torch.unsqueeze(x,2)
+        x = torch.unsqueeze(x,2)
+
+        # compute output according to gpu parallel
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.main, x, range(self.ngpu))
+        else: 
+            x = self.main(x)
 
         # return
-        return output
+        return x
