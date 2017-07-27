@@ -23,10 +23,8 @@ class rn_layer(nn.Module):
         self.g_fc1 = nn.Linear((self.lenth+1)*2+self.aux_lenth, self.size).cuda()
         self.g_fc2 = nn.Linear(self.size, self.size).cuda()
         self.g_fc3 = nn.Linear(self.size, self.size).cuda()
-        self.g_fc4 = nn.Linear(self.size, self.output_size).cuda()
         self.f_fc1 = nn.Linear(self.size, self.size).cuda()
-        self.f_fc2 = nn.Linear(self.size, self.size).cuda()
-        self.f_fc3 = nn.Linear(self.size, self.output_size).cuda()
+        self.f_fc2 = nn.Linear(self.size, self.output_size).cuda()
 
         # prepare coord tensor
         self.coord_tensor = torch.FloatTensor(config.gan_batchsize, num, 1).cuda()
@@ -74,19 +72,15 @@ class rn_layer(nn.Module):
         x_ = F.relu(x_)
         x_ = self.g_fc3(x_)
         x_ = F.relu(x_)
-        x_ = self.g_fc4(x_)
-        x_ = F.relu(x_)
 
         # reshape again and sum
-        x_g = x_.view(batch_size,x_.size()[0]/batch_size,self.output_size)
+        x_g = x_.view(batch_size,x_.size()[0]/batch_size,self.size)
         x_g = x_g.sum(1).squeeze()
 
         x_f = self.f_fc1(x_g)
         x_f = F.relu(x_f)
-        x_f = self.f_fc2(x_f)
-        x_f = F.relu(x_f)
         x_f = F.dropout(x_f)
-        x_f = self.f_fc3(x_f)
+        x_f = self.f_fc2(x_f)
 
         return x_f
 
@@ -131,37 +125,33 @@ class DCGAN_D(nn.Module):
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_d'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
-
         # main model done
         self.main = main
 
-        # cat_layer
-        self.cat_layer = torch.nn.Linear(nz+config.gan_aux_size, 1)
+        # rn layer
+        self.rn = rn_layer(num=csize*csize,
+                           lenth=cndf,
+                           aux_lenth=config.gan_aux_size*1,
+                           size=nz,
+                           output_size=1)
 
-    def forward(self, input_image, input_aux):
-
-        '''
-            specific return when comute forward
-        '''
+    def forward(self, input_image, inputg_aux_v):
 
         # compute output according to GPU parallel
         if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
+            encoded_v = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
         else: 
-            output_encoded = self.main(input_image)
+            encoded_v = self.main(input_image)
 
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
+        x = to_rn(encoded_v=encoded_v,
+                  inputg_aux_v=inputg_aux_v,
+                  noise_v=None)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        if self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
         else: 
-            output = self.cat_layer(cated)
+            output = self.rn(x)
 
         # compute error
         error = output.mean(0)
@@ -210,44 +200,37 @@ class DCGAN_C(nn.Module):
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_c'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
-
         # main model done
         self.main = main
 
-        cat_layer = nn.Sequential()
-        cat_layer.add_module('cat_linear',
-                        nn.Linear(nz+config.gan_aux_size, 1))
-        cat_layer.add_module('sigmoid_out',
-                        nn.Sigmoid())
-        self.cat_layer = cat_layer
+        # rn layer
+        self.rn = rn_layer(num=csize*csize,
+                           lenth=cndf,
+                           aux_lenth=config.gan_aux_size*1,
+                           size=nz,
+                           output_size=1)
 
-    def forward(self, input_image, input_aux):
+        self.rn.add_module('sigmoid',nn.Sigmoid())
 
-        '''
-            specific return when comute forward
-        '''
+    def forward(self, input_image, inputg_aux_v):
 
         # compute output according to GPU parallel
         if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
+            encoded_v = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
         else: 
-            output_encoded = self.main(input_image)
+            encoded_v = self.main(input_image)
 
-        # cat them
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
+        x = to_rn(encoded_v=encoded_v,
+                  inputg_aux_v=inputg_aux_v,
+                  noise_v=None)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
         else: 
-            output = self.cat_layer(cated)
+            x = self.rn(x)
 
-        return output
+        return x
 
 class DCGAN_G_Cv(nn.Module):
 
@@ -290,11 +273,6 @@ class DCGAN_G_Cv(nn.Module):
                             nn.LeakyReLU(0.2, inplace=True))
             cndf = cndf * 2  
             csize = csize / 2
-
-        # # conv final to nz
-        # # state size. K x 4 x 4
-        # main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-        #                 nn.Conv2d(cndf, nz, config.gan_gctc, 1, 0, bias=False))
 
         # main model done
         self.main = main
@@ -376,11 +354,9 @@ class DCGAN_G_DeCv(nn.Module):
         # main model done
         self.main = main
 
-    def forward(self, x):
+    def forward(self, encoded_v, inputg_aux_v, noise_v):
 
-        '''
-            specific forward comute
-        '''
+        x = to_rn(encoded_v, inputg_aux_v, noise_v)
 
         # compute output according to gpu parallel
         if self.ngpu > 1:
@@ -399,3 +375,24 @@ class DCGAN_G_DeCv(nn.Module):
 
         # return
         return x
+
+def to_rn(encoded_v, inputg_aux_v, noise_v=None):
+
+    concated = []
+
+    number_rn = encoded_v.size()[2]*encoded_v.size()[3]
+    encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1],number_rn).permute(0,2,1)
+    concated += [encoded_v]
+
+    inputg_aux_v = torch.unsqueeze(inputg_aux_v,1)
+    inputg_aux_v = inputg_aux_v.repeat(1,number_rn,1)
+    concated += [inputg_aux_v]
+
+    if noise_v is not None:
+        noise_v = torch.unsqueeze(noise_v,1)
+        noise_v = noise_v.repeat(1,number_rn,1)
+        concated += [noise_v]
+
+    encoded_v_noise_v_action_v = torch.cat(concated,2)
+
+    return encoded_v_noise_v_action_v

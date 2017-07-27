@@ -1,6 +1,6 @@
 # exp time
-t = 2
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_add_rn'
+t = 6
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_add_rndc'
 
 # mode
 run_on = 'agent' # agent, video
@@ -23,9 +23,11 @@ gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
 gan_ngpu = 2
-gan_dct = 4
-gan_gctc = 8
+
+gan_dct = 8
+gan_gctc = gan_dct
 gan_gctd = gan_gctc
+
 gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+'_gctc'+str(gan_gctc)+'_gctd'+str(gan_gctd)
 
 # generate logdir according to config
@@ -54,8 +56,9 @@ if run_on is 'agent':
     lower_env_worker = 0.0
     agent_learning = False
     agent_acting = False
+    train_corrector = False
 
-    gan_gloss_c_porpotion = 0.5
+    gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64
