@@ -23,8 +23,11 @@ class rn_layer(nn.Module):
         self.g_fc1 = nn.Linear((self.lenth+1)*2+self.aux_lenth, self.size).cuda()
         self.g_fc2 = nn.Linear(self.size, self.size).cuda()
         self.g_fc3 = nn.Linear(self.size, self.size).cuda()
+        self.g_fc4 = nn.Linear(self.size, self.size).cuda()
+
         self.f_fc1 = nn.Linear(self.size, self.size).cuda()
-        self.f_fc2 = nn.Linear(self.size, self.output_size).cuda()
+        self.f_fc2 = nn.Linear(self.size, self.size).cuda()
+        self.f_fc3 = nn.Linear(self.size, self.output_size).cuda()
 
         # prepare coord tensor
         self.coord_tensor = torch.FloatTensor(config.gan_batchsize, num, 1).cuda()
@@ -64,25 +67,52 @@ class rn_layer(nn.Module):
         x_full = torch.cat([x_i,x_j],3)
 
         # reshape for passing through network
-        x_ = x_full.view(x_full.size()[0]*x_full.size()[1]*x_full.size()[2],x_full.size()[3])
+        x = x_full.view(x_full.size()[0]*x_full.size()[1]*x_full.size()[2],x_full.size()[3])
 
-        x_ = self.g_fc1(x_)        
-        x_ = F.relu(x_)
-        x_ = self.g_fc2(x_)
-        x_ = F.relu(x_)
-        x_ = self.g_fc3(x_)
-        x_ = F.relu(x_)
+        x = self.g_fc1(x)        
+        x = F.relu(x)
+        x = self.g_fc2(x)
+        x = F.relu(x)
+        x = self.g_fc3(x)
+        x = F.relu(x)
+        x = self.g_fc4(x)
+        x = F.relu(x)
 
         # reshape again and sum
-        x_g = x_.view(batch_size,x_.size()[0]/batch_size,self.size)
-        x_g = x_g.sum(1).squeeze()
+        x = x.view(batch_size,x.size()[0]/batch_size,self.size)
+        x = x.sum(1).squeeze()
 
-        x_f = self.f_fc1(x_g)
-        x_f = F.relu(x_f)
-        x_f = F.dropout(x_f)
-        x_f = self.f_fc2(x_f)
+        x = self.f_fc1(x)
+        x = F.relu(x)
+        x = self.f_fc2(x)
+        x = F.relu(x)
+        x = F.dropout(x)
+        x = self.f_fc3(x)
 
-        return x_f
+        return 
+
+class cat_layer(nn.Module):
+
+    """docstring for rn_layer"""
+    def __init__(self, lenth, aux_lenth=0, size=256, output_size=256):
+        super(rn_layer, self).__init__()
+
+        # settings
+        self.lenth = lenth
+        self.aux_lenth = aux_lenth
+        self.size = size
+        self.output_size = output_size
+
+        # NNs
+        self.f1 = nn.Linear(self.lenth+self.aux_lenth, self.output_size).cuda()
+
+    def forward(self, x_aux):
+
+        batch_size = x_aux.size()[0]
+
+        x = self.f1(x_aux)
+
+        return x
 
 class DCGAN_D(nn.Module):
 
@@ -129,11 +159,10 @@ class DCGAN_D(nn.Module):
         self.main = main
 
         # rn layer
-        self.rn = rn_layer(num=csize*csize,
-                           lenth=cndf,
-                           aux_lenth=config.gan_aux_size*1,
-                           size=nz,
-                           output_size=1)
+        self.cat = cat_layer(lenth=cndf,
+                             aux_lenth=config.gan_aux_size*1,
+                             size=nz,
+                             output_size=1)
 
     def forward(self, input_image, inputg_aux_v):
 
@@ -143,15 +172,15 @@ class DCGAN_D(nn.Module):
         else: 
             encoded_v = self.main(input_image)
 
-        x = to_rn(encoded_v=encoded_v,
+        x = to_cat(encoded_v=encoded_v,
                   inputg_aux_v=inputg_aux_v,
                   noise_v=None)
 
         # compute output according to GPU parallel
         if self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.cat, x, range(self.ngpu))
         else: 
-            output = self.rn(x)
+            output = self.cat(x)
 
         # compute error
         error = output.mean(0)
@@ -394,5 +423,21 @@ def to_rn(encoded_v, inputg_aux_v, noise_v=None):
         concated += [noise_v]
 
     encoded_v_noise_v_action_v = torch.cat(concated,2)
+
+    return 
+
+def to_cat(encoded_v, inputg_aux_v, noise_v=None):
+
+    concated = []
+
+    encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1]*encoded_v.size()[2]*encoded_v.size()[3])
+    concated += [encoded_v]
+
+    concated += [inputg_aux_v]
+
+    if noise_v is not None:
+        concated += [noise_v]
+
+    encoded_v_noise_v_action_v = torch.cat(concated,1)
 
     return encoded_v_noise_v_action_v
