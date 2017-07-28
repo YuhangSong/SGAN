@@ -1,7 +1,118 @@
 import torch
 import torch.nn as nn
 import torch.nn.parallel
+from torch.autograd import Variable
+import torch.nn.functional as F
+import numpy as np
 import config
+
+class rn_layer(nn.Module):
+
+    """docstring for rn_layer"""
+    def __init__(self, num, lenth, aux_lenth=0, size=256, output_size=256):
+        super(rn_layer, self).__init__()
+
+        # settings
+        self.num = num
+        self.lenth = lenth
+        self.aux_lenth = aux_lenth
+        self.size = size
+        self.output_size = output_size
+
+        # NNs
+        self.g_fc1 = nn.Linear((self.lenth+1)*2+self.aux_lenth, self.size).cuda()
+        self.g_fc2 = nn.Linear(self.size, self.size).cuda()
+        self.g_fc3 = nn.Linear(self.size, self.size).cuda()
+        self.g_fc4 = nn.Linear(self.size, self.size).cuda()
+
+        self.f_fc1 = nn.Linear(self.size, self.size).cuda()
+        self.f_fc2 = nn.Linear(self.size, self.size).cuda()
+        self.f_fc3 = nn.Linear(self.size, self.output_size).cuda()
+
+        # prepare coord tensor
+        self.coord_tensor = torch.FloatTensor(config.gan_batchsize, num, 1).cuda()
+        self.coord_tensor = Variable(self.coord_tensor)
+        np_coord_tensor = np.zeros((config.gan_batchsize, self.num, 1))
+        for i in range(self.num):
+            np_coord_tensor[:,i,:] = np.array([i])
+        self.coord_tensor.data.copy_(torch.from_numpy(np_coord_tensor))
+
+    def forward(self, x_aux):
+
+        # 0: batch
+        # 1: number
+        # 2: feature
+
+        batch_size = x_aux.size()[0]
+
+        # coordinate tensor is cutted to fit in a
+        # smaller batch resulted from gpu para
+        coord_tensor_batch = self.coord_tensor.narrow(0,0,batch_size)
+
+        x = x_aux.narrow(2,0,self.lenth)
+        x = torch.cat([x, coord_tensor_batch],2)
+
+        # add coordinates
+        x_aux = torch.cat([x_aux, coord_tensor_batch],2)
+
+        # cast all pairs against each other i
+        x_i = torch.unsqueeze(x,1)
+        x_i = x_i.repeat(1,self.num,1,1)
+
+        # cast all pairs against each other j
+        x_j = torch.unsqueeze(x_aux,2)
+        x_j = x_j.repeat(1,1,self.num,1)
+
+        # concatenate all together
+        x_full = torch.cat([x_i,x_j],3)
+
+        # reshape for passing through network
+        x = x_full.view(x_full.size()[0]*x_full.size()[1]*x_full.size()[2],x_full.size()[3])
+
+        x = self.g_fc1(x)        
+        x = F.relu(x)
+        x = self.g_fc2(x)
+        x = F.relu(x)
+        x = self.g_fc3(x)
+        x = F.relu(x)
+        x = self.g_fc4(x)
+        x = F.relu(x)
+
+        # reshape again and sum
+        x = x.view(batch_size,x.size()[0]/batch_size,self.size)
+        x = x.sum(1).squeeze()
+
+        x = self.f_fc1(x)
+        x = F.relu(x)
+        x = self.f_fc2(x)
+        x = F.relu(x)
+        # x = F.dropout(x)
+        x = self.f_fc3(x)
+
+        return x
+
+class cat_layer(nn.Module):
+
+    """docstring for rn_layer"""
+    def __init__(self, lenth, aux_lenth=0, size=256, output_size=256):
+        super(cat_layer, self).__init__()
+
+        # settings
+        self.lenth = lenth
+        self.aux_lenth = aux_lenth
+        self.size = size
+        self.output_size = output_size
+
+        # NNs
+        self.f1 = nn.Linear(self.lenth+self.aux_lenth, self.output_size).cuda()
+
+    def forward(self, x_aux):
+
+        batch_size = x_aux.size()[0]
+
+        x = self.f1(x_aux)
+
+        return x
 
 class DCGAN_D(nn.Module):
 
@@ -44,37 +155,32 @@ class DCGAN_D(nn.Module):
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_d'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
-
         # main model done
         self.main = main
 
-        # cat_layer
-        self.cat_layer = torch.nn.Linear(nz+config.gan_aux_size, 1)
+        # rn layer
+        self.cat = cat_layer(lenth=csize*csize*cndf,
+                             aux_lenth=config.gan_aux_size*1,
+                             size=nz,
+                             output_size=1)
 
-    def forward(self, input_image, input_aux):
-
-        '''
-            specific return when comute forward
-        '''
+    def forward(self, input_image, inputg_aux_v):
 
         # compute output according to GPU parallel
         if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
+            encoded_v = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
         else: 
-            output_encoded = self.main(input_image)
+            encoded_v = self.main(input_image)
 
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
+        x = to_cat(encoded_v=encoded_v,
+                  inputg_aux_v=inputg_aux_v,
+                  noise_v=None)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        if self.ngpu > 1:
+            output = nn.parallel.data_parallel(self.cat, x, range(self.ngpu))
         else: 
-            output = self.cat_layer(cated)
+            output = self.cat(x)
 
         # compute error
         error = output.mean(0)
@@ -123,44 +229,37 @@ class DCGAN_C(nn.Module):
             cndf = cndf * 2
             csize = csize / 2
 
-        # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_c'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
-
         # main model done
         self.main = main
 
-        cat_layer = nn.Sequential()
-        cat_layer.add_module('cat_linear',
-                        nn.Linear(nz+config.gan_aux_size, 1))
-        cat_layer.add_module('sigmoid_out',
-                        nn.Sigmoid())
-        self.cat_layer = cat_layer
+        # rn layer
+        self.rn = rn_layer(num=csize*csize,
+                           lenth=cndf,
+                           aux_lenth=config.gan_aux_size*1,
+                           size=nz,
+                           output_size=1)
 
-    def forward(self, input_image, input_aux):
+        self.rn.add_module('sigmoid',nn.Sigmoid())
 
-        '''
-            specific return when comute forward
-        '''
+    def forward(self, input_image, inputg_aux_v):
 
         # compute output according to GPU parallel
         if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
+            encoded_v = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
         else: 
-            output_encoded = self.main(input_image)
+            encoded_v = self.main(input_image)
 
-        # cat them
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
+        x = to_rn(encoded_v=encoded_v,
+                  inputg_aux_v=inputg_aux_v,
+                  noise_v=None)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
         else: 
-            output = self.cat_layer(cated)
+            x = self.rn(x)
 
-        return output
+        return x
 
 class DCGAN_G_Cv(nn.Module):
 
@@ -204,11 +303,6 @@ class DCGAN_G_Cv(nn.Module):
             cndf = cndf * 2  
             csize = csize / 2
 
-        # conv final to nz
-        # state size. K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_gctc, 1, 0, bias=False))
-
         # main model done
         self.main = main
 
@@ -244,6 +338,13 @@ class DCGAN_G_DeCv(nn.Module):
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
+        # rn layer
+        self.rn = rn_layer(num=config.gan_gctc*config.gan_gctc,
+                           lenth=512,
+                           aux_lenth=config.gan_aux_size*2,
+                           size=nz,
+                           output_size=nz)
+
         # starting main model
         main = nn.Sequential()
 
@@ -254,8 +355,8 @@ class DCGAN_G_DeCv(nn.Module):
             tisize = tisize * 2
 
         # initail deconv
-        main.add_module('initial.{0}-{1}.conv_gd'.format(nz*2, cngf),
-                        nn.ConvTranspose2d(nz*2, cngf, config.gan_gctd, 1, 0, bias=False))
+        main.add_module('initial.{0}-{1}.conv_gd'.format(nz, cngf),
+                        nn.ConvTranspose2d(nz, cngf, config.gan_gctd, 1, 0, bias=False))
         main.add_module('initial.{0}.batchnorm_gd'.format(cngf),
                         nn.BatchNorm2d(cngf))
         main.add_module('initial.{0}.relu_gd'.format(cngf),
@@ -282,17 +383,61 @@ class DCGAN_G_DeCv(nn.Module):
         # main model done
         self.main = main
 
-    def forward(self, input):
+    def forward(self, encoded_v, inputg_aux_v, noise_v):
 
-        '''
-            specific forward comute
-        '''
+        x = to_rn(encoded_v, inputg_aux_v, noise_v)
 
         # compute output according to gpu parallel
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
         else: 
-            output = self.main(input)
+            x = self.rn(x)
+
+        x = torch.unsqueeze(x,2)
+        x = torch.unsqueeze(x,2)
+
+        # compute output according to gpu parallel
+        if self.ngpu > 1:
+            x = nn.parallel.data_parallel(self.main, x, range(self.ngpu))
+        else: 
+            x = self.main(x)
 
         # return
-        return output
+        return x
+
+def to_rn(encoded_v, inputg_aux_v, noise_v=None):
+
+    concated = []
+
+    number_rn = encoded_v.size()[2]*encoded_v.size()[3]
+    encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1],number_rn).permute(0,2,1)
+    concated += [encoded_v]
+
+    inputg_aux_v = torch.unsqueeze(inputg_aux_v,1)
+    inputg_aux_v = inputg_aux_v.repeat(1,number_rn,1)
+    concated += [inputg_aux_v]
+
+    if noise_v is not None:
+        noise_v = torch.unsqueeze(noise_v,1)
+        noise_v = noise_v.repeat(1,number_rn,1)
+        concated += [noise_v]
+
+    encoded_v_noise_v_action_v = torch.cat(concated,2)
+
+    return encoded_v_noise_v_action_v
+
+def to_cat(encoded_v, inputg_aux_v, noise_v=None):
+
+    concated = []
+
+    encoded_v = encoded_v.view(encoded_v.size()[0],encoded_v.size()[1]*encoded_v.size()[2]*encoded_v.size()[3])
+    concated += [encoded_v]
+
+    concated += [inputg_aux_v]
+
+    if noise_v is not None:
+        concated += [noise_v]
+
+    encoded_v_noise_v_action_v = torch.cat(concated,1)
+
+    return encoded_v_noise_v_action_v
