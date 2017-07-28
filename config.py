@@ -1,6 +1,6 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_rng_nodp_noisegtmul'
+t = 2
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_noisegtmul_norn'
 
 # mode
 run_on = 'agent' # agent, video

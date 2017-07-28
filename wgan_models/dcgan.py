@@ -338,13 +338,6 @@ class DCGAN_G_DeCv(nn.Module):
         self.ngpu = ngpu
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
-        # rn layer
-        self.rn = rn_layer(num=config.gan_gctc*config.gan_gctc,
-                           lenth=512,
-                           aux_lenth=config.gan_aux_size*2,
-                           size=nz,
-                           output_size=nz)
-
         # starting main model
         main = nn.Sequential()
 
@@ -353,6 +346,12 @@ class DCGAN_G_DeCv(nn.Module):
         while tisize != isize:
             cngf = cngf * 2
             tisize = tisize * 2
+
+        # rn layer
+        self.cat = cat_layer(lenth=config.gan_gctc*config.gan_gctc*cngf,
+                             aux_lenth=config.gan_aux_size*2,
+                             size=nz,
+                             output_size=nz)
 
         # initail deconv
         main.add_module('initial.{0}-{1}.conv_gd'.format(nz, cngf),
@@ -385,13 +384,13 @@ class DCGAN_G_DeCv(nn.Module):
 
     def forward(self, encoded_v, inputg_aux_v, noise_v):
 
-        x = to_rn(encoded_v, inputg_aux_v, noise_v)
+        x = to_cat(encoded_v, inputg_aux_v, noise_v)
 
         # compute output according to gpu parallel
         if self.ngpu > 1:
-            x = nn.parallel.data_parallel(self.rn, x, range(self.ngpu))
+            x = nn.parallel.data_parallel(self.cat, x, range(self.ngpu))
         else: 
-            x = self.rn(x)
+            x = self.cat(x)
 
         x = torch.unsqueeze(x,2)
         x = torch.unsqueeze(x,2)
