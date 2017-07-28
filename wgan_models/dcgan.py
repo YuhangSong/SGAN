@@ -374,9 +374,9 @@ class DCGAN_G_DeCv(nn.Module):
             csize = csize * 2
 
         # layer for final output
-        main.add_module('final.{0}-{1}.conv_gd'.format(cngf, nc),
-                        nn.ConvTranspose2d(cngf, nc, 4, 2, 1, bias=False))
-        main.add_module('final.{0}.tanh_gd'.format(nc),
+        main.add_module('final.{0}-{1}.conv_gd'.format(cngf, nc*4),
+                        nn.ConvTranspose2d(cngf, nc*4, 4, 2, 1, bias=False))
+        main.add_module('final.{0}.tanh_gd'.format(nc*4),
                         nn.Tanh())
 
         # main model done

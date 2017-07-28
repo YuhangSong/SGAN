@@ -61,7 +61,6 @@ class gan():
         self.experiment = config.logdir
         self.dataset_limit = config.gan_dataset_limit
         self.aux_size = config.gan_aux_size
-        
 
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
@@ -140,11 +139,14 @@ class gan():
         self.recorder_loss_g_from_c = torch.FloatTensor(0)
         self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
         self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
+        self.recorder_loss_g_from_mse_maped = torch.FloatTensor(0)
         self.recorder_loss_g = torch.FloatTensor(0)
         self.recorder_loss_d_fake = torch.FloatTensor(0)
         self.recorder_loss_d_real = torch.FloatTensor(0)
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
+
+        self.mse_loss_model = torch.nn.MSELoss()
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -172,6 +174,7 @@ class gan():
             self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
             self.noise_image = self.noise_image.cuda()
+            self.mse_loss_model = self.mse_loss_model.cuda()
 
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
@@ -247,16 +250,36 @@ class gan():
                 self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
                 self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
                 self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
-
-                self.prediction_gt = torch.add(-self.prediction_gt,torch.FloatTensor(np.ones(np.shape(self.prediction_gt.cpu().numpy()))).cuda())
-                self.noise_image.resize_as_(self.prediction_gt).normal_(1, config.noise_image)
-                self.prediction_gt = torch.mul(self.prediction_gt,self.noise_image)
-                self.prediction_gt = torch.add(-self.prediction_gt,torch.FloatTensor(np.ones(np.shape(self.prediction_gt.cpu().numpy()))).cuda())
-
-                self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
-                
                 # indexing aux
                 self.aux = self.dataset_aux.index_select(0,indexs).cuda()
+                #####################################################
+
+                ################# process prediction_gt #################
+                to_cat = [self.prediction_gt]*3
+                prediction_gt_x3 = torch.cat(to_cat,1)
+
+                # feed
+                self.inputg_image.resize_as_(prediction_gt_x3).copy_(prediction_gt_x3)
+                inputg_image_v = Variable(self.inputg_image, volatile = True) # totally freeze
+
+                # compute encoded
+                encoded_v = self.netG_Cv(inputg_image_v)
+
+                # feed aux
+                self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
+                inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze
+
+                # feed noise
+                self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
+                noise_v = Variable(self.noise, volatile = True) # totally freeze
+
+                # predict
+                state_prediction_v = self.netG_DeCv(encoded_v=encoded_v,
+                                                    inputg_aux_v=inputg_aux_v,
+                                                    noise_v=noise_v)
+
+                self.prediction_gt = state_prediction_v.narrow(1,0,self.nc)
+
                 #####################################################
 
                 # clamp parameters to a cube
@@ -297,9 +320,11 @@ class gan():
                 noise_v = Variable(self.noise, volatile = True) # totally freeze
 
                 # predict
-                prediction_v = self.netG_DeCv(encoded_v=encoded_v,
-                                              inputg_aux_v=inputg_aux_v,
-                                              noise_v=noise_v)
+                state_prediction_v = self.netG_DeCv(encoded_v=encoded_v,
+                                                    inputg_aux_v=inputg_aux_v,
+                                                    noise_v=noise_v)
+
+                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
                 prediction = prediction_v.data
                 #####################################################
                 
@@ -383,23 +408,30 @@ class gan():
 
             # feed
             self.inputg_image.resize_as_(self.state).copy_(self.state)
-            inputg_image_v = Variable(self.inputg_image) # totally freeze netG
+            inputg_image_v = Variable(self.inputg_image)
 
             # compute encoded
             encoded_v = self.netG_Cv(inputg_image_v)
 
             # feed aux
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
-            inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
+            inputg_aux_v = Variable(self.inputg_aux)
 
             # feed noise
             self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
-            noise_v = Variable(self.noise) # totally freeze netG
+            noise_v = Variable(self.noise)
 
             # predict
-            prediction_v = self.netG_DeCv(encoded_v=encoded_v,
-                                          inputg_aux_v=inputg_aux_v,
-                                          noise_v=noise_v)
+            state_prediction_v = self.netG_DeCv(encoded_v=encoded_v,
+                                                inputg_aux_v=inputg_aux_v,
+                                                noise_v=noise_v)
+
+            prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
+            state_v = state_prediction_v.narrow(1,0,self.nc*3)
+
+            loss_mse = self.mse_loss_model(state_v,inputg_image_v)
+            loss_mse_maped = loss_mse * 4.0
+            self.recorder_loss_g_from_mse_maped = torch.cat([self.recorder_loss_g_from_mse_maped,loss_mse_maped.data.cpu()],0)
 
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
@@ -443,9 +475,9 @@ class gan():
 
             if config.gan_gloss_c_porpotion > 0.0:
                 print(s)
-                errG = errG_from_D_v_maped + errG_from_C_v_maped
+                errG = errG_from_D_v_maped + errG_from_C_v_maped + loss_mse_maped
             else:
-                errG = errG_from_D_v
+                errG = errG_from_D_v + loss_mse_maped
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
@@ -465,9 +497,9 @@ class gan():
             ######################################################################
 
             '''log result'''
-            print('[iteration_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
+            print('[iteration_i:%d] Loss_D:%f Loss_G:%f Loss_D_real:%f Loss_D_fake:%f Loss_G_mse:%f'
                 % (self.iteration_i,
-                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse_maped.data[0]))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
@@ -495,9 +527,12 @@ class gan():
                 noise_v = Variable(self.noise) # totally freeze netG
 
                 # predict
-                prediction_v = self.netG_DeCv(encoded_v=encoded_v,
-                                              inputg_aux_v=inputg_aux_v,
-                                              noise_v=noise_v)
+                state_prediction_v = self.netG_DeCv(encoded_v=encoded_v,
+                                                    inputg_aux_v=inputg_aux_v,
+                                                    noise_v=noise_v)
+
+                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
+                state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
                 # get state_predictionv, this is a Variable cat 
                 state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
@@ -538,8 +573,9 @@ class gan():
                 plt.figure()
                 line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
                 line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
+                line_loss_g_from_mse_maped, = plt.plot(self.recorder_loss_g_from_mse_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_mse_maped')
                 line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
-                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
+                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g_from_mse_maped, line_loss_g])
                 plt.savefig(self.experiment+'/loss_g.jpg')
 
                 self.last_save_image_time = time.time()
