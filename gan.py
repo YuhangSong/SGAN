@@ -208,7 +208,7 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
+            if self.iteration_i > 0 and self.iteration_i % 500 == 0:
                 DCiters = 100
             else:
                 DCiters = self.DCiters_
