@@ -1,6 +1,6 @@
 # exp time
-t = 2
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game'
+t = 3
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn'
 
 # mode
 run_on = 'agent' # agent, video
@@ -22,11 +22,13 @@ elif run_on is 'agent':
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 2
+gan_ngpu = 4
 
-gan_dct = 8
+gan_dct = 4
 gan_gctc = gan_dct
 gan_gctd = gan_gctc
+gan_size_conved = gan_dct
+gan_channel_times = 32
 
 gan_model_name_ = 'bs'+str(gan_batchsize)+'_nz'+str(gan_nz)+'_dct'+str(gan_dct)+'_gctc'+str(gan_gctc)+'_gctd'+str(gan_gctd)
 
