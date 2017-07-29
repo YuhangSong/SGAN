@@ -171,6 +171,8 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
+        self.training_ruiner = True
+
     def train(self):
         """
         train one iteraction
@@ -208,10 +210,13 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
-                DCiters = 100
+            if self.training_ruiner:
+                DCiters = 0
             else:
-                DCiters = self.DCiters_
+                if self.iteration_i % 500 == 0:
+                    DCiters = 100
+                else:
+                    DCiters = self.DCiters_
 
             '''
                 start interation training of D network
@@ -224,43 +229,7 @@ class gan():
 
                 j += 1
 
-                ################# load a trained batch #####################
-                # generate indexs
-                indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0]).cuda()
-
-                # indexing image
-                image = self.dataset_image.index_select(0,indexs).cuda()
-                state_prediction_gt = torch.cat([image.narrow(1,0,1),image.narrow(1,1,1),image.narrow(1,2,1),image.narrow(1,3,1)],2)
-                # image part to
-                self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
-                self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
-                # indexing aux
-                self.aux = self.dataset_aux.index_select(0,indexs).cuda()
-                #####################################################
-
-                ################# process prediction_gt #################
-                to_cat = [self.prediction_gt]*3
-                prediction_gt_x3 = torch.cat(to_cat,1)
-
-                # feed
-                self.inputg_image.resize_as_(prediction_gt_x3).copy_(prediction_gt_x3)
-                inputg_image_v = Variable(self.inputg_image, volatile = True)
-
-                self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
-                inputg_aux_v = Variable(self.inputg_aux, volatile = True)
-
-                self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
-                noise_v = Variable(self.noise, volatile = True)
-
-                # compute encoded
-                state_prediction_v = self.netG( input_image_v=inputg_image_v,
-                                                input_aux_v=inputg_aux_v,
-                                                input_noise_v=noise_v)
-
-                self.prediction_gt = state_prediction_v.narrow(1,0,self.nc)
-
-                #####################################################
+                self.get_a_batch(if_ruin_prediction_gt=True)
 
                 # clamp parameters to a cube
                 for p in self.netD.parameters():
@@ -368,6 +337,8 @@ class gan():
             ########################## Update G network ##########################
             ######################################################################
 
+            self.get_a_batch(if_ruin_prediction_gt=True)
+
             '''
                 when train G networks, paramters in p network is freezed
                 to avoid computation on grad
@@ -402,7 +373,7 @@ class gan():
             state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
             loss_mse = self.mse_loss_model(state_v,inputg_image_v)
-            loss_mse_maped = loss_mse * 4.0
+            loss_mse_maped = loss_mse * config.loss_g_factor
             self.recorder_loss_g_from_mse_maped = torch.cat([self.recorder_loss_g_from_mse_maped,loss_mse_maped.data.cpu()],0)
 
             # get state_predictionv, this is a Variable cat 
@@ -445,11 +416,14 @@ class gan():
                 errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
                 self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
 
-            if config.gan_gloss_c_porpotion > 0.0:
-                print(s)
-                errG = errG_from_D_v_maped + errG_from_C_v_maped + loss_mse_maped
+            if self.training_ruiner:
+                errG = loss_mse_maped
             else:
-                errG = errG_from_D_v + loss_mse_maped
+                if config.gan_gloss_c_porpotion > 0.0:
+                    print(s)
+                    errG = errG_from_D_v_maped + errG_from_C_v_maped + loss_mse_maped
+                else:
+                    errG = errG_from_D_v + loss_mse_maped
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
@@ -467,10 +441,15 @@ class gan():
             ########################### One Iteration ### ########################
             ######################################################################
 
-            '''log result'''
-            print('[iteration_i:%d] Loss_D:%f Loss_G:%f Loss_D_real:%f Loss_D_fake:%f Loss_G_mse:%f'
-                % (self.iteration_i,
-                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse_maped.data[0]))
+            if self.training_ruiner:
+                print('[iteration_i:%d] Training ruiner >> Loss_G_mse:%f'
+                    % (self.iteration_i,loss_mse_maped.data[0]))
+                if loss_mse_maped.data.cpu().numpy()[0] < (config.ruiner_train_to_mse)*config.loss_g_factor:
+                        self.training_ruiner = False
+            else:
+                print('[iteration_i:%d] Loss_D:%f Loss_G:%f Loss_D_real:%f Loss_D_fake:%f Loss_G_mse:%f'
+                    % (self.iteration_i,
+                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse_maped.data[0]))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
@@ -479,17 +458,18 @@ class gan():
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
 
+                save_batch_size = 10
                 # feed
-                multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
+                multiple_one_state = torch.cat([self.state[0:1]]*save_batch_size,0)
 
                 self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
                 inputg_image_v = Variable(self.inputg_image)
 
-                multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
+                multiple_one_aux = torch.cat([self.aux[0:1]]*save_batch_size,0)
                 self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
                 inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
 
-                self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
+                self.noise.resize_(save_batch_size, self.aux_size).normal_(0, 1)
                 noise_v = Variable(self.noise) # totally freeze netG
 
                 # predict
@@ -521,7 +501,7 @@ class gan():
 
                 if config.train_corrector:
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
-                    self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+                    self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
                 '''log'''
                 plt.figure()
@@ -559,6 +539,54 @@ class gan():
 
             time.sleep(config.gan_worker_com_internal)
 
+    def get_a_batch(self,if_ruin_prediction_gt):
+
+        ################# load a trained batch #####################
+        # generate indexs
+        indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0])
+
+        # indexing image
+        image = torch.index_select( self.dataset_image,
+                                    dim=0,
+                                    index=indexs).cuda()
+
+        state_prediction_gt = torch.cat([torch.index_select(image,1,torch.cuda.LongTensor(range(0,1))),torch.index_select(image,1,torch.cuda.LongTensor(range(1,2))),torch.index_select(image,1,torch.cuda.LongTensor(range(2,3))),torch.index_select(image,1,torch.cuda.LongTensor(range(3,4)))],2)
+        # image part to
+        self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
+        self.state = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(0*self.nc,3*self.nc)))
+        self.prediction_gt = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(3*self.nc,4*self.nc)))
+        # indexing aux
+        self.aux = torch.index_select(  self.dataset_aux,
+                                        dim=0,
+                                        index=indexs).cuda()
+        #############################################################
+
+        if if_ruin_prediction_gt:
+
+            ################# process prediction_gt #####################
+            to_cat = [self.prediction_gt]*3
+            prediction_gt_x3 = torch.cat(to_cat,1)
+
+            # feed
+            self.inputg_image.resize_as_(prediction_gt_x3).copy_(prediction_gt_x3)
+            inputg_image_v = Variable(self.inputg_image, volatile = True)
+
+            self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
+            inputg_aux_v = Variable(self.inputg_aux, volatile = True)
+
+            self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
+            noise_v = Variable(self.noise, volatile = True)
+
+            # compute encoded
+            state_prediction_v = self.netG( input_image_v=inputg_image_v,
+                                            input_aux_v=inputg_aux_v,
+                                            input_noise_v=noise_v)
+            state_prediction = state_prediction_v.data
+
+            self.prediction_gt = torch.index_select(state_prediction,1,torch.cuda.LongTensor(range(0,self.nc)))
+            self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
+            ##############################################################
+
     def push_data(self, data):
         """
         push data to dataset which is a torch tensor
@@ -567,7 +595,7 @@ class gan():
         if np.shape(data)[0] is 0:
             return
 
-        data = torch.FloatTensor(data).cuda()
+        data = torch.FloatTensor(data)
 
         data_image = data[:,0:4,:,:,:]
 
@@ -639,7 +667,7 @@ class gan():
                 else:
                     image_to = num
                 for image_i in range(image_to):
-                    save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
+                    save += [torch.unsqueeze(torch.index_select(sample,0,torch.cuda.LongTensor(range(image_i*3,image_i*3+3))),0)]
                 save = torch.cat(save,0)
             
             # save = save.mul(0.5).add(0.5)

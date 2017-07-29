@@ -1,6 +1,6 @@
 # exp time
-t = 3
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn'
+t = 1
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner'
 
 # mode
 run_on = 'agent' # agent, video
@@ -19,10 +19,10 @@ elif run_on is 'agent':
     dataset_name_ = 'agent'
 
 # gan model
+gan_ngpu = 2
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 4
 
 gan_dct = 4
 gan_gctc = gan_dct
@@ -50,9 +50,8 @@ if run_on is 'agent':
     grid_action_random_discounter = 0.5
     gan_worker_com_internal = 10
     gan_save_image_internal = 60*5
-    gan_dataset_limit = 1000
-    gan_dataset_full_no_update = True
-    '''since'''
+    gan_dataset_limit = 1024*2
+    gan_dataset_full_no_update = False
     gan_recent_dataset = 10
     lower_gan_worker = 0.0
     lower_env_worker = 0.0
@@ -61,10 +60,13 @@ if run_on is 'agent':
     train_corrector = False
     DCiters_ = 5
     noise_image = 0.2
+    ruiner_train_to_mse = 0.1
+    loss_g_factor = 4.0
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
-    # gan_recent_dataset = 64
-    # gan_worker_com_internal = 1
+    # gan_recent_dataset = gan_batchsize
+    # gan_worker_com_internal = 10
+    # gan_save_image_internal = 5
 
