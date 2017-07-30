@@ -128,7 +128,7 @@ class gan():
         self.recorder_loss_g_from_c = torch.FloatTensor(0)
         self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
         self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_from_mse_maped = torch.FloatTensor(0)
+        self.recorder_loss_mse = torch.FloatTensor(0)
         self.recorder_loss_g = torch.FloatTensor(0)
         self.recorder_loss_d_fake = torch.FloatTensor(0)
         self.recorder_loss_d_real = torch.FloatTensor(0)
@@ -171,7 +171,7 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.training_ruiner = True
+        self.training_ruiner_next_time = True
 
     def train(self):
         """
@@ -186,6 +186,8 @@ class gan():
             ######################################################################
             ########################### Update D network #########################
             ######################################################################
+
+            self.training_ruiner = self.training_ruiner_next_time
 
             '''
                 when train D network, paramters of D network in trained,
@@ -373,8 +375,8 @@ class gan():
             state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
             loss_mse = self.mse_loss_model(state_v,inputg_image_v)
-            loss_mse_maped = loss_mse * config.loss_g_factor
-            self.recorder_loss_g_from_mse_maped = torch.cat([self.recorder_loss_g_from_mse_maped,loss_mse_maped.data.cpu()],0)
+            loss_mse_maped = loss_mse * (config.loss_g_factor / loss_mse.data.cpu().numpy()[0]) # keep it to the same rank as loss G
+            self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse.data.cpu()],0)
 
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
@@ -390,40 +392,14 @@ class gan():
                                          input_aux_v=inputd_aux_v)
             self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data.cpu()],0)
 
-            if config.gan_gloss_c_porpotion > 0.0:
-
-                # errG_from_D is mapped for integrationg with errG_from_C latter
-                errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0] # avoid grandient
-                errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion)) # maped
-                self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data.cpu()],0) # record
-
-            if config.gan_gloss_c_porpotion > 0.0:
-
-                inputc_image_v = inputd_image_v
-
-                self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
-                inputc_aux_v = Variable(self.inputc_aux)
-
-                # compute
-                outputc = self.netC(inputc_image_v, inputc_aux_v)
-
-                errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
-                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data.cpu()],0)
-
-                # avoid grandient
-                errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
-
-                errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
-
-            if self.training_ruiner:
-                errG = loss_mse_maped
-            else:
-                if config.gan_gloss_c_porpotion > 0.0:
-                    print(s)
-                    errG = errG_from_D_v_maped + errG_from_C_v_maped + loss_mse_maped
+            if loss_mse.data.cpu().numpy()[0] > config.ruiner_train_to_mse:
+                if self.training_ruiner:
+                    errG = loss_mse_maped
                 else:
                     errG = errG_from_D_v + loss_mse_maped
+            else:
+                self.training_ruiner_next_time = False
+                errG = errG_from_D_v
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
@@ -442,14 +418,12 @@ class gan():
             ######################################################################
 
             if self.training_ruiner:
-                print('[iteration_i:%d] Training ruiner >> Loss_G_mse:%f'
-                    % (self.iteration_i,loss_mse_maped.data[0]))
-                if loss_mse_maped.data.cpu().numpy()[0] < (config.ruiner_train_to_mse)*config.loss_g_factor:
-                        self.training_ruiner = False
+                print('[iteration_i:%d] Training ruiner >> Loss_G_mse:%.4f'
+                    % (self.iteration_i,loss_mse.data[0]))
             else:
-                print('[iteration_i:%d] Loss_D:%f Loss_G:%f Loss_D_real:%f Loss_D_fake:%f Loss_G_mse:%f'
+                print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_G_mse:%.4f'
                     % (self.iteration_i,
-                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse_maped.data[0]))
+                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse.data[0]))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
@@ -519,10 +493,14 @@ class gan():
                 plt.figure()
                 line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
                 line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
-                line_loss_g_from_mse_maped, = plt.plot(self.recorder_loss_g_from_mse_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_mse_maped')
                 line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
-                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g_from_mse_maped, line_loss_g])
+                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
                 plt.savefig(self.experiment+'/loss_g.eps')
+
+                plt.figure()
+                line_loss_mse, = plt.plot(np.clip(self.recorder_loss_mse.cpu().numpy(),0,config.ruiner_train_to_mse*2),alpha=0.5,label='loss_g_from_mse_maped')
+                plt.legend(handles=[line_loss_mse])
+                plt.savefig(self.experiment+'/loss_mse.eps')
 
                 self.last_save_image_time = time.time()
 
