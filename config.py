@@ -1,6 +1,6 @@
 # exp time
-t = 7
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse'
+t = 1
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c'
 
 # mode
 run_on = 'agent' # agent, video
@@ -43,8 +43,9 @@ if run_on is 'agent':
     """ 
     overwirite_with_grid = True
     grid_type = 'normal' # simple_one_move, normal
+    grid_random_type = 'russell' # discount
     action_space = 4
-    grid_size = 8
+    grid_size = 5
     grid_target_x = 4
     grid_target_y = 4
     grid_action_random_discounter = 0.5
@@ -60,7 +61,7 @@ if run_on is 'agent':
     train_corrector = False
     DCiters_ = 5
     noise_image = 0.2
-    ruiner_train_to_mse = 0.01
+    ruiner_train_to_mse = 0.001
     loss_g_factor = 2.0
 
     gan_gloss_c_porpotion = 0.0

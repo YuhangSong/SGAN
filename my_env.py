@@ -3,7 +3,7 @@ import config
 import time
 def get_grid_observation(x, y):
     observation = np.ones((config.gan_size,config.gan_size))
-    observation[x*(config.gan_size/config.grid_size):(x+1)*(config.gan_size/config.grid_size),y*(config.gan_size/config.grid_size):(y+1)*(config.gan_size/config.grid_size)] = 0.0
+    observation[int(x*(float(config.gan_size)/float(config.grid_size))):int((x+1)*(float(config.gan_size)/float(config.grid_size))),int(y*(float(config.gan_size)/float(config.grid_size))):int((y+1)*(float(config.gan_size)/float(config.grid_size)))] = 0.0
     observation = np.expand_dims(a=observation,
                                  axis=0)
     observation = np.concatenate((observation,observation,observation),
@@ -68,7 +68,18 @@ class env():
                 distance = abs(i-self.action)
                 if distance > (config.action_space/2):
                     distance = distance - (config.action_space/2)
-                action_dic_p[i] = config.grid_action_random_discounter**(distance)
+                if config.grid_random_type is 'discount':
+                    action_dic_p[i] = config.grid_action_random_discounter**(distance)
+                elif config.grid_random_type is 'russell':
+                    if distance==0:
+                        action_dic_p[i]=0.8
+                    elif distance==1:
+                        action_dic_p[i]=0.1
+                    elif distance==2:
+                        action_dic_p[i]=0.0
+                    else:
+                        print('error')
+                        print(s)
             action_dic_p = action_dic_p / np.sum(action_dic_p)
 
             self.action = np.random.choice(a=action_dic, 
