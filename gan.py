@@ -172,6 +172,7 @@ class gan():
         self.last_save_image_time = 0
 
         self.training_ruiner_next_time = True
+        self.errD_has_been_big = False
 
     def train(self):
         """
@@ -424,6 +425,16 @@ class gan():
                 print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_G_mse:%.4f'
                     % (self.iteration_i,
                     errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse.data[0]))
+                
+                if self.errD_has_been_big:
+                    if abs(errD.data.cpu().numpy()[0]) < config.bloom_at_errD:
+                        print('>>>>>>>>>>>>>>>>>>>>> Bloom noise >>>>>>>>>>>>>>>>>>>>>')
+                        self.netG.bloom_noise()
+                else:
+                    print('>>>>>>>>>>>>>>>>>>>>> errD has not been big >>>>>>>>>>>>>>>>>>>>>')
+                    if abs(errD.data.cpu().numpy()[0]) > config.loss_g_factor:
+                        print('>>>>>>>>>>>>>>>>>>>>> errD has been big >>>>>>>>>>>>>>>>>>>>>')
+                        self.errD_has_been_big = True
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
