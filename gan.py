@@ -508,13 +508,13 @@ class gan():
                 line_loss_d_real, = plt.plot(self.recorder_loss_d_real.cpu().numpy(),alpha=0.5,label='loss_d_real')
                 line_loss_d_fake, = plt.plot(self.recorder_loss_d_fake.cpu().numpy(),alpha=0.5,label='loss_d_fake')
                 plt.legend(handles=[line_loss_d_real, line_loss_d_fake])
-                plt.savefig(self.experiment+'/loss_d_rf.jpg')
+                plt.savefig(self.experiment+'/loss_d_rf.eps')
 
                 plt.figure()
                 line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),alpha=0.5,label='loss_d')
                 line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),alpha=0.5,label='loss_c')
                 plt.legend(handles=[line_loss_d, line_loss_c])
-                plt.savefig(self.experiment+'/loss_d_c.jpg')
+                plt.savefig(self.experiment+'/loss_d_c.eps')
 
                 plt.figure()
                 line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
@@ -522,7 +522,7 @@ class gan():
                 line_loss_g_from_mse_maped, = plt.plot(self.recorder_loss_g_from_mse_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_mse_maped')
                 line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
                 plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g_from_mse_maped, line_loss_g])
-                plt.savefig(self.experiment+'/loss_g.jpg')
+                plt.savefig(self.experiment+'/loss_g.eps')
 
                 self.last_save_image_time = time.time()
 
