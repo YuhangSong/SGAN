@@ -1,5 +1,5 @@
 # exp time
-t = 1
+t = 2
 lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner'
 
 # mode
@@ -60,7 +60,7 @@ if run_on is 'agent':
     train_corrector = False
     DCiters_ = 5
     noise_image = 0.2
-    ruiner_train_to_mse = 0.1
+    ruiner_train_to_mse = 0.01
     loss_g_factor = 4.0
 
     gan_gloss_c_porpotion = 0.0
