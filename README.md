@@ -5,6 +5,16 @@
 ~/anaconda3/bin/conda create -n gmbrl_3 python=2 -y && source ~/.bashrc && source activate gmbrl_3 && wget http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torchvision && pip install tensorflow && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
 ```
 
+# vis server
+```
+source activate gmbrl_3 && python -m visdom.server
+```
+
+# ssh ng
+```
+./ngrok authtoken 5mNAnGxChf8csh2rrKoZL_7KUzPLUhRBGMKsHhLxEdP && ./ngrok tcp 22
+```
+
 The codebase implements a starter agent that can solve a number of `universe` environments.
 It contains a basic implementation of the [A3C algorithm](https://arxiv.org/abs/1602.01783), adapted for real-time environments.
 
