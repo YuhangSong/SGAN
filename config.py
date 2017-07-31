@@ -1,6 +1,5 @@
 # exp time
-t = 2
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_noise'
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_bloom_onehot_noise'
 
 # mode
 run_on = 'agent' # agent, video
@@ -63,12 +62,19 @@ if run_on is 'agent':
     noise_image = 0.2
     ruiner_train_to_mse = 0.001
     loss_g_factor = 2.0
+    bloom_noise_rate = 0.5
+    bloom_noise_lenth = int(gan_aux_size*bloom_noise_rate)
+    fixed_noise_lenth = gan_aux_size-bloom_noise_lenth
+    bloom_noise_step = int(bloom_noise_lenth*1.0)# max to the effect of bloom_noise_rate
+    bloom_at_errD = 0.25
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
+    # to fasten training, only use when debug
     # gan_recent_dataset = gan_batchsize
     # gan_worker_com_internal = 10
     # gan_save_image_internal = 5
     # ruiner_train_to_mse = 0.8
+    # bloom_at_errD = 4.0
 

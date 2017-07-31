@@ -36,6 +36,8 @@ import visdom
 vis = visdom.Visdom()
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import visdom
+vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 class gan():
@@ -174,6 +176,7 @@ class gan():
         self.last_save_image_time = 0
 
         self.training_ruiner_next_time = True
+        self.errD_has_been_big = False
 
     def get_noise(self,size):
         # return self.noise.resize_as_(size).uniform_(0,1).round()
@@ -434,6 +437,16 @@ class gan():
                 print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_G_mse:%.4f'
                     % (self.iteration_i,
                     errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse.data[0]))
+                
+                if self.errD_has_been_big:
+                    if abs(errD.data.cpu().numpy()[0]) < config.bloom_at_errD:
+                        print('>>>>>>>>>>>>>>>>>>>>> Bloom noise >>>>>>>>>>>>>>>>>>>>>')
+                        self.netG.bloom_noise()
+                else:
+                    print('>>>>>>>>>>>>>>>>>>>>> errD has not been big >>>>>>>>>>>>>>>>>>>>>')
+                    if abs(errD.data.cpu().numpy()[0]) > config.loss_g_factor:
+                        print('>>>>>>>>>>>>>>>>>>>>> errD has been big >>>>>>>>>>>>>>>>>>>>>')
+                        self.errD_has_been_big = True
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
@@ -487,8 +500,59 @@ class gan():
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
-                '''log'''
+                '''log image result and save models'''
+            if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
+                self.save_models()
+                self.last_save_model_time = time.time()
 
+            if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
+
+                save_batch_size = self.batchSize
+                # feed
+                multiple_one_state = torch.cat([self.state[0:1]]*save_batch_size,0)
+
+                self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
+                inputg_image_v = Variable(self.inputg_image)
+
+                multiple_one_aux = torch.cat([self.aux[0:1]]*save_batch_size,0)
+                self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
+                inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
+
+                self.noise.resize_(save_batch_size, self.aux_size).normal_(0, 1)
+                noise_v = Variable(self.noise) # totally freeze netG
+
+                # predict
+                state_prediction_v = self.netG( input_image_v=inputg_image_v,
+                                                input_aux_v=inputg_aux_v,
+                                                input_noise_v=noise_v)
+
+                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
+                state_v = state_prediction_v.narrow(1,0,self.nc*3)
+
+                # get state_predictionv, this is a Variable cat 
+                state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
+
+                state_prediction = state_v_prediction_v.data
+
+                state_prediction_gt_ = torch.cat([self.state_prediction_gt[0:1],state_prediction],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'distri_f',-1)
+
+                state_prediction_mean = torch.sum(state_prediction,0)/(state_prediction.size()[0])
+                state_prediction_gt_mean = torch.sum(self.state_prediction_gt,0)/(self.state_prediction_gt.size()[0])
+                state_prediction_gt_ = torch.cat([state_prediction_gt_mean,state_prediction_mean],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'mean_f')
+
+                if config.train_corrector:
+                    self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
+                    self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
+
+                '''log'''
                 vis.line(   self.recorder_loss_d_real,
                             win='recorder_loss_d_real',
                             opts=dict(title='recorder_loss_d_real'))

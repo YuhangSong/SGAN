@@ -107,9 +107,34 @@ class cat_layer(nn.Module):
         self.f_encoded = nn.Linear(self.conved_lenth, self.encoded_lenth).cuda()
         self.f_cat = nn.Linear(self.encoded_lenth+self.aux_lenth, self.output_lenth).cuda()
 
-    def forward(self, x_aux):
+    def forward(self, x_aux, bloom_noise_offset=1):
         x_encoded = self.f_encoded(x_aux.narrow(1,0,self.conved_lenth))
-        x = self.f_cat(torch.cat([x_encoded,x_aux.narrow(1,self.conved_lenth,self.aux_lenth)],1))
+
+        if x_aux.size()[1] > (self.conved_lenth+config.gan_aux_size):
+
+            # there is noise, bloom
+            slide_width = self.encoded_lenth+config.gan_aux_size+config.bloom_noise_lenth
+
+            all_seq_cated_no_bloom_noise = torch.cat([x_encoded,x_aux.narrow(1,self.conved_lenth,int(config.gan_aux_size+config.fixed_noise_lenth))],1)
+
+            bloom_noise_offset = bloom_noise_offset % slide_width
+
+            bloom_noise = x_aux.narrow(1,self.conved_lenth+self.aux_lenth-config.bloom_noise_lenth,config.bloom_noise_lenth)
+
+            before_bloom_noise = all_seq_cated_no_bloom_noise.narrow(1,0,bloom_noise_offset)
+            after_bloom_noise = all_seq_cated_no_bloom_noise.narrow(1,bloom_noise_offset,(all_seq_cated_no_bloom_noise.size()[1]-bloom_noise_offset))
+
+            to_cat_temp = [before_bloom_noise,bloom_noise,after_bloom_noise]
+
+            final_cated = torch.cat(to_cat_temp, 1)
+
+        else:
+
+            # there isn't noise
+            final_cated = torch.cat([x_encoded,x_aux.narrow(1,self.conved_lenth,self.aux_lenth)],1)
+        
+        x = self.f_cat(final_cated)
+
         return x
 
 def compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved):
@@ -261,11 +286,7 @@ class DCGAN_D(nn.Module):
                     input_aux_v=input_aux_v,
                     input_noise_v=None)
 
-        # compute output according to GPU parallel
-        if config.gan_ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat, x, range(config.gan_ngpu))
-        else: 
-            output = self.cat(x)
+        output = self.cat(x)
 
         # compute error
         error = output.mean(0)
@@ -341,6 +362,10 @@ class DCGAN_G(nn.Module):
                                         channel_times=config.gan_channel_times,
                                         depth_in = 4,
                                         depth_conved=1)
+        self.bloom_noise_offset = long(1)
+
+    def bloom_noise(self):
+        self.bloom_noise_offset += config.bloom_noise_step
 
     def forward(self, input_image_v, input_aux_v, input_noise_v):
 
@@ -358,11 +383,7 @@ class DCGAN_G(nn.Module):
                     input_aux_v=input_aux_v,
                     input_noise_v=input_noise_v)
 
-        # compute output according to GPU parallel
-        if config.gan_ngpu > 1:
-            x = nn.parallel.data_parallel(self.cat, x, range(config.gan_ngpu))
-        else: 
-            x = self.cat(x)
+        x = self.cat(x,self.bloom_noise_offset)
 
         x = torch.unsqueeze(x,2)
         x = torch.unsqueeze(x,2)
