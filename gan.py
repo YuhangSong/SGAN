@@ -518,8 +518,8 @@ class gan():
                 self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
                 inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
 
-                self.noise.resize_(save_batch_size, self.aux_size).normal_(0, 1)
-                noise_v = Variable(self.noise) # totally freeze netG
+                noise = self.get_noise(torch.cuda.FloatTensor(save_batch_size, self.aux_size))
+                noise_v = Variable(noise) # totally freeze netG
 
                 # predict
                 state_prediction_v = self.netG( input_image_v=inputg_image_v,
