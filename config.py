@@ -20,7 +20,7 @@ elif run_on is 'agent':
 
 # gan model
 gan_ngpu = 4
-gan_batchsize = 64
+gan_batchsize = 128 * gan_ngpu
 gan_nz = 256
 gan_aux_size = gan_nz/2
 

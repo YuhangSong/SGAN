@@ -34,6 +34,8 @@ import multiprocessing
 import matplotlib  
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import visdom
+vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 class gan():
@@ -124,14 +126,14 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_loss_g_from_d = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c = torch.FloatTensor(0)
-        self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
-        self.recorder_loss_mse = torch.FloatTensor(0)
-        self.recorder_loss_g = torch.FloatTensor(0)
-        self.recorder_loss_d_fake = torch.FloatTensor(0)
-        self.recorder_loss_d_real = torch.FloatTensor(0)
+        self.recorder_loss_g_from_d = torch.FloatTensor([0])
+        self.recorder_loss_g_from_c = torch.FloatTensor([0])
+        self.recorder_loss_g_from_d_maped = torch.FloatTensor([0])
+        self.recorder_loss_g_from_c_maped = torch.FloatTensor([0])
+        self.recorder_loss_mse = torch.FloatTensor([0])
+        self.recorder_loss_g = torch.FloatTensor([0])
+        self.recorder_loss_d_fake = torch.FloatTensor([0])
+        self.recorder_loss_d_real = torch.FloatTensor([0])
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
@@ -488,30 +490,74 @@ class gan():
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
+                '''log image result and save models'''
+            if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
+                self.save_models()
+                self.last_save_model_time = time.time()
+
+            if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
+
+                save_batch_size = self.batchSize
+                # feed
+                multiple_one_state = torch.cat([self.state[0:1]]*save_batch_size,0)
+
+                self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
+                inputg_image_v = Variable(self.inputg_image)
+
+                multiple_one_aux = torch.cat([self.aux[0:1]]*save_batch_size,0)
+                self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
+                inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
+
+                self.noise.resize_(save_batch_size, self.aux_size).normal_(0, 1)
+                noise_v = Variable(self.noise) # totally freeze netG
+
+                # predict
+                state_prediction_v = self.netG( input_image_v=inputg_image_v,
+                                                input_aux_v=inputg_aux_v,
+                                                input_noise_v=noise_v)
+
+                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
+                state_v = state_prediction_v.narrow(1,0,self.nc*3)
+
+                # get state_predictionv, this is a Variable cat 
+                state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
+
+                state_prediction = state_v_prediction_v.data
+
+                state_prediction_gt_ = torch.cat([self.state_prediction_gt[0:1],state_prediction],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'distri_f',-1)
+
+                state_prediction_mean = torch.sum(state_prediction,0)/(state_prediction.size()[0])
+                state_prediction_gt_mean = torch.sum(self.state_prediction_gt,0)/(self.state_prediction_gt.size()[0])
+                state_prediction_gt_ = torch.cat([state_prediction_gt_mean,state_prediction_mean],0)
+                state_prediction_gt_channelled = state_prediction_gt_[0]
+                for batch_i in range(1,state_prediction_gt_.size()[0]):
+                    state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
+                self.save_sample(state_prediction_gt_channelled,'mean_f')
+
+                if config.train_corrector:
+                    self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
+                    self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
+
                 '''log'''
-                plt.figure()
-                line_loss_d_real, = plt.plot(self.recorder_loss_d_real.cpu().numpy(),alpha=0.5,label='loss_d_real')
-                line_loss_d_fake, = plt.plot(self.recorder_loss_d_fake.cpu().numpy(),alpha=0.5,label='loss_d_fake')
-                plt.legend(handles=[line_loss_d_real, line_loss_d_fake])
-                plt.savefig(self.experiment+'/loss_d_rf.eps')
+                vis.line(   self.recorder_loss_d_real,
+                            win='recorder_loss_d_real',
+                            opts=dict(title='recorder_loss_d_real'))
 
-                plt.figure()
-                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),alpha=0.5,label='loss_d')
-                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),alpha=0.5,label='loss_c')
-                plt.legend(handles=[line_loss_d, line_loss_c])
-                plt.savefig(self.experiment+'/loss_d_c.eps')
+                vis.line(   self.recorder_loss_d_fake,
+                            win='recorder_loss_d_fake',
+                            opts=dict(title='recorder_loss_d_fake'))
 
-                plt.figure()
-                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
-                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
-                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
-                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
-                plt.savefig(self.experiment+'/loss_g.eps')
+                vis.line(   self.recorder_loss_g,
+                            win='loss_g',
+                            opts=dict(title='loss_g'))
 
-                plt.figure()
-                line_loss_mse, = plt.plot(np.clip(self.recorder_loss_mse.cpu().numpy(),0,config.ruiner_train_to_mse*2),alpha=0.5,label='loss_g_from_mse_maped')
-                plt.legend(handles=[line_loss_mse])
-                plt.savefig(self.experiment+'/loss_mse.eps')
+                vis.line(   self.recorder_loss_mse,
+                            win='recorder_loss_mse',
+                            opts=dict(title='recorder_loss_mse'))
 
                 self.last_save_image_time = time.time()
 
@@ -665,7 +711,11 @@ class gan():
         number_rows = 4
 
         '''log real result'''
-        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        # vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        sample=sample2image(sample).cpu().numpy()
+        vis.images( sample,
+                    win=name,
+                    opts=dict(caption=name+str(self.iteration_i)))
 
     def if_dataset_full(self):
         if self.dataset_image.size()[0] >= self.dataset_limit:
