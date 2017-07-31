@@ -1,6 +1,6 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c'
+t = 2
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_maga'
 
 # mode
 run_on = 'agent' # agent, video
@@ -67,7 +67,8 @@ if run_on is 'agent':
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
-    # gan_recent_dataset = gan_batchsize
-    # gan_worker_com_internal = 10
-    # gan_save_image_internal = 5
+    gan_recent_dataset = gan_batchsize
+    gan_worker_com_internal = 10
+    gan_save_image_internal = 5
+    ruiner_train_to_mse = 0.8
 

@@ -31,7 +31,9 @@ import config
 import subprocess
 import time
 import multiprocessing
-import matplotlib  
+import matplotlib
+import visdom
+vis = visdom.Visdom()
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
@@ -164,8 +166,8 @@ class gan():
             self.mse_loss_model = self.mse_loss_model.cuda()
 
         '''create optimizer'''
-        self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
-        self.optimizerG = optim.RMSprop(self.netG.parameters(), lr = self.lrG)
+        self.optimizerD = optim.Adam(self.netD.parameters(), lr=self.lrD, betas=(0.5, 0.999))
+        self.optimizerG = optim.Adam(self.netG.parameters(), lr=self.lrG, betas=(0.5, 0.999))
 
         self.iteration_i = 0
         self.last_save_model_time = 0
@@ -497,6 +499,9 @@ class gan():
                 plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
                 plt.savefig(self.experiment+'/loss_g.eps')
 
+                # vis.line(   self.recorder_loss_mse,
+                #             opts=dict(  title='recorder_loss_mse',
+                #                         legend=['recorder_loss_mse']))
                 plt.figure()
                 line_loss_mse, = plt.plot(np.clip(self.recorder_loss_mse.cpu().numpy(),0,config.ruiner_train_to_mse*2),alpha=0.5,label='loss_g_from_mse_maped')
                 plt.legend(handles=[line_loss_mse])
