@@ -166,14 +166,22 @@ class gan():
             self.mse_loss_model = self.mse_loss_model.cuda()
 
         '''create optimizer'''
-        self.optimizerD = optim.Adam(self.netD.parameters(), lr=self.lrD, betas=(0.5, 0.999))
-        self.optimizerG = optim.Adam(self.netG.parameters(), lr=self.lrG, betas=(0.5, 0.999))
+        self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
+        self.optimizerG = optim.RMSprop(self.netG.parameters(), lr = self.lrG)
 
         self.iteration_i = 0
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
         self.training_ruiner_next_time = True
+
+    def get_noise(self,size):
+        # return self.noise.resize_as_(size).uniform_(0,1).round()
+        self.noise.resize_as_(size).zero_()
+        for batch_i in range(self.noise.size()[0]):
+            index = np.random.randint(0,self.noise.size()[1])
+            self.noise[batch_i][index]=1.0
+        return self.noise
 
     def train(self):
         """
@@ -266,8 +274,8 @@ class gan():
                 self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
                 inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze
 
-                self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
-                noise_v = Variable(self.noise, volatile = True) # totally freeze
+                noise=self.get_noise(torch.cuda.FloatTensor(self.batchSize, self.aux_size))
+                noise_v = Variable(noise, volatile = True) # totally freeze
 
                 # predict
                 state_prediction_v = self.netG( input_image_v=inputg_image_v,
@@ -365,8 +373,8 @@ class gan():
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
             inputg_aux_v = Variable(self.inputg_aux)
 
-            self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
-            noise_v = Variable(self.noise)
+            noise=self.get_noise(torch.cuda.FloatTensor(self.batchSize, self.aux_size))
+            noise_v = Variable(noise)
 
             # predict
             state_prediction_v = self.netG( input_image_v=inputg_image_v,
@@ -445,8 +453,8 @@ class gan():
                 self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
                 inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
 
-                self.noise.resize_(save_batch_size, self.aux_size).normal_(0, 1)
-                noise_v = Variable(self.noise) # totally freeze netG
+                noise=self.get_noise(torch.cuda.FloatTensor(save_batch_size, self.aux_size))
+                noise_v = Variable(noise) # totally freeze netG
 
                 # predict
                 state_prediction_v = self.netG( input_image_v=inputg_image_v,
@@ -547,8 +555,8 @@ class gan():
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
             inputg_aux_v = Variable(self.inputg_aux, volatile = True)
 
-            self.noise.resize_(self.batchSize, self.aux_size).normal_(0, 1)
-            noise_v = Variable(self.noise, volatile = True)
+            noise = self.get_noise(torch.cuda.FloatTensor(self.batchSize, self.aux_size))
+            noise_v = Variable(noise, volatile = True)
 
             # compute encoded
             state_prediction_v = self.netG( input_image_v=inputg_image_v,
