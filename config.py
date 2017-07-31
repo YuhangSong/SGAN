@@ -1,6 +1,5 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_bloom'
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_bloom_onehot_noise'
 
 # mode
 run_on = 'agent' # agent, video
@@ -19,8 +18,8 @@ elif run_on is 'agent':
     dataset_name_ = 'agent'
 
 # gan model
-gan_ngpu = 4
-gan_batchsize = 128 * gan_ngpu
+gan_ngpu = 2
+gan_batchsize = 64 * gan_ngpu
 gan_nz = 256
 gan_aux_size = gan_nz/2
 
