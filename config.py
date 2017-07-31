@@ -67,8 +67,8 @@ if run_on is 'agent':
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
-    gan_recent_dataset = gan_batchsize
-    gan_worker_com_internal = 10
-    gan_save_image_internal = 5
-    ruiner_train_to_mse = 0.8
+    # gan_recent_dataset = gan_batchsize
+    # gan_worker_com_internal = 10
+    # gan_save_image_internal = 5
+    # ruiner_train_to_mse = 0.8
 

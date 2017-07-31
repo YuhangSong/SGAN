@@ -126,14 +126,14 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_loss_g_from_d = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c = torch.FloatTensor(0)
-        self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
-        self.recorder_loss_mse = torch.FloatTensor(0)
-        self.recorder_loss_g = torch.FloatTensor(0)
-        self.recorder_loss_d_fake = torch.FloatTensor(0)
-        self.recorder_loss_d_real = torch.FloatTensor(0)
+        self.recorder_loss_g_from_d = torch.FloatTensor([0])
+        self.recorder_loss_g_from_c = torch.FloatTensor([0])
+        self.recorder_loss_g_from_d_maped = torch.FloatTensor([0])
+        self.recorder_loss_g_from_c_maped = torch.FloatTensor([0])
+        self.recorder_loss_mse = torch.FloatTensor([0])
+        self.recorder_loss_g = torch.FloatTensor([0])
+        self.recorder_loss_d_fake = torch.FloatTensor([0])
+        self.recorder_loss_d_real = torch.FloatTensor([0])
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
@@ -434,7 +434,7 @@ class gan():
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
 
-                save_batch_size = 10
+                save_batch_size = self.batchSize
                 # feed
                 multiple_one_state = torch.cat([self.state[0:1]]*save_batch_size,0)
 
@@ -480,32 +480,22 @@ class gan():
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
                 '''log'''
-                plt.figure()
-                line_loss_d_real, = plt.plot(self.recorder_loss_d_real.cpu().numpy(),alpha=0.5,label='loss_d_real')
-                line_loss_d_fake, = plt.plot(self.recorder_loss_d_fake.cpu().numpy(),alpha=0.5,label='loss_d_fake')
-                plt.legend(handles=[line_loss_d_real, line_loss_d_fake])
-                plt.savefig(self.experiment+'/loss_d_rf.eps')
 
-                plt.figure()
-                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),alpha=0.5,label='loss_d')
-                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),alpha=0.5,label='loss_c')
-                plt.legend(handles=[line_loss_d, line_loss_c])
-                plt.savefig(self.experiment+'/loss_d_c.eps')
+                vis.line(   self.recorder_loss_d_real,
+                            win='recorder_loss_d_real',
+                            opts=dict(title='recorder_loss_d_real'))
 
-                plt.figure()
-                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
-                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
-                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
-                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
-                plt.savefig(self.experiment+'/loss_g.eps')
+                vis.line(   self.recorder_loss_d_fake,
+                            win='recorder_loss_d_fake',
+                            opts=dict(title='recorder_loss_d_fake'))
 
-                # vis.line(   self.recorder_loss_mse,
-                #             opts=dict(  title='recorder_loss_mse',
-                #                         legend=['recorder_loss_mse']))
-                plt.figure()
-                line_loss_mse, = plt.plot(np.clip(self.recorder_loss_mse.cpu().numpy(),0,config.ruiner_train_to_mse*2),alpha=0.5,label='loss_g_from_mse_maped')
-                plt.legend(handles=[line_loss_mse])
-                plt.savefig(self.experiment+'/loss_mse.eps')
+                vis.line(   self.recorder_loss_g,
+                            win='loss_g',
+                            opts=dict(title='loss_g'))
+
+                vis.line(   self.recorder_loss_mse,
+                            win='recorder_loss_mse',
+                            opts=dict(title='recorder_loss_mse'))
 
                 self.last_save_image_time = time.time()
 
@@ -659,7 +649,11 @@ class gan():
         number_rows = 4
 
         '''log real result'''
-        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        # vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        sample=sample2image(sample).cpu().numpy()
+        vis.images( sample,
+                    win=name,
+                    opts=dict(caption=name+str(self.iteration_i)))
 
     def if_dataset_full(self):
         if self.dataset_image.size()[0] >= self.dataset_limit:
