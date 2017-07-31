@@ -130,16 +130,17 @@ class gan():
         '''recorders'''
         self.recorder_loss_g_from_d = torch.FloatTensor([0])
         self.recorder_loss_g_from_c = torch.FloatTensor([0])
+        self.recorder_loss_g_from_mse = torch.FloatTensor([0])
         self.recorder_loss_g_from_d_maped = torch.FloatTensor([0])
         self.recorder_loss_g_from_c_maped = torch.FloatTensor([0])
-        self.recorder_loss_mse = torch.FloatTensor([0])
+        self.recorder_loss_r_mse = torch.FloatTensor([0])
         self.recorder_loss_g = torch.FloatTensor([0])
         self.recorder_loss_d_fake = torch.FloatTensor([0])
         self.recorder_loss_d_real = torch.FloatTensor([0])
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
-        self.mse_loss_model = torch.nn.MSELoss()
+        self.mse_loss_model_averaged = torch.nn.MSELoss(size_average=True)
 
         '''convert tesors to cuda type'''
         if self.cuda:
@@ -165,7 +166,7 @@ class gan():
             self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
             self.noise_image = self.noise_image.cuda()
-            self.mse_loss_model = self.mse_loss_model.cuda()
+            self.mse_loss_model_averaged = self.mse_loss_model_averaged.cuda()
 
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
@@ -387,9 +388,9 @@ class gan():
             prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
             state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
-            loss_mse = self.mse_loss_model(state_v,inputg_image_v)
-            loss_mse_maped = loss_mse * (config.loss_g_factor / loss_mse.data.cpu().numpy()[0]) # keep it to the same rank as loss G
-            self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse.data.cpu()],0)
+            loss_r_mse = self.mse_loss_model_averaged(state_v,inputg_image_v)
+            loss_r_mse_maped = loss_r_mse * (config.loss_g_factor / loss_r_mse.data.cpu().numpy()[0]) # keep it to the same rank as loss G
+            self.recorder_loss_r_mse = torch.cat([self.recorder_loss_r_mse,loss_r_mse.data.cpu()],0)
 
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
@@ -405,14 +406,101 @@ class gan():
                                          input_aux_v=inputd_aux_v)
             self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data.cpu()],0)
 
-            if loss_mse.data.cpu().numpy()[0] > config.ruiner_train_to_mse:
-                if self.training_ruiner:
-                    errG = loss_mse_maped
+            total_num_numpy = torch.numel(self.prediction_gt) 
+            prediction_gt_v = Variable(self.prediction_gt)
+            errG_from_mse_seperate_v = torch.pow(torch.add(prediction_v,-prediction_gt_v),2.0) / total_num_numpy
+            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,3).squeeze(3)
+            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,2).squeeze(2)
+            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,1).squeeze(1)
+
+            ######################## get niv #####################################
+            '''feed'''
+            self.inputd_image.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
+            inputd_image_v = Variable(self.inputd_image)
+            self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
+            inputd_aux_v = Variable(self.inputd_aux)
+
+            '''compute'''
+            _, niv_v = self.netD(   input_image_v=inputd_image_v,
+                                    input_aux_v=inputd_aux_v)
+
+            '''revers, so that bigger niv means heavier weight'''
+            '''clip, under zero is not add to niv'''
+            niv_numpy = np.clip(-niv_v.data.cpu().numpy(),
+                                a_min=0.0,
+                                a_max=config.loss_g_factor)
+            niv_numpy = np.squeeze(niv_numpy,1)
+
+            '''if some is good enough, do not include to Update'''
+            ever_removed = False
+            original_shape = np.shape(niv_numpy)
+            iii=0
+            have_niv = True
+            while True:
+
+                if iii > (int(np.shape(niv_numpy)[0])-1):
+                    break
+
+                if niv_numpy[iii] <= config.donot_niv_gate:
+                    ever_removed = True
+                    if iii < 1:
+                        if iii > (np.shape(niv_numpy)[0]-2):
+                            have_niv = False
+                            break
+                        else:
+                            niv_numpy = niv_numpy[iii+1:]
+                            errG_from_mse_seperate_v = errG_from_mse_seperate_v.narrow(0,(iii+1),errG_from_mse_seperate_v.size()[0]-(iii+1))
+
+                    elif iii > (np.shape(niv_numpy)[0]-2):
+                        niv_numpy = niv_numpy[:iii]
+                        errG_from_mse_seperate_v = errG_from_mse_seperate_v.narrow(0,0,iii)
+                                                           
+                    else:
+                        niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
+                        errG_from_mse_seperate_v = torch.cat(   [errG_from_mse_seperate_v.narrow(0,0,iii),
+                                                                 errG_from_mse_seperate_v.narrow(0,(iii+1),errG_from_mse_seperate_v.size()[0]-(iii+1))],
+                                                                 0)
+
+                    continue
+
                 else:
-                    errG = errG_from_D_v + loss_mse_maped
+                    iii += 1
+                
+
+            if have_niv:
+                now_shape = np.shape(niv_numpy)
+                if ever_removed:
+                    print('Some elements in training ruiner is removed: '+str(original_shape)+'>>>'+str(now_shape))
+
+                niv_numpy = np.expand_dims(niv_numpy,1)
+                errG_from_mse_seperate_v = errG_from_mse_seperate_v.unsqueeze(0)
+
+                errG_from_mse_v = torch.mm(errG_from_mse_seperate_v,Variable(torch.from_numpy(niv_numpy).cuda())).squeeze()
+                self.recorder_loss_g_from_mse = torch.cat([self.recorder_loss_g_from_mse,errG_from_mse_v.data.cpu()],0)
+
+                errG_from_mse_v = errG_from_mse_v * (config.loss_g_factor / errG_from_mse_v.data.cpu().numpy()[0] * config.niv_rate) # keep it uniform
+            else:
+                print('No niv to compute!')
+
+            ######################################################################
+
+            if loss_r_mse.data.cpu().numpy()[0] > config.ruiner_train_to_mse:
+                if self.training_ruiner:
+                    errG = loss_r_mse_maped
+                else:
+                    if have_niv:
+                        errG = errG_from_D_v + loss_r_mse_maped + errG_from_mse_v
+                    else:
+                        errG = errG_from_D_v + loss_r_mse_maped
+
             else:
                 self.training_ruiner_next_time = False
-                errG = errG_from_D_v
+
+                if have_niv:
+                    errG = errG_from_D_v + errG_from_mse_v
+                else:
+                    errG = errG_from_D_v
+
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
@@ -431,12 +519,12 @@ class gan():
             ######################################################################
 
             if self.training_ruiner:
-                print('[iteration_i:%d] Training ruiner >> Loss_G_mse:%.4f'
-                    % (self.iteration_i,loss_mse.data[0]))
+                print('[iteration_i:%d] Training ruiner >> Loss_R_mse:%.4f'
+                    % (self.iteration_i,loss_r_mse.data[0]))
             else:
-                print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_G_mse:%.4f'
+                print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_R_mse:%.4f'
                     % (self.iteration_i,
-                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_mse.data[0]))
+                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_r_mse.data[0]))
                 
                 if self.errD_has_been_big:
                     if abs(errD.data.cpu().numpy()[0]) < config.bloom_at_errD:
@@ -565,9 +653,13 @@ class gan():
                             win='loss_g',
                             opts=dict(title='loss_g'))
 
-                vis.line(   self.recorder_loss_mse,
-                            win='recorder_loss_mse',
-                            opts=dict(title='recorder_loss_mse'))
+                vis.line(   self.recorder_loss_r_mse,
+                            win='recorder_loss_r_mse',
+                            opts=dict(title='recorder_loss_r_mse'))
+
+                vis.line(   self.recorder_loss_g_from_mse,
+                            win='recorder_loss_g_from_mse',
+                            opts=dict(title='recorder_loss_g_from_mse'))                
 
                 self.last_save_image_time = time.time()
 
