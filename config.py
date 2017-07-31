@@ -1,6 +1,6 @@
 # exp time
-t=1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_bloom_onehot_noise'
+t=10
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_noise'
 
 # mode
 run_on = 'agent' # agent, video
@@ -66,7 +66,7 @@ if run_on is 'agent':
     bloom_noise_rate = 0.5
     bloom_noise_lenth = int(gan_aux_size*bloom_noise_rate)
     fixed_noise_lenth = gan_aux_size-bloom_noise_lenth
-    bloom_noise_step = int(bloom_noise_lenth*1.0)# max to the effect of bloom_noise_rate
+    bloom_noise_step = int(bloom_noise_lenth*0.0)# max to the effect of bloom_noise_rate
     bloom_at_errD = 0.25
 
     gan_gloss_c_porpotion = 0.0
