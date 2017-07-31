@@ -466,7 +466,7 @@ class gan():
                 self.inputg_aux.resize_as_(multiple_one_aux).copy_(multiple_one_aux)
                 inputg_aux_v = Variable(self.inputg_aux) # totally freeze netG
 
-                noise=self.get_noise(torch.cuda.FloatTensor(save_batch_size, self.aux_size))
+                noise = self.get_noise(torch.cuda.FloatTensor(save_batch_size, self.aux_size))
                 noise_v = Variable(noise) # totally freeze netG
 
                 # predict
