@@ -1,5 +1,5 @@
 # exp time
-t=11
+t=12
 lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv'
 
 # mode

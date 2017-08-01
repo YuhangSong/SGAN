@@ -702,22 +702,18 @@ class gan():
 
                 '''log'''
                 vis.line(   Y=self.recorder_loss_d_real,
-                            X=self.recorder_iteration,
                             win='recorder_loss_d_real',
                             opts=dict(title='recorder_loss_d_real'))
 
                 vis.line(   Y=self.recorder_loss_d_fake,
-                            X=self.recorder_iteration,
                             win='recorder_loss_d_fake',
                             opts=dict(title='recorder_loss_d_fake'))
 
                 vis.line(   Y=self.recorder_errG_from_niv,
-                            X=self.recorder_iteration,
                             win='recorder_errG_from_niv',
                             opts=dict(title='recorder_errG_from_niv'))
 
                 vis.line(   Y=self.recorder_errG_from_D,
-                            X=self.recorder_iteration,
                             win='recorder_errG_from_D',
                             opts=dict(title='recorder_errG_from_D'))  
 
