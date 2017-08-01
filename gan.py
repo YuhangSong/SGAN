@@ -678,8 +678,8 @@ class gan():
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
-                print(self.recorder_iteration.size())
-                print(self.recorder_loss_d_real.size())
+                # print(self.recorder_iteration.size())
+                # print(self.recorder_loss_d_real.size())
                 '''log'''
                 vis.line(   Y=self.recorder_loss_d_real,
                             X=self.recorder_iteration,
