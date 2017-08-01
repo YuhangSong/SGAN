@@ -701,23 +701,23 @@ class gan():
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
                 '''log'''
-                vis.scatter(    torch.cat([self.recorder_loss_d_real.unsqueeze(1),self.recorder_iteration.unsqueeze(1)],1),
+                vis.scatter(    torch.cat([self.recorder_iteration.unsqueeze(1),self.recorder_loss_d_real.unsqueeze(1)],1),
                                 win='recorder_loss_d_real',
                                 opts=dict(title='recorder_loss_d_real'))
 
-                vis.scatter(    torch.cat([self.recorder_loss_d_fake.unsqueeze(1),self.recorder_iteration.unsqueeze(1)],1),
+                vis.scatter(    torch.cat([self.recorder_iteration.unsqueeze(1),self.recorder_loss_d_fake.unsqueeze(1)],1),
                                 win='recorder_loss_d_fake',
                                 opts=dict(title='recorder_loss_d_fake'))
 
-                vis.scatter(    torch.cat([self.recorder_errG_from_niv.unsqueeze(1),self.recorder_iteration.unsqueeze(1)],1),   
+                vis.scatter(    torch.cat([self.recorder_iteration.unsqueeze(1),self.recorder_errG_from_niv.unsqueeze(1)],1),   
                                 win='recorder_errG_from_niv',
                                 opts=dict(title='recorder_errG_from_niv'))
 
-                vis.scatter(    torch.cat([self.recorder_errG_from_D.unsqueeze(1),self.recorder_iteration.unsqueeze(1)],1),   
+                vis.scatter(    torch.cat([self.recorder_iteration.unsqueeze(1),self.recorder_errG_from_D.unsqueeze(1)],1),   
                                 win='recorder_errG_from_D',
                                 opts=dict(title='recorder_errG_from_D'))  
 
-                vis.scatter(    torch.cat([self.recorder_errR_from_mse.unsqueeze(1),self.recorder_iteration.unsqueeze(1)],1),   
+                vis.scatter(    torch.cat([self.recorder_iteration.unsqueeze(1),self.recorder_errR_from_mse.unsqueeze(1)],1),   
                                 win='recorder_errR_from_mse',
                                 opts=dict(title='recorder_errR_from_mse'))
 
