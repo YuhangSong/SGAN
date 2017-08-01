@@ -76,9 +76,9 @@ if run_on is 'agent':
     auto_d_c_factor = 2
 
     # to fasten training, only use when debug
-    gan_recent_dataset = gan_batchsize
-    gan_worker_com_internal = 10
-    gan_save_image_internal = 5
-    ruiner_train_to_mse = 0.8
-    bloom_at_errD = 4.0
+    # gan_recent_dataset = gan_batchsize
+    # gan_worker_com_internal = 10
+    # gan_save_image_internal = 5
+    # ruiner_train_to_mse = 0.8
+    # bloom_at_errD = 4.0
 
