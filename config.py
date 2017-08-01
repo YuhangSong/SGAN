@@ -1,5 +1,5 @@
 # exp time
-t=5
+t=8
 lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd'
 
 # mode
@@ -70,14 +70,15 @@ if run_on is 'agent':
     bloom_at_errD = 0.25
     niv_rate = 1.0
     donot_niv_gate = 0.2
+    do_niv_p_gate = 0.2
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
     # to fasten training, only use when debug
-    # gan_recent_dataset = gan_batchsize
-    # gan_worker_com_internal = 10
-    # gan_save_image_internal = 5
-    # ruiner_train_to_mse = 0.8
-    # bloom_at_errD = 4.0
+    gan_recent_dataset = gan_batchsize
+    gan_worker_com_internal = 10
+    gan_save_image_internal = 5
+    ruiner_train_to_mse = 0.8
+    bloom_at_errD = 4.0
 

@@ -374,6 +374,10 @@ class gan():
                                          input_aux_v=inputd_aux_v)
 
             errG_from_D_seperate_v = errG_from_D_seperate_v.squeeze(1)
+
+            errG_from_D_seperate_numpy_remain = np.clip(errG_from_D_seperate_v.data.cpu().numpy(),
+                                                        a_min=-config.loss_g_factor,
+                                                        a_max=+config.loss_g_factor)
             
             total_num_numpy = torch.numel(self.prediction_gt) 
             prediction_gt_v = Variable(self.prediction_gt)
@@ -402,6 +406,7 @@ class gan():
 
             '''if some is good enough, do not include to Update'''
             niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
+            errG_from_D_seperate_numpy = copy.deepcopy(np.asarray(errG_from_D_seperate_numpy_remain))
             ever_removed = False
             original_shape = np.shape(niv_numpy)
             iii=0
@@ -411,7 +416,11 @@ class gan():
                 if iii > (int(np.shape(niv_numpy)[0])-1):
                     break
 
-                if niv_numpy[iii] <= config.donot_niv_gate:
+                if (niv_numpy[iii] > config.donot_niv_gate) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                    # leave for niv loss
+                    iii += 1
+                else:
+                    # git rid of it for D loss
                     ever_removed = True
                     if iii < 1:
                         if iii > (np.shape(niv_numpy)[0]-2):
@@ -419,23 +428,22 @@ class gan():
                             break
                         else:
                             niv_numpy = niv_numpy[iii+1:]
+                            errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[iii+1:]
                             errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))
 
                     elif iii > (np.shape(niv_numpy)[0]-2):
                         niv_numpy = niv_numpy[:iii]
+                        errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[:iii]
                         errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,0,iii)
                                                            
                     else:
                         niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
+                        errG_from_D_seperate_numpy = np.concatenate((errG_from_D_seperate_numpy[:iii],errG_from_D_seperate_numpy[iii+1:]),0)
                         errG_from_niv_seperate_v = torch.cat(   [errG_from_niv_seperate_v.narrow(0,0,iii),
                                                                  errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))],
                                                                  0)
 
                     continue
-
-                else:
-                    iii += 1
-                
 
             if loss_G_have_niv:
                 now_shape = np.shape(niv_numpy)
@@ -459,6 +467,7 @@ class gan():
 
             '''if some is good enough, do not include to Update'''
             niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
+            errG_from_D_seperate_numpy = copy.deepcopy(np.asarray(errG_from_D_seperate_numpy_remain))
             ever_removed = False
             original_shape = np.shape(niv_numpy)
             iii=0
@@ -468,7 +477,8 @@ class gan():
                 if iii > (int(np.shape(niv_numpy)[0])-1):
                     break
 
-                if niv_numpy[iii] > config.donot_niv_gate:
+                if (niv_numpy[iii] > config.donot_niv_gate) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                    # get rid of for niv loss
                     ever_removed = True
                     if iii < 1:
                         if iii > (np.shape(niv_numpy)[0]-2):
@@ -476,21 +486,24 @@ class gan():
                             break
                         else:
                             niv_numpy = niv_numpy[iii+1:]
+                            errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[iii+1:]
                             errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))
 
                     elif iii > (np.shape(niv_numpy)[0]-2):
                         niv_numpy = niv_numpy[:iii]
+                        errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[:iii]
                         errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,0,iii)
                                                            
                     else:
                         niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
+                        errG_from_D_seperate_numpy = np.concatenate((errG_from_D_seperate_numpy[:iii],errG_from_D_seperate_numpy[iii+1:]),0)
                         errG_from_D_seperate_v = torch.cat(   [errG_from_D_seperate_v.narrow(0,0,iii),
                                                                  errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))],
                                                                  0)
 
                     continue
-
                 else:
+                    # leave for D loss
                     iii += 1
                 
 
