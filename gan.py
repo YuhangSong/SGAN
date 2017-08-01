@@ -501,7 +501,7 @@ class gan():
                 else:
                     print('Full elements in errG_from_D_seperate_v is used: '+str(now_shape))
 
-                errG_from_D_v = errG_from_D_seperate_v.mean(0)
+                errG_from_D_v = errG_from_D_seperate_v.mean(0) / now_shape[0]
                 self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,errG_from_D_v.data.cpu()],0)
 
                 # keep it uniform
