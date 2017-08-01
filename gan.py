@@ -128,15 +128,15 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_loss_g_from_d = torch.FloatTensor([0])
-        self.recorder_loss_g_from_c = torch.FloatTensor([0])
-        self.recorder_loss_g_from_mse = torch.FloatTensor([0])
-        self.recorder_loss_g_from_d_maped = torch.FloatTensor([0])
-        self.recorder_loss_g_from_c_maped = torch.FloatTensor([0])
-        self.recorder_loss_r_mse = torch.FloatTensor([0])
+        self.recorder_errG_from_D = torch.FloatTensor([0])
+        self.recorder_errG_from_niv = torch.FloatTensor([0])
+        self.recorder_errR_from_mse = torch.FloatTensor([0])
+
         self.recorder_loss_g = torch.FloatTensor([0])
         self.recorder_loss_d_fake = torch.FloatTensor([0])
         self.recorder_loss_d_real = torch.FloatTensor([0])
+
+        self.recorder_iteration = torch.FloatTensor([0])
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
@@ -210,10 +210,6 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = True
-                
-            if config.gan_gloss_c_porpotion > 0.0:
-                for p in self.netC.parameters():
-                    p.requires_grad = True
 
             '''
                 train the discriminator DCiters times
@@ -228,6 +224,8 @@ class gan():
             '''
             if self.training_ruiner:
                 DCiters = 0
+                self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,torch.FloatTensor([0.0])],0)
+                self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,torch.FloatTensor([0.0])],0)
             else:
                 if self.iteration_i % 500 == 0:
                     DCiters = 100
@@ -242,8 +240,6 @@ class gan():
             j = 0
             # DCiters = 2 # debuging
             while j < DCiters:
-
-                j += 1
 
                 self.get_a_batch(if_ruin_prediction_gt=True)
 
@@ -266,7 +262,8 @@ class gan():
                                                     input_aux_v=inputd_aux_v)
                 errD_real.backward(self.one)
 
-                self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,errD_real.data.cpu()],0)
+                if j < 1.0:
+                    self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,errD_real.data.cpu()],0)
                 #####################################################
 
                 ###################### get fake #####################
@@ -305,7 +302,8 @@ class gan():
                                                     input_aux_v=inputd_aux_v)
                 errD_fake.backward(self.mone)
 
-                self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,errD_fake.data.cpu()],0)
+                if j < 1.0:
+                    self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,errD_fake.data.cpu()],0)
 
                 # optmize
                 errD = errD_real - errD_fake
@@ -313,37 +311,7 @@ class gan():
 
                 self.optimizerD.step()
 
-                ############# train C with real & fake ##############
-                if config.train_corrector:
-
-                    # clamp parameters to a cube
-                    for p in self.netC.parameters():
-                        p.data.clamp_(self.clamp_lower, self.clamp_upper)
-
-                    # reset grandient
-                    self.netC.zero_grad()
-
-                    # feed real
-
-                    self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
-                    self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
-                    inputc_image_v = Variable(self.inputc_image_2)
-
-                    self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
-                    self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
-                    inputc_aux_v = Variable(self.inputc_aux_2)
-
-                    # compute
-                    outputc = self.netC(inputc_image_v, inputc_aux_v)
-
-                    outputc_gt_ = outputc
-     
-                    lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
-
-                    lossc.backward()
-
-                    self.optimizerC.step()
-                #####################################################
+                j += 1
 
             ######################################################################
             ####################### End of Update D network ######################
@@ -362,10 +330,6 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = False
-
-            if config.gan_gloss_c_porpotion > 0.0:
-                for p in self.netC.parameters():
-                    p.requires_grad = False
 
             # reset grandient
             self.netG.zero_grad()
@@ -388,9 +352,13 @@ class gan():
             prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
             state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
-            loss_r_mse = self.mse_loss_model_averaged(state_v,inputg_image_v)
-            loss_r_mse_maped = loss_r_mse * (config.loss_g_factor / loss_r_mse.data.cpu().numpy()[0]) # keep it to the same rank as loss G
-            self.recorder_loss_r_mse = torch.cat([self.recorder_loss_r_mse,loss_r_mse.data.cpu()],0)
+            # supervise loss from ruiner
+            errR_from_mse_v = self.mse_loss_model_averaged(state_v,inputg_image_v)
+            errR_from_mse_numpy = errR_from_mse_v.data.cpu().numpy()
+            self.recorder_errR_from_mse = torch.cat([self.recorder_errR_from_mse,errR_from_mse_v.data.cpu()],0)
+
+            # keep it uniform
+            errR_from_mse_v = errR_from_mse_v * (config.loss_g_factor / errR_from_mse_v.data.cpu().numpy()[0])
 
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
@@ -402,16 +370,17 @@ class gan():
             self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
             inputd_aux_v = Variable(self.inputd_aux)
 
-            errG_from_D_v, _ = self.netD(input_image_v=inputd_image_v,
+            _, errG_from_D_seperate_v = self.netD(input_image_v=inputd_image_v,
                                          input_aux_v=inputd_aux_v)
-            self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data.cpu()],0)
 
+            errG_from_D_seperate_v = errG_from_D_seperate_v.squeeze(1)
+            
             total_num_numpy = torch.numel(self.prediction_gt) 
             prediction_gt_v = Variable(self.prediction_gt)
-            errG_from_mse_seperate_v = torch.pow(torch.add(prediction_v,-prediction_gt_v),2.0) / total_num_numpy
-            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,3).squeeze(3)
-            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,2).squeeze(2)
-            errG_from_mse_seperate_v = torch.mean(errG_from_mse_seperate_v,1).squeeze(1)
+            errG_from_niv_seperate_v = torch.pow(torch.add(prediction_v,-prediction_gt_v),2.0) / total_num_numpy
+            errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,3).squeeze(3)
+            errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,2).squeeze(2)
+            errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,1).squeeze(1)
 
             ######################## get niv #####################################
             '''feed'''
@@ -426,16 +395,17 @@ class gan():
 
             '''revers, so that bigger niv means heavier weight'''
             '''clip, under zero is not add to niv'''
-            niv_numpy = np.clip(-niv_v.data.cpu().numpy(),
+            niv_numpy_remain = np.clip(-niv_v.data.cpu().numpy(),
                                 a_min=0.0,
                                 a_max=config.loss_g_factor)
-            niv_numpy = np.squeeze(niv_numpy,1)
+            niv_numpy_remain = np.squeeze(niv_numpy_remain,1)
 
             '''if some is good enough, do not include to Update'''
+            niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
             ever_removed = False
             original_shape = np.shape(niv_numpy)
             iii=0
-            have_niv = True
+            loss_G_have_niv = True
             while True:
 
                 if iii > (int(np.shape(niv_numpy)[0])-1):
@@ -445,20 +415,20 @@ class gan():
                     ever_removed = True
                     if iii < 1:
                         if iii > (np.shape(niv_numpy)[0]-2):
-                            have_niv = False
+                            loss_G_have_niv = False
                             break
                         else:
                             niv_numpy = niv_numpy[iii+1:]
-                            errG_from_mse_seperate_v = errG_from_mse_seperate_v.narrow(0,(iii+1),errG_from_mse_seperate_v.size()[0]-(iii+1))
+                            errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))
 
                     elif iii > (np.shape(niv_numpy)[0]-2):
                         niv_numpy = niv_numpy[:iii]
-                        errG_from_mse_seperate_v = errG_from_mse_seperate_v.narrow(0,0,iii)
+                        errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,0,iii)
                                                            
                     else:
                         niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
-                        errG_from_mse_seperate_v = torch.cat(   [errG_from_mse_seperate_v.narrow(0,0,iii),
-                                                                 errG_from_mse_seperate_v.narrow(0,(iii+1),errG_from_mse_seperate_v.size()[0]-(iii+1))],
+                        errG_from_niv_seperate_v = torch.cat(   [errG_from_niv_seperate_v.narrow(0,0,iii),
+                                                                 errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))],
                                                                  0)
 
                     continue
@@ -467,39 +437,103 @@ class gan():
                     iii += 1
                 
 
-            if have_niv:
+            if loss_G_have_niv:
                 now_shape = np.shape(niv_numpy)
                 if ever_removed:
-                    print('Some elements in training ruiner is removed: '+str(original_shape)+'>>>'+str(now_shape))
+                    print('Some elements in errG_from_niv_seperate_v is removed: '+str(original_shape)+'>>>'+str(now_shape))
+                else:
+                    print('Full elements in errG_from_niv_seperate_v is used: '+str(now_shape))
 
                 niv_numpy = np.expand_dims(niv_numpy,1)
-                errG_from_mse_seperate_v = errG_from_mse_seperate_v.unsqueeze(0)
+                errG_from_niv_seperate_v = errG_from_niv_seperate_v.unsqueeze(0)
 
-                errG_from_mse_v = torch.mm(errG_from_mse_seperate_v,Variable(torch.from_numpy(niv_numpy).cuda())).squeeze()
-                self.recorder_loss_g_from_mse = torch.cat([self.recorder_loss_g_from_mse,errG_from_mse_v.data.cpu()],0)
+                errG_from_niv_v = torch.mm(errG_from_niv_seperate_v,Variable(torch.from_numpy(niv_numpy).cuda())).squeeze(1) / now_shape[0]
+                self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,errG_from_niv_v.data.cpu()],0)
 
-                errG_from_mse_v = errG_from_mse_v * (config.loss_g_factor / errG_from_mse_v.data.cpu().numpy()[0] * config.niv_rate) # keep it uniform
+                # keep it uniform
+                errG_from_niv_v = errG_from_niv_v * (config.loss_g_factor / errG_from_niv_v.data.cpu().numpy()[0] * config.niv_rate)
             else:
-                print('No niv to compute!')
+                self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,torch.FloatTensor([0.0])],0)
+                print('No errG_from_niv_seperate_v.')
 
-            ######################################################################
 
-            if loss_r_mse.data.cpu().numpy()[0] > config.ruiner_train_to_mse:
-                if self.training_ruiner:
-                    errG = loss_r_mse_maped
-                else:
-                    if have_niv:
-                        errG = errG_from_D_v + loss_r_mse_maped + errG_from_mse_v
+            '''if some is good enough, do not include to Update'''
+            niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
+            ever_removed = False
+            original_shape = np.shape(niv_numpy)
+            iii=0
+            loss_G_have_D = True
+            while True:
+
+                if iii > (int(np.shape(niv_numpy)[0])-1):
+                    break
+
+                if niv_numpy[iii] > config.donot_niv_gate:
+                    ever_removed = True
+                    if iii < 1:
+                        if iii > (np.shape(niv_numpy)[0]-2):
+                            loss_G_have_D = False
+                            break
+                        else:
+                            niv_numpy = niv_numpy[iii+1:]
+                            errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))
+
+                    elif iii > (np.shape(niv_numpy)[0]-2):
+                        niv_numpy = niv_numpy[:iii]
+                        errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,0,iii)
+                                                           
                     else:
-                        errG = errG_from_D_v + loss_r_mse_maped
+                        niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
+                        errG_from_D_seperate_v = torch.cat(   [errG_from_D_seperate_v.narrow(0,0,iii),
+                                                                 errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))],
+                                                                 0)
+
+                    continue
+
+                else:
+                    iii += 1
+                
+
+            if loss_G_have_D:
+                now_shape = np.shape(niv_numpy)
+                if ever_removed:
+                    print('Some elements in errG_from_D_seperate_v is removed: '+str(original_shape)+'>>>'+str(now_shape))
+                else:
+                    print('Full elements in errG_from_D_seperate_v is used: '+str(now_shape))
+
+                errG_from_D_v = errG_from_D_seperate_v.mean(0)
+                self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,errG_from_D_v.data.cpu()],0)
+
+                # keep it uniform
+                errG_from_D_v = errG_from_D_v * (config.loss_g_factor / errG_from_D_v.data.cpu().numpy()[0] * config.niv_rate)
+                
+            else:
+                self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,torch.FloatTensor([0.0])],0)
+                print('No errG_from_D_seperate_v.')
+
+
+            if errR_from_mse_numpy[0] > config.ruiner_train_to_mse:
+                if self.training_ruiner:
+                    errG = errR_from_mse_v
+                else:
+                    errG = errR_from_mse_v
+                    if loss_G_have_niv:
+                        errG = errG + errG_from_niv_v
+                    if loss_G_have_D:
+                        errG = errG + errG_from_D_v
 
             else:
                 self.training_ruiner_next_time = False
 
-                if have_niv:
-                    errG = errG_from_D_v + errG_from_mse_v
+                if loss_G_have_niv and loss_G_have_D:
+                    errG = errG_from_D_v + errG_from_niv_v
                 else:
-                    errG = errG_from_D_v
+                    if loss_G_have_D:
+                        errG = errG_from_D_v
+                    elif loss_G_have_niv:
+                        errG = errG_from_niv_v
+                    else:
+                        print(e)
 
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
@@ -518,18 +552,22 @@ class gan():
             ########################### One Iteration ### ########################
             ######################################################################
 
+            self.iteration_i += 1
+            self.recorder_iteration = torch.cat([self.recorder_iteration,torch.FloatTensor([self.iteration_i])],0)
+
             if self.training_ruiner:
                 print('[iteration_i:%d] Training ruiner >> Loss_R_mse:%.4f'
-                    % (self.iteration_i,loss_r_mse.data[0]))
+                    % (self.iteration_i,errR_from_mse_numpy[0]))
             else:
                 print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_R_mse:%.4f'
                     % (self.iteration_i,
-                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], loss_r_mse.data[0]))
+                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], errR_from_mse_numpy[0]))
                 
                 if self.errD_has_been_big:
                     if abs(errD.data.cpu().numpy()[0]) < config.bloom_at_errD:
-                        print('>>>>>>>>>>>>>>>>>>>>> Bloom noise >>>>>>>>>>>>>>>>>>>>>')
-                        self.netG.bloom_noise()
+                        if config.bloom_noise_step > 0.0:
+                            print('>>>>>>>>>>>>>>>>>>>>> Bloom noise >>>>>>>>>>>>>>>>>>>>>')
+                            self.netG.bloom_noise()
                 else:
                     print('>>>>>>>>>>>>>>>>>>>>> errD has not been big >>>>>>>>>>>>>>>>>>>>>')
                     if abs(errD.data.cpu().numpy()[0]) > config.loss_g_factor:
@@ -640,8 +678,11 @@ class gan():
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
+                print(self.recorder_iteration.size())
+                print(self.recorder_loss_d_real.size())
                 '''log'''
-                vis.line(   self.recorder_loss_d_real,
+                vis.line(   Y=self.recorder_loss_d_real,
+                            X=self.recorder_iteration,
                             win='recorder_loss_d_real',
                             opts=dict(title='recorder_loss_d_real'))
 
@@ -649,21 +690,24 @@ class gan():
                             win='recorder_loss_d_fake',
                             opts=dict(title='recorder_loss_d_fake'))
 
+                vis.line(   self.recorder_errG_from_niv,
+                            win='recorder_errG_from_niv',
+                            opts=dict(title='recorder_errG_from_niv'))
+
+                vis.line(   self.recorder_errG_from_D,
+                            win='recorder_errG_from_D',
+                            opts=dict(title='recorder_errG_from_D'))  
+
+                vis.line(   Y=self.recorder_errR_from_mse,
+                            X=self.recorder_iteration,
+                            win='recorder_errR_from_mse',
+                            opts=dict(title='recorder_errR_from_mse'))
+
                 vis.line(   self.recorder_loss_g,
                             win='loss_g',
-                            opts=dict(title='loss_g'))
-
-                vis.line(   self.recorder_loss_r_mse,
-                            win='recorder_loss_r_mse',
-                            opts=dict(title='recorder_loss_r_mse'))
-
-                vis.line(   self.recorder_loss_g_from_mse,
-                            win='recorder_loss_g_from_mse',
-                            opts=dict(title='recorder_loss_g_from_mse'))                
+                            opts=dict(title='loss_g'))         
 
                 self.last_save_image_time = time.time()
-
-            self.iteration_i += 1
 
             ######################################################################
             ######################### End One in Iteration  ######################
@@ -768,26 +812,15 @@ class gan():
         except Exception, e:
             print('Previous checkpoint for netD unfounded')
         try:
-            self.netC.load_state_dict(torch.load('{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_)))
-            print('Previous checkpoint for netC founded')
+            self.netG.load_state_dict(torch.load('{0}/{1}/netG.pth'.format(self.experiment,config.gan_model_name_)))
+            print('Previous checkpoint for netG founded')
         except Exception, e:
-            print('Previous checkpoint for netC unfounded')
-        try:
-            self.netG_Cv.load_state_dict(torch.load('{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_)))
-            print('Previous checkpoint for netG_Cv founded')
-        except Exception, e:
-            print('Previous checkpoint for netG_Cv unfounded')
-        try:
-            self.netG_DeCv.load_state_dict(torch.load('{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_)))
-            print('Previous checkpoint for netG_DeCv founded')
-        except Exception, e:
-            print('Previous checkpoint for netG_DeCv unfounded')
+            print('Previous checkpoint for netG unfounded')
 
     def save_models(self):
         '''do checkpointing'''
         torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
-        # torch.save(self.netC.state_dict(), '{0}/{1}/netC.pth'.format(self.experiment,config.gan_model_name_))
-        torch.save(self.netG.state_dict(), '{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_))
+        torch.save(self.netG.state_dict(), '{0}/{1}/netG.pth'.format(self.experiment,config.gan_model_name_))
 
     def save_sample(self,sample,name,num=-1):
 
