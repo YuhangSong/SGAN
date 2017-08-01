@@ -1,6 +1,6 @@
 # exp time
-t=8
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd'
+t=9
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv'
 
 # mode
 run_on = 'agent' # agent, video
@@ -61,7 +61,7 @@ if run_on is 'agent':
     train_corrector = False
     DCiters_ = 5
     noise_image = 0.2
-    ruiner_train_to_mse = 0.001
+    ruiner_train_to_mse = 0.0005
     loss_g_factor = 2.0
     bloom_noise_rate = 0.5
     bloom_noise_lenth = int(gan_aux_size*bloom_noise_rate)

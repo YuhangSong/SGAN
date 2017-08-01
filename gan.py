@@ -132,7 +132,6 @@ class gan():
         self.recorder_errG_from_niv = torch.FloatTensor([0])
         self.recorder_errR_from_mse = torch.FloatTensor([0])
 
-        self.recorder_loss_g = torch.FloatTensor([0])
         self.recorder_loss_d_fake = torch.FloatTensor([0])
         self.recorder_loss_d_real = torch.FloatTensor([0])
 
@@ -189,9 +188,8 @@ class gan():
 
     def train(self):
         """
-        train one iteraction
+            train one iteraction
         """
-
         if self.dataset_image.size()[0] >= self.batchSize:
 
             '''only train when have enough dataset'''
@@ -210,6 +208,8 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = True
+            for p in self.netG.parameters():
+                p.requires_grad = False
 
             '''
                 train the discriminator DCiters times
@@ -238,37 +238,40 @@ class gan():
                 G network is trained for one time
             '''
             j = 0
-            # DCiters = 2 # debuging
             while j < DCiters:
 
+                '''refresh to a new batch'''
                 self.get_a_batch(if_ruin_prediction_gt=True)
 
-                # clamp parameters to a cube
+                '''prepare for the update'''
                 for p in self.netD.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
-
-                ################# train D with real #################
-                # reset grandient
+                    # clamp parameters to a cube
+                    p.data.clamp_(self.clamp_lower, self.clamp_upper) 
                 self.netD.zero_grad()
 
-                # feed
+                ################# train D with real #################
+
+                '''feed'''
                 self.inputd_image.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
                 inputd_image_v = Variable(self.inputd_image)
                 self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
                 inputd_aux_v = Variable(self.inputd_aux)
 
-                # compute
+                '''forward'''
                 errD_real, outputD_real = self.netD(input_image_v=inputd_image_v,
                                                     input_aux_v=inputd_aux_v)
-                errD_real.backward(self.one)
-
+                '''record'''
                 if j < 1.0:
                     self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,errD_real.data.cpu()],0)
+
+                '''backward'''
+                errD_real.backward(self.one)
+
                 #####################################################
 
                 ###################### get fake #####################
 
-                # feed
+                ''' feed '''
                 self.inputg_image.resize_as_(self.state).copy_(self.state)
                 inputg_image_v = Variable(self.inputg_image, volatile = True) # totally freeze
 
@@ -278,39 +281,46 @@ class gan():
                 noise=self.get_noise(torch.cuda.FloatTensor(self.batchSize, self.aux_size))
                 noise_v = Variable(noise, volatile = True) # totally freeze
 
-                # predict
+                '''predict'''
                 state_prediction_v = self.netG( input_image_v=inputg_image_v,
                                                 input_aux_v=inputg_aux_v,
                                                 input_noise_v=noise_v)
 
                 prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
                 prediction = prediction_v.data
+
                 #####################################################
                 
                 ################# train D with fake #################
-                # get state_prediction
+
+                '''get state_prediction'''
                 self.state_prediction = torch.cat([self.state, prediction], 1)
 
-                # feed
+                '''feed'''
                 self.inputd_image.resize_as_(self.state_prediction).copy_(self.state_prediction)
                 inputd_image_v = Variable(self.inputd_image)
                 self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
                 inputd_aux_v = Variable(self.inputd_aux)
 
-                # compute
+                '''compute'''
                 errD_fake, outputD_fake = self.netD(input_image_v=inputd_image_v,
                                                     input_aux_v=inputd_aux_v)
-                errD_fake.backward(self.mone)
-
+                '''record'''
                 if j < 1.0:
                     self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,errD_fake.data.cpu()],0)
 
-                # optmize
+                '''backward'''
+                errD_fake.backward(self.mone)
+
+                '''just for log'''
                 errD = errD_real - errD_fake
+
                 #####################################################
 
+                '''optimize'''
                 self.optimizerD.step()
 
+                '''interaction for updating D'''
                 j += 1
 
             ######################################################################
@@ -321,6 +331,7 @@ class gan():
             ########################## Update G network ##########################
             ######################################################################
 
+            '''refresh to a new batch'''
             self.get_a_batch(if_ruin_prediction_gt=True)
 
             '''
@@ -330,11 +341,15 @@ class gan():
             '''
             for p in self.netD.parameters():
                 p.requires_grad = False
+            for p in self.netG.parameters():
+                p.requires_grad = True
 
-            # reset grandient
+            '''prepare update for G'''
             self.netG.zero_grad()
 
-            # feed
+            ########################## generate ############################
+
+            '''feed'''
             self.inputg_image.resize_as_(self.state).copy_(self.state)
             inputg_image_v = Variable(self.inputg_image)
 
@@ -344,7 +359,7 @@ class gan():
             noise=self.get_noise(torch.cuda.FloatTensor(self.batchSize, self.aux_size))
             noise_v = Variable(noise)
 
-            # predict
+            '''for ward'''
             state_prediction_v = self.netG( input_image_v=inputg_image_v,
                                             input_aux_v=inputg_aux_v,
                                             input_noise_v=noise_v)
@@ -352,59 +367,83 @@ class gan():
             prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
             state_v = state_prediction_v.narrow(1,0,self.nc*3)
 
-            # supervise loss from ruiner
+            '''supervise loss from ruiner'''
             errR_from_mse_v = self.mse_loss_model_averaged(state_v,inputg_image_v)
-            errR_from_mse_numpy = errR_from_mse_v.data.cpu().numpy()
             self.recorder_errR_from_mse = torch.cat([self.recorder_errR_from_mse,errR_from_mse_v.data.cpu()],0)
+            errR_from_mse_numpy = errR_from_mse_v.data.cpu().numpy()
 
-            # keep it uniform
-            errR_from_mse_v = errR_from_mse_v * (config.loss_g_factor / errR_from_mse_v.data.cpu().numpy()[0])
+            '''keep it uniform'''
+            errR_from_mse_v = torch.mul(errR_from_mse_v,
+                                        (config.loss_g_factor / errR_from_mse_v.data.cpu().numpy()[0]))
 
-            # get state_predictionv, this is a Variable cat 
+            '''get state_predictionv, this is a Variable cat'''
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
 
-            # feed, this state_predictionv is Variable
+            '''feed, this state_predictionv is Variable'''
             inputd_image_v = state_v_prediction_v
 
-            # feed
             self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
             inputd_aux_v = Variable(self.inputd_aux)
 
-            _, errG_from_D_seperate_v = self.netD(input_image_v=inputd_image_v,
-                                         input_aux_v=inputd_aux_v)
+            '''forward'''
+            _, errG_from_D_seperate_v = self.netD(  input_image_v=inputd_image_v,
+                                                    input_aux_v=inputd_aux_v)
 
+            '''squeeze to a one dimentional tensor'''
             errG_from_D_seperate_v = errG_from_D_seperate_v.squeeze(1)
 
-            errG_from_D_seperate_numpy_remain = np.clip(errG_from_D_seperate_v.data.cpu().numpy(),
-                                                        a_min=-config.loss_g_factor,
-                                                        a_max=+config.loss_g_factor)
+            errG_from_D_seperate_numpy_remain = errG_from_D_seperate_v.data.cpu().numpy()
             
-            total_num_numpy = torch.numel(self.prediction_gt) 
+            total_num_numpy = torch.numel(self.prediction_gt)/self.prediction_gt.size()[0]
             prediction_gt_v = Variable(self.prediction_gt)
             errG_from_niv_seperate_v = torch.pow(torch.add(prediction_v,-prediction_gt_v),2.0) / total_num_numpy
             errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,3).squeeze(3)
             errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,2).squeeze(2)
             errG_from_niv_seperate_v = torch.mean(errG_from_niv_seperate_v,1).squeeze(1)
 
-            ######################## get niv #####################################
+            ################################## get niv #####################################
+
             '''feed'''
             self.inputd_image.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
             inputd_image_v = Variable(self.inputd_image)
             self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
             inputd_aux_v = Variable(self.inputd_aux)
 
-            '''compute'''
+            '''forward'''
             _, niv_v = self.netD(   input_image_v=inputd_image_v,
                                     input_aux_v=inputd_aux_v)
 
-            '''revers, so that bigger niv means heavier weight'''
-            '''clip, under zero is not add to niv'''
-            niv_numpy_remain = np.clip(-niv_v.data.cpu().numpy(),
-                                a_min=0.0,
-                                a_max=config.loss_g_factor)
-            niv_numpy_remain = np.squeeze(niv_numpy_remain,1)
+            '''to a one dimentional tensorflow'''
+            niv_v = niv_v.squeeze(1)
 
-            '''if some is good enough, do not include to Update'''
+            niv_numpy_remain = niv_v.data.cpu().numpy()
+
+            def numpy_remove(x,index):
+                if index < 1:
+                    if index > (np.shape(x)[0]-2):
+                        return None
+                    else:
+                        x = x[index+1:]
+                elif index > (np.shape(x)[0]-2):
+                    x = x[:iii]                                                       
+                else:
+                    x = np.concatenate((x[:index],x[index+1:]),0)
+                return x
+
+            def torch_remove(x,index):
+                if index < 1:
+                    if index > (x.size()[0]-2):
+                        return None
+                    else:
+                        x = x.narrow(0,(index+1),x.size()[0]-(index+1))
+
+                elif index > (x.size()[0]-2):
+                    x = x.narrow(0,0,index)                                    
+                else:
+                    x = torch.cat(  [x.narrow(0,0,index),x.narrow(0,(index+1),x.size()[0]-(index+1))],0)
+                return x
+
+            '''get rid of D from niv'''
             niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
             errG_from_D_seperate_numpy = copy.deepcopy(np.asarray(errG_from_D_seperate_numpy_remain))
             ever_removed = False
@@ -413,57 +452,38 @@ class gan():
             loss_G_have_niv = True
             while True:
 
-                if iii > (int(np.shape(niv_numpy)[0])-1):
+                if iii >= (int(np.shape(niv_numpy)[0])):
                     break
 
-                if (niv_numpy[iii] > config.donot_niv_gate) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                if (niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
                     # leave for niv loss
                     iii += 1
                 else:
                     # git rid of it for D loss
                     ever_removed = True
-                    if iii < 1:
-                        if iii > (np.shape(niv_numpy)[0]-2):
-                            loss_G_have_niv = False
-                            break
-                        else:
-                            niv_numpy = niv_numpy[iii+1:]
-                            errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[iii+1:]
-                            errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))
-
-                    elif iii > (np.shape(niv_numpy)[0]-2):
-                        niv_numpy = niv_numpy[:iii]
-                        errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[:iii]
-                        errG_from_niv_seperate_v = errG_from_niv_seperate_v.narrow(0,0,iii)
-                                                           
-                    else:
-                        niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
-                        errG_from_D_seperate_numpy = np.concatenate((errG_from_D_seperate_numpy[:iii],errG_from_D_seperate_numpy[iii+1:]),0)
-                        errG_from_niv_seperate_v = torch.cat(   [errG_from_niv_seperate_v.narrow(0,0,iii),
-                                                                 errG_from_niv_seperate_v.narrow(0,(iii+1),errG_from_niv_seperate_v.size()[0]-(iii+1))],
-                                                                 0)
-
+                    niv_numpy = numpy_remove(niv_numpy,iii)
+                    errG_from_D_seperate_numpy = numpy_remove(errG_from_D_seperate_numpy,iii)
+                    errG_from_niv_seperate_v = torch_remove(errG_from_niv_seperate_v,iii)
+                    if niv_numpy is None:
+                        loss_G_have_niv = False
+                        break
                     continue
 
-            if loss_G_have_niv:
+            if loss_G_have_niv is False:
+                self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,torch.FloatTensor([0.0])],0)
+                print('No errG_from_niv_seperate_v.')
+            else:
                 now_shape = np.shape(niv_numpy)
                 if ever_removed:
                     print('Some elements in errG_from_niv_seperate_v is removed: '+str(original_shape)+'>>>'+str(now_shape))
                 else:
                     print('Full elements in errG_from_niv_seperate_v is used: '+str(now_shape))
 
-                niv_numpy = np.expand_dims(niv_numpy,1)
-                errG_from_niv_seperate_v = errG_from_niv_seperate_v.unsqueeze(0)
-
-                errG_from_niv_v = torch.mm(errG_from_niv_seperate_v,Variable(torch.from_numpy(niv_numpy).cuda())).squeeze(1) / now_shape[0]
+                errG_from_niv_v = errG_from_niv_seperate_v.mean(0)
                 self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,errG_from_niv_v.data.cpu()],0)
 
-                # keep it uniform
-                errG_from_niv_v = errG_from_niv_v * (config.loss_g_factor / errG_from_niv_v.data.cpu().numpy()[0] * config.niv_rate)
-            else:
-                self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,torch.FloatTensor([0.0])],0)
-                print('No errG_from_niv_seperate_v.')
-
+                '''keep it uniform'''
+                errG_from_niv_v = errG_from_niv_v * (config.loss_g_factor / errG_from_niv_v.data.cpu().numpy()[0])
 
             '''if some is good enough, do not include to Update'''
             niv_numpy = copy.deepcopy(np.asarray(niv_numpy_remain))
@@ -474,83 +494,49 @@ class gan():
             loss_G_have_D = True
             while True:
 
-                if iii > (int(np.shape(niv_numpy)[0])-1):
+                if iii >= (int(np.shape(niv_numpy)[0])):
                     break
 
-                if (niv_numpy[iii] > config.donot_niv_gate) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                if (niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
                     # get rid of for niv loss
                     ever_removed = True
-                    if iii < 1:
-                        if iii > (np.shape(niv_numpy)[0]-2):
-                            loss_G_have_D = False
-                            break
-                        else:
-                            niv_numpy = niv_numpy[iii+1:]
-                            errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[iii+1:]
-                            errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))
-
-                    elif iii > (np.shape(niv_numpy)[0]-2):
-                        niv_numpy = niv_numpy[:iii]
-                        errG_from_D_seperate_numpy = errG_from_D_seperate_numpy[:iii]
-                        errG_from_D_seperate_v = errG_from_D_seperate_v.narrow(0,0,iii)
-                                                           
-                    else:
-                        niv_numpy = np.concatenate((niv_numpy[:iii],niv_numpy[iii+1:]),0)
-                        errG_from_D_seperate_numpy = np.concatenate((errG_from_D_seperate_numpy[:iii],errG_from_D_seperate_numpy[iii+1:]),0)
-                        errG_from_D_seperate_v = torch.cat(   [errG_from_D_seperate_v.narrow(0,0,iii),
-                                                                 errG_from_D_seperate_v.narrow(0,(iii+1),errG_from_D_seperate_v.size()[0]-(iii+1))],
-                                                                 0)
-
+                    niv_numpy = numpy_remove(niv_numpy,iii)
+                    errG_from_D_seperate_numpy = numpy_remove(errG_from_D_seperate_numpy,iii)
+                    errG_from_D_seperate_v = torch_remove(errG_from_D_seperate_v,iii)
+                    if niv_numpy is None:
+                        loss_G_have_D = False
+                        break        
                     continue
                 else:
                     # leave for D loss
                     iii += 1
                 
 
-            if loss_G_have_D:
+            if loss_G_have_D is False:
+                self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,torch.FloatTensor([0.0])],0)
+                print('No errG_from_D_seperate_v.')
+            else:
                 now_shape = np.shape(niv_numpy)
                 if ever_removed:
                     print('Some elements in errG_from_D_seperate_v is removed: '+str(original_shape)+'>>>'+str(now_shape))
                 else:
                     print('Full elements in errG_from_D_seperate_v is used: '+str(now_shape))
 
-                errG_from_D_v = errG_from_D_seperate_v.mean(0) / now_shape[0]
+                errG_from_D_v = errG_from_D_seperate_v.mean(0)
                 self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,errG_from_D_v.data.cpu()],0)
 
                 # keep it uniform
-                errG_from_D_v = errG_from_D_v * (config.loss_g_factor / errG_from_D_v.data.cpu().numpy()[0] * config.niv_rate)
+                errG_from_D_v = errG_from_D_v * (config.loss_g_factor / errG_from_D_v.data.cpu().numpy()[0])
                 
-            else:
-                self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,torch.FloatTensor([0.0])],0)
-                print('No errG_from_D_seperate_v.')
+            errG = Variable(torch.cuda.FloatTensor([0.0]))
+            if self.training_ruiner:
+                errG = errG + errR_from_mse_v
+            if loss_G_have_niv:
+                errG = errG + errG_from_niv_v
+            if loss_G_have_D:
+                errG = errG + errG_from_D_v
 
-
-            if errR_from_mse_numpy[0] > config.ruiner_train_to_mse:
-                if self.training_ruiner:
-                    errG = errR_from_mse_v
-                else:
-                    errG = errR_from_mse_v
-                    if loss_G_have_niv:
-                        errG = errG + errG_from_niv_v
-                    if loss_G_have_D:
-                        errG = errG + errG_from_D_v
-
-            else:
-                self.training_ruiner_next_time = False
-
-                if loss_G_have_niv and loss_G_have_D:
-                    errG = errG_from_D_v + errG_from_niv_v
-                else:
-                    if loss_G_have_D:
-                        errG = errG_from_D_v
-                    elif loss_G_have_niv:
-                        errG = errG_from_niv_v
-                    else:
-                        print(e)
-
-
-            self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
-
+            '''backward'''
             errG.backward(self.one)
 
             # optmize
@@ -572,9 +558,7 @@ class gan():
                 print('[iteration_i:%d] Training ruiner >> Loss_R_mse:%.4f'
                     % (self.iteration_i,errR_from_mse_numpy[0]))
             else:
-                print('[iteration_i:%d] Loss_D:%.2f Loss_G:%.2f Loss_D_real:%.2f Loss_D_fake:%.2f Loss_R_mse:%.4f'
-                    % (self.iteration_i,
-                    errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0], errR_from_mse_numpy[0]))
+                print('[iteration_i:%d]')
                 
                 if self.errD_has_been_big:
                     if abs(errD.data.cpu().numpy()[0]) < config.bloom_at_errD:
@@ -595,7 +579,7 @@ class gan():
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
 
                 save_batch_size = self.batchSize
-                # feed
+                
                 multiple_one_state = torch.cat([self.state[0:1]]*save_batch_size,0)
 
                 self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
@@ -608,7 +592,7 @@ class gan():
                 noise=self.get_noise(torch.cuda.FloatTensor(save_batch_size, self.aux_size))
                 noise_v = Variable(noise) # totally freeze netG
 
-                # predict
+                '''predict'''
                 state_prediction_v = self.netG( input_image_v=inputg_image_v,
                                                 input_aux_v=inputg_aux_v,
                                                 input_noise_v=noise_v)
@@ -691,8 +675,6 @@ class gan():
                     self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
                     self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[save_batch_size].data.cpu().numpy()[0])).replace('.',''))
 
-                # print(self.recorder_iteration.size())
-                # print(self.recorder_loss_d_real.size())
                 '''log'''
                 vis.line(   Y=self.recorder_loss_d_real,
                             X=self.recorder_iteration,
@@ -717,12 +699,7 @@ class gan():
                 vis.line(   Y=self.recorder_errR_from_mse,
                             X=self.recorder_iteration,
                             win='recorder_errR_from_mse',
-                            opts=dict(title='recorder_errR_from_mse'))
-
-                vis.line(   Y=self.recorder_loss_g,
-                            X=self.recorder_iteration,
-                            win='loss_g',
-                            opts=dict(title='loss_g'))         
+                            opts=dict(title='recorder_errR_from_mse'))      
 
                 self.last_save_image_time = time.time()
 
@@ -863,7 +840,6 @@ class gan():
         number_rows = 4
 
         '''log real result'''
-        # vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
         sample=sample2image(sample).cpu().numpy()
         vis.images( sample,
                     win=name,
