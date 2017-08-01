@@ -686,15 +686,18 @@ class gan():
                             win='recorder_loss_d_real',
                             opts=dict(title='recorder_loss_d_real'))
 
-                vis.line(   self.recorder_loss_d_fake,
+                vis.line(   Y=self.recorder_loss_d_fake,
+                            X=self.recorder_iteration,
                             win='recorder_loss_d_fake',
                             opts=dict(title='recorder_loss_d_fake'))
 
-                vis.line(   self.recorder_errG_from_niv,
+                vis.line(   Y=self.recorder_errG_from_niv,
+                            X=self.recorder_iteration,
                             win='recorder_errG_from_niv',
                             opts=dict(title='recorder_errG_from_niv'))
 
-                vis.line(   self.recorder_errG_from_D,
+                vis.line(   Y=self.recorder_errG_from_D,
+                            X=self.recorder_iteration,
                             win='recorder_errG_from_D',
                             opts=dict(title='recorder_errG_from_D'))  
 
@@ -703,7 +706,8 @@ class gan():
                             win='recorder_errR_from_mse',
                             opts=dict(title='recorder_errR_from_mse'))
 
-                vis.line(   self.recorder_loss_g,
+                vis.line(   Y=self.recorder_loss_g,
+                            X=self.recorder_iteration,
                             win='loss_g',
                             opts=dict(title='loss_g'))         
 
