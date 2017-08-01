@@ -72,11 +72,11 @@ class env():
                     action_dic_p[i] = config.grid_action_random_discounter**(distance)
                 elif config.grid_random_type is 'russell':
                     if distance==0:
-                        action_dic_p[i]=0.8
+                        action_dic_p[i]=0.25
                     elif distance==1:
-                        action_dic_p[i]=0.1
+                        action_dic_p[i]=0.25
                     elif distance==2:
-                        action_dic_p[i]=0.0
+                        action_dic_p[i]=0.25
                     else:
                         print('error')
                         print(s)
