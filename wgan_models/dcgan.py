@@ -137,7 +137,7 @@ class cat_layer(nn.Module):
 
         return x
 
-def compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved):
+def compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved, direction_conv):
 
     # compute parameters
     num_layer = int(np.log2(size_in/size_conved))
@@ -146,10 +146,16 @@ def compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times,
     kernel_size_dic = []
     channel_i = channel_times / 2
     for layer in range(num_layer):
-        if (num_layer-layer) <= (depth_in-depth_conved):
-            kernel_size = (2,4,4)
+        if direction_conv:
+            if (num_layer-layer) <= (depth_in-depth_conved):
+                kernel_size = (2,4,4)
+            else:
+                kernel_size = (1,4,4)
         else:
-            kernel_size = (1,4,4)
+            if layer < (depth_in-depth_conved):
+                kernel_size = (2,4,4)
+            else:
+                kernel_size = (1,4,4)
         channel_i_1 = channel_i * 2
         if layer < 1:
             channel_i = num_channel_in
@@ -171,7 +177,7 @@ class conv3d_layers(nn.Module):
     def __init__(self, num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved):
         super(conv3d_layers, self).__init__()
 
-        temp = compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved)
+        temp = compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved, True)
         self.num_layer, self.size_out, self.num_channel_out, self.channel_i_dic, self.channel_i_1_dic, self.kernel_size_dic = temp
     
         # NNs
@@ -205,7 +211,7 @@ class deconv3d_layers(nn.Module):
     def __init__(self, num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved):
         super(deconv3d_layers, self).__init__()
 
-        temp = compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved)
+        temp = compute_conv_parameters(num_channel_in, size_in, size_conved, channel_times, depth_in, depth_conved, False)
         self.num_layer, self.size_out, self.num_channel_out, self.channel_i_dic, self.channel_i_1_dic, self.kernel_size_dic = temp
     
         # NNs
