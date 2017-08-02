@@ -176,6 +176,7 @@ class gan():
         self.last_save_image_time = 0
 
         self.training_ruiner = True
+        self.ruiner_ready = False
 
     def get_noise(self,size):
         # return self.noise.resize_as_(size).uniform_(0,1).round()
@@ -219,8 +220,11 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            if self.training_ruiner:
-                '''if we are train ruiner, D is not updating'''
+            if self.ruiner_ready is False:
+                '''
+                    if ruiner is not ready yet
+                    we do not train other thing than ruiner
+                '''
                 DCiters = 0
                 self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,torch.FloatTensor([0.0])],0)
                 self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,torch.FloatTensor([0.0])],0)
@@ -378,8 +382,11 @@ class gan():
 
             ###################################################################################################################
 
-            if self.training_ruiner:
-
+            if self.ruiner_ready is False:
+                '''
+                    if we are train ruiner, and ruiner is not ready yet
+                    we do not train other thing than ruiner
+                '''
                 self.recorder_errG_from_niv = torch.cat([self.recorder_errG_from_niv,torch.FloatTensor([0.0])],0)
                 self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,torch.FloatTensor([0.0])],0)
 
@@ -478,7 +485,12 @@ class gan():
                     if iii >= (int(np.shape(niv_numpy)[0])):
                         break
 
-                    if (niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                    if config.if_loss_g_niv:
+                        condition_for_niv = ((niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)))
+                    else:
+                        condition_for_niv = False
+
+                    if condition_for_niv:
                         # leave for niv loss
                         iii += 1
                     else:
@@ -522,7 +534,12 @@ class gan():
                     if iii >= (int(np.shape(niv_numpy)[0])):
                         break
 
-                    if (niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)):
+                    if config.if_loss_g_niv:
+                        condition_for_niv = ((niv_numpy[iii] < (-config.donot_niv_gate)) and (errG_from_D_seperate_numpy[iii]>(-config.do_niv_p_gate)) and (errG_from_D_seperate_numpy[iii]<(config.do_niv_p_gate)))
+                    else:
+                        condition_for_niv = False
+
+                    if condition_for_niv:
                         # get rid of for niv loss
                         ever_removed = True
                         niv_numpy = numpy_remove(niv_numpy,iii)
@@ -546,9 +563,16 @@ class gan():
                         print('Some elements in errG_from_D_seperate_v is removed: '+str(original_shape)+'>>>'+str(now_shape))
                     else:
                         print('Full elements in errG_from_D_seperate_v is used: '+str(now_shape))
+                        
+                    errG_from_D_v_unmaped = errG_from_D_seperate_v.mean(0)
+                    self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,errG_from_D_v_unmaped.data.cpu()],0)
 
-                    errG_from_D_v = errG_from_D_seperate_v.mean(0)
-                    self.recorder_errG_from_D = torch.cat([self.recorder_errG_from_D,errG_from_D_v.data.cpu()],0)
+                    if config.if_keep_flow_force:
+                        errG_from_D_seperate_numpy[errG_from_D_seperate_numpy <= 0.0] = config.loss_g_factor
+                        errG_from_D_seperate_keep_force_numpy = np.reciprocal(errG_from_D_seperate_numpy) * config.loss_g_factor
+                        errG_from_D_v = torch.dot(errG_from_D_seperate_v,Variable(torch.from_numpy(errG_from_D_seperate_keep_force_numpy).cuda()))/now_shape[0]
+                    else:
+                        errG_from_D_v = errG_from_D_seperate_v.mean(0)
 
                     # keep it uniform
                     errG_from_D_v = errG_from_D_v * (config.loss_g_factor / errG_from_D_v.data.cpu().numpy()[0])
@@ -559,12 +583,20 @@ class gan():
             
             errG = Variable(torch.cuda.FloatTensor([0.0]))
 
-            if self.training_ruiner:
-                '''if train the ruiner, we wouldnot train other losses'''
+            if self.ruiner_ready is False:
+                '''
+                    if ruiner is not ready yet
+                    we do not train other thing than ruiner
+                '''
                 errG = errG + errR_from_mse_v
             else:
-                '''if not trainning ruiner, we train all other losses'''
+                '''
+                    if ruiner is ready, we consider all
+                '''
+                if self.training_ruiner:
+                    errG = errG + errR_from_mse_v
                 if loss_G_have_niv:
+                    print(e)
                     errG = errG + errG_from_niv_v
                 if loss_G_have_D:
                     errG = errG + errG_from_D_v
@@ -589,12 +621,14 @@ class gan():
             self.iteration_i += 1
             self.recorder_iteration = torch.cat([self.recorder_iteration,torch.FloatTensor([self.iteration_i])],0)
 
-            if self.training_ruiner:
-                print(  '[iteration_i:%d] Training ruiner >> Loss_R_mse:%.4f'
+            if self.ruiner_ready is False:
+                print(  '[iteration_i:%d] Ruiner not ready >> Loss_R_mse:%.4f'
                         % (self.iteration_i,errR_from_mse_numpy[0]))
+                if errR_from_mse_numpy[0] < config.ruiner_train_to_mse:
+                    self.ruiner_ready = True
             else:
-                print(  '[iteration_i:%d]'
-                        % (self.iteration_i))
+                print(  '[iteration_i:%d] training_ruiner:%s loss_G_have_niv:%s loss_G_have_D:%s'
+                        % (self.iteration_i,self.training_ruiner,loss_G_have_niv,loss_G_have_D))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:

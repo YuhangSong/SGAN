@@ -1,6 +1,6 @@
 # exp time
-t=14
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv_deconv_depth_later_normal_dis_action'
+t=5
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv_deconv_depth_later_normal_dis_action_keep_flow_force'
 
 # mode
 run_on = 'agent' # agent, video
@@ -71,6 +71,9 @@ if run_on is 'agent':
     niv_rate = 1.0
     donot_niv_gate = 0.2
     do_niv_p_gate = 0.2
+
+    if_loss_g_niv = False
+    if_keep_flow_force = True
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
