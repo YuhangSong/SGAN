@@ -61,7 +61,7 @@ class gan():
         self.dataset_limit = config.gan_dataset_limit
         self.aux_size = config.gan_aux_size
 
-        self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
+        self.empty_dataset_with_aux = np.zeros((0, 5, 3, self.imageSize, self.imageSize))
 
         '''random seed for torch'''
         self.manualSeed = random.randint(1, 10000) # fix seed
@@ -175,8 +175,12 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.training_ruiner = True
-        self.ruiner_ready = False
+        if config.if_ruin_prediction_gt:
+            self.training_ruiner = True
+            self.ruiner_ready = False
+        else:
+            self.training_ruiner = False
+            self.ruiner_ready = True
 
     def get_noise(self,size):
         # return self.noise.resize_as_(size).uniform_(0,1).round()
@@ -243,7 +247,7 @@ class gan():
             while j < DCiters:
 
                 '''refresh to a new batch'''
-                self.get_a_batch(if_ruin_prediction_gt=True)
+                self.get_a_batch(if_ruin_prediction_gt=config.if_ruin_prediction_gt)
 
                 '''prepare for the update'''
                 for p in self.netD.parameters():
@@ -334,7 +338,7 @@ class gan():
             ######################################################################
 
             '''refresh to a new batch'''
-            self.get_a_batch(if_ruin_prediction_gt=True)
+            self.get_a_batch(if_ruin_prediction_gt=config.if_ruin_prediction_gt)
 
             '''
                 when train G networks, paramters in p network is freezed
@@ -594,6 +598,7 @@ class gan():
                     if ruiner is ready, we consider all
                 '''
                 if self.training_ruiner:
+                    print(f)
                     errG = errG + errR_from_mse_v
                 if loss_G_have_niv:
                     print(e)
@@ -767,6 +772,8 @@ class gan():
                 self.training_ruiner = True
             else:
                 self.training_ruiner = False
+            if config.if_ruin_prediction_gt is False:
+                self.training_ruiner = False
 
 
         else:
@@ -796,6 +803,7 @@ class gan():
         self.aux = torch.index_select(  self.dataset_aux,
                                         dim=0,
                                         index=indexs).cuda()
+
         #############################################################
 
         if if_ruin_prediction_gt:
@@ -832,11 +840,12 @@ class gan():
         if np.shape(data)[0] is 0:
             return
 
-        data = torch.FloatTensor(data)
+        data_image = torch.FloatTensor(data[:,0:4,:,:,:])
 
-        data_image = data[:,0:4,:,:,:]
+        if config.gan_nc==1:
+            data_image = torch.mean(data_image,2)
 
-        data_aux = data[:,4:5,0:1,0:1,0:self.aux_size]
+        data_aux = torch.FloatTensor(data[:,4:5,0:1,0:1,0:self.aux_size])
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)
@@ -883,7 +892,7 @@ class gan():
         '''function need for log image'''
         def sample2image(sample):
             if config.gan_nc is 1:
-                c = sample / 3.0
+                c = sample
                 c = torch.unsqueeze(c,1)
                 save = torch.cat([c,c,c],1)
             elif config.gan_nc is 3:

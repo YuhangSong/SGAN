@@ -1,12 +1,12 @@
 # exp time
-t=5
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv_deconv_depth_later_normal_dis_action_keep_flow_force'
+t=11
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv_deconv_depth_later_normal_test_bug_simple'
 
 # mode
 run_on = 'agent' # agent, video
 
 gan_size = 128
-gan_nc = 3
+gan_nc = 1
 
 if run_on is 'video':
     dataset_path = '../../dataset/'
@@ -42,7 +42,7 @@ if run_on is 'agent':
     config rl env here
     """ 
     overwirite_with_grid = True
-    grid_type = 'normal' # simple_one_move, normal
+    grid_type = 'simple_one_move' # simple_one_move, normal
     grid_random_type = 'russell' # discount
     action_space = 4
     grid_size = 5
@@ -70,10 +70,12 @@ if run_on is 'agent':
     bloom_at_errD = 0.25
     niv_rate = 1.0
     donot_niv_gate = 0.2
+
+    if_ruin_prediction_gt = False
     do_niv_p_gate = 0.2
 
     if_loss_g_niv = False
-    if_keep_flow_force = True
+    if_keep_flow_force = False
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
