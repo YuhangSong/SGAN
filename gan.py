@@ -99,19 +99,18 @@ class gan():
 
         '''feed interface initialize'''
         # input of d
-        self.inputd_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
+        self.inputd_image = torch.FloatTensor(self.batchSize, config.gan_state_lenth+1, self.imageSize, self.imageSize)
         self.inputd_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         # input of c
-        self.inputc_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
+        self.inputc_image = torch.FloatTensor(self.batchSize, config.gan_state_lenth+1, self.imageSize, self.imageSize)
         self.inputc_aux = torch.FloatTensor(self.batchSize, self.aux_size)
-        self.inputc_image_2 = torch.FloatTensor(self.batchSize*2, 4, self.imageSize, self.imageSize)
+        self.inputc_image_2 = torch.FloatTensor(self.batchSize*2, config.gan_state_lenth+1, self.imageSize, self.imageSize)
         self.inputc_aux_2 = torch.FloatTensor(self.batchSize*2, self.aux_size)
         # input of g
-        self.inputg_image = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
+        self.inputg_image = torch.FloatTensor(self.batchSize, config.gan_state_lenth, self.imageSize, self.imageSize)
         self.inputg_aux = torch.FloatTensor(self.batchSize, self.aux_size)
         # noise
         self.noise = torch.FloatTensor(self.batchSize, self.aux_size, 1, 1)
-        self.noise_image = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
         self.fixed_noise = torch.FloatTensor(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
         # constent
         self.one = torch.FloatTensor([1])
@@ -124,7 +123,7 @@ class gan():
         self.ones_v = Variable(self.ones)
 
         '''dataset intialize'''
-        self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+        self.dataset_image = torch.FloatTensor(np.zeros((1, config.gan_state_lenth+1, self.nc, self.imageSize, self.imageSize)))
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
@@ -163,7 +162,6 @@ class gan():
             self.ones = self.ones.cuda()
             self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
-            self.noise_image = self.noise_image.cuda()
             self.mse_loss_model_averaged = self.mse_loss_model_averaged.cuda()
 
         '''create optimizer'''
@@ -183,7 +181,6 @@ class gan():
             self.ruiner_ready_iteration = self.iteration_i
 
     def get_noise(self,size):
-        # return self.noise.resize_as_(size).uniform_(0,1).round()
         self.noise.resize_as_(size).zero_()
         for batch_i in range(self.noise.size()[0]):
             index = np.random.randint(0,self.noise.size()[1])
@@ -213,17 +210,6 @@ class gan():
             for p in self.netG.parameters():
                 p.requires_grad = False
 
-            '''
-                train the discriminator DCiters times
-                DCiters is set to 100 only on the first 25 generator iterations or
-                very sporadically (once every 500 generator iterations).
-                This helps to start with the critic at optimum even in the first iterations.
-                There shouldn't be a major difference in performance, but it can help,
-                especially when visualizing learning curves (since otherwise you'd see the
-                loss going up until the critic is properly trained).
-                This is also why the first 25 iterations take significantly longer than
-                the rest of the training as well.
-            '''
             if self.ruiner_ready is False:
                 '''
                     if ruiner is not ready yet
@@ -233,6 +219,17 @@ class gan():
                 self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,torch.FloatTensor([0.0])],0)
                 self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,torch.FloatTensor([0.0])],0)
             else:
+                '''
+                    train the discriminator DCiters times
+                    DCiters is set to 100 only on the first 25 generator iterations or
+                    very sporadically (once every 500 generator iterations).
+                    This helps to start with the critic at optimum even in the first iterations.
+                    There shouldn't be a major difference in performance, but it can help,
+                    especially when visualizing learning curves (since otherwise you'd see the
+                    loss going up until the critic is properly trained).
+                    This is also why the first 25 iterations take significantly longer than
+                    the rest of the training as well.
+                '''
                 if (self.iteration_i % 500 == 0) or ((self.iteration_i-self.ruiner_ready_iteration)<27):
                     DCiters = 100
                 else:
@@ -252,7 +249,8 @@ class gan():
                 '''prepare for the update'''
                 for p in self.netD.parameters():
                     # clamp parameters to a cube
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper) 
+                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+
                 self.netD.zero_grad()
 
                 ################# train D with real #################
@@ -264,8 +262,8 @@ class gan():
                 inputd_aux_v = Variable(self.inputd_aux)
 
                 '''forward'''
-                errD_real, outputD_real = self.netD(input_image_v=inputd_image_v,
-                                                    input_aux_v=inputd_aux_v)
+                errD_real, _ = self.netD(   input_image_v=inputd_image_v,
+                                            input_aux_v=inputd_aux_v)
                 '''record'''
                 if j < 1.0:
                     self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,errD_real.data.cpu()],0)
@@ -292,7 +290,7 @@ class gan():
                                                 input_aux_v=inputg_aux_v,
                                                 input_noise_v=noise_v)
 
-                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
+                prediction_v = state_prediction_v.narrow(1,self.nc*config.gan_state_lenth,self.nc)
                 prediction = prediction_v.data
 
                 #####################################################
@@ -317,9 +315,6 @@ class gan():
 
                 '''backward'''
                 errD_fake.backward(self.mone)
-
-                '''just for log'''
-                errD = errD_real - errD_fake
 
                 #####################################################
 
@@ -370,8 +365,8 @@ class gan():
                                             input_aux_v=inputg_aux_v,
                                             input_noise_v=noise_v)
 
-            prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
-            state_v = state_prediction_v.narrow(1,0,self.nc*3)
+            state_v = state_prediction_v.narrow(1,0,self.nc*config.gan_state_lenth)
+            prediction_v = state_prediction_v.narrow(1,self.nc*config.gan_state_lenth,self.nc)
 
             ################################################## errR_from_mse_v ################################################
 
@@ -469,11 +464,6 @@ class gan():
             self.iteration_i += 1
             self.recorder_iteration = torch.cat([self.recorder_iteration,torch.FloatTensor([self.iteration_i])],0)
 
-            if self.ruiner_ready is False:
-                if errR_from_mse_numpy[0] < config.ruiner_train_to_mse:
-                    self.ruiner_ready = True
-                    self.ruiner_ready_iteration = self.iteration_i 
-
             print(  '[iteration_i:%d] ruiner_ready:%s raining_ruiner:%s errR_from_mse_numpy:%.6f'
                     % (self.iteration_i,self.ruiner_ready,self.training_ruiner,errR_from_mse_numpy[0]))
 
@@ -503,8 +493,8 @@ class gan():
                                                 input_aux_v=inputg_aux_v,
                                                 input_noise_v=noise_v)
 
-                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
-                state_v = state_prediction_v.narrow(1,0,self.nc*3)
+                state_v = state_prediction_v.narrow(1,0,self.nc*config.gan_state_lenth)
+                prediction_v = state_prediction_v.narrow(1,self.nc*config.gan_state_lenth,self.nc)
 
                 # get state_predictionv, this is a Variable cat 
                 state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
@@ -555,8 +545,8 @@ class gan():
                                                 input_aux_v=inputg_aux_v,
                                                 input_noise_v=noise_v)
 
-                prediction_v = state_prediction_v.narrow(1,self.nc*3,self.nc)
-                state_v = state_prediction_v.narrow(1,0,self.nc*3)
+                state_v = state_prediction_v.narrow(1,0,self.nc*config.gan_state_lenth)
+                prediction_v = state_prediction_v.narrow(1,self.nc*config.gan_state_lenth,self.nc)
 
                 # get state_predictionv, this is a Variable cat 
                 state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
@@ -604,12 +594,18 @@ class gan():
             ######################### End One in Iteration  ######################
             ######################################################################
 
+            '''control part'''
             if config.if_ruin_prediction_gt:
-                '''auto control'''
-                if errR_from_mse_numpy[0] > config.ruiner_train_to_mse:
-                    self.training_ruiner = True
+                if self.ruiner_ready is False:
+                    if errR_from_mse_numpy[0] < config.ruiner_train_to_mse:
+                        self.ruiner_ready = True
+                        self.ruiner_ready_iteration = self.iteration_i 
                 else:
-                    self.training_ruiner = False
+                    '''auto control'''
+                    if errR_from_mse_numpy[0] > config.ruiner_train_to_mse:
+                        self.training_ruiner = True
+                    else:
+                        self.training_ruiner = False
 
         else:
 
@@ -629,11 +625,15 @@ class gan():
                                     dim=0,
                                     index=indexs).cuda()
 
-        state_prediction_gt = torch.cat([torch.index_select(image,1,torch.cuda.LongTensor(range(0,1))),torch.index_select(image,1,torch.cuda.LongTensor(range(1,2))),torch.index_select(image,1,torch.cuda.LongTensor(range(2,3))),torch.index_select(image,1,torch.cuda.LongTensor(range(3,4)))],2)
+        if config.gan_state_lenth==3:
+            state_prediction_gt = torch.cat([torch.index_select(image,1,torch.cuda.LongTensor(range(0,1))),torch.index_select(image,1,torch.cuda.LongTensor(range(1,2))),torch.index_select(image,1,torch.cuda.LongTensor(range(2,3))),torch.index_select(image,1,torch.cuda.LongTensor(range(3,4)))],2)
+        elif config.gan_state_lenth==1:
+            state_prediction_gt = torch.cat([torch.index_select(image,1,torch.cuda.LongTensor(range(2,3))),torch.index_select(image,1,torch.cuda.LongTensor(range(3,4)))],2)
+
         # image part to
         self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-        self.state = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(0*self.nc,3*self.nc)))
-        self.prediction_gt = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(3*self.nc,4*self.nc)))
+        self.state = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(0*self.nc,config.gan_state_lenth*self.nc)))
+        self.prediction_gt = torch.index_select(self.state_prediction_gt,1,torch.cuda.LongTensor(range(config.gan_state_lenth*self.nc,(config.gan_state_lenth+1)*self.nc)))
         # indexing aux
         self.aux = torch.index_select(  self.dataset_aux,
                                         dim=0,
@@ -644,11 +644,11 @@ class gan():
         if if_ruin_prediction_gt:
 
             ################# process prediction_gt #####################
-            to_cat = [self.prediction_gt]*3
-            prediction_gt_x3 = torch.cat(to_cat,1)
+            to_cat = [self.prediction_gt]*config.gan_state_lenth
+            prediction_gt_x = torch.cat(to_cat,1)
 
             # feed
-            self.inputg_image.resize_as_(prediction_gt_x3).copy_(prediction_gt_x3)
+            self.inputg_image.resize_as_(prediction_gt_x).copy_(prediction_gt_x)
             inputg_image_v = Variable(self.inputg_image, volatile = True)
 
             self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
@@ -684,6 +684,8 @@ class gan():
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)
         data_aux = torch.squeeze(data_aux,1)
+
+        print(data_aux)
 
         if self.dataset_image.size()[0] <= 1:
             self.dataset_image = data_image
@@ -743,7 +745,7 @@ class gan():
             # save = save.mul(0.5).add(0.5)
             return save
 
-        number_rows = 4
+        number_rows = config.gan_state_lenth + 1
 
         '''log real result'''
         sample=sample2image(sample).cpu().numpy()

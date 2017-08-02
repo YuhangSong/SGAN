@@ -1,5 +1,5 @@
 # exp time
-t=13
+t=15
 lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_dg_g_ruiner_normal_game_3dcnn_pre_ruiner_keep_mse_exp_c_onehot_niv_removed_in_lgd_onehot_niv_deconv_depth_later_normal_test_bug_simple'
 
 # mode
@@ -7,6 +7,7 @@ run_on = 'agent' # agent, video
 
 gan_size = 128
 gan_nc = 1
+gan_state_lenth = 1
 
 if run_on is 'video':
     dataset_path = '../../dataset/'
@@ -19,7 +20,7 @@ elif run_on is 'agent':
     dataset_name_ = 'agent'
 
 # gan model
-gan_ngpu = 2
+gan_ngpu = 4
 gan_batchsize = 64 * gan_ngpu
 gan_nz = 256
 gan_aux_size = gan_nz/2

@@ -6,91 +6,6 @@ import torch.nn.functional as F
 import numpy as np
 import config
 
-class rn_layer(nn.Module):
-
-    """docstring for rn_layer"""
-    def __init__(self, num, lenth, aux_lenth=0, size=256, output_size=256):
-        super(rn_layer, self).__init__()
-
-        # settings
-        self.num = num
-        self.lenth = lenth
-        self.aux_lenth = aux_lenth
-        self.size = size
-        self.output_size = output_size
-
-        # NNs
-        self.g_fc1 = nn.Linear((self.lenth+1)*2+self.aux_lenth, self.size).cuda()
-        self.g_fc2 = nn.Linear(self.size, self.size).cuda()
-        self.g_fc3 = nn.Linear(self.size, self.size).cuda()
-        self.g_fc4 = nn.Linear(self.size, self.size).cuda()
-
-        self.f_fc1 = nn.Linear(self.size, self.size).cuda()
-        self.f_fc2 = nn.Linear(self.size, self.size).cuda()
-        self.f_fc3 = nn.Linear(self.size, self.output_size).cuda()
-
-        # prepare coord tensor
-        self.coord_tensor = torch.FloatTensor(config.gan_batchsize, num, 1).cuda()
-        self.coord_tensor = Variable(self.coord_tensor)
-        np_coord_tensor = np.zeros((config.gan_batchsize, self.num, 1))
-        for i in range(self.num):
-            np_coord_tensor[:,i,:] = np.array([i])
-        self.coord_tensor.data.copy_(torch.from_numpy(np_coord_tensor))
-
-    def forward(self, x_aux):
-
-        # 0: batch
-        # 1: number
-        # 2: feature
-
-        batch_size = x_aux.size()[0]
-
-        # coordinate tensor is cutted to fit in a
-        # smaller batch resulted from gpu para
-        coord_tensor_batch = self.coord_tensor.narrow(0,0,batch_size)
-
-        x = x_aux.narrow(2,0,self.lenth)
-        x = torch.cat([x, coord_tensor_batch],2)
-
-        # add coordinates
-        x_aux = torch.cat([x_aux, coord_tensor_batch],2)
-
-        # cast all pairs against each other i
-        x_i = torch.unsqueeze(x,1)
-        x_i = x_i.repeat(1,self.num,1,1)
-
-        # cast all pairs against each other j
-        x_j = torch.unsqueeze(x_aux,2)
-        x_j = x_j.repeat(1,1,self.num,1)
-
-        # concatenate all together
-        x_full = torch.cat([x_i,x_j],3)
-
-        # reshape for passing through network
-        x = x_full.view(x_full.size()[0]*x_full.size()[1]*x_full.size()[2],x_full.size()[3])
-
-        x = self.g_fc1(x)        
-        x = F.relu(x)
-        x = self.g_fc2(x)
-        x = F.relu(x)
-        x = self.g_fc3(x)
-        x = F.relu(x)
-        x = self.g_fc4(x)
-        x = F.relu(x)
-
-        # reshape again and sum
-        x = x.view(batch_size,x.size()[0]/batch_size,self.size)
-        x = x.sum(1).squeeze()
-
-        x = self.f_fc1(x)
-        x = F.relu(x)
-        x = self.f_fc2(x)
-        x = F.relu(x)
-        # x = F.dropout(x)
-        x = self.f_fc3(x)
-
-        return x
-
 class cat_layer(nn.Module):
 
     """docstring for rn_layer"""
@@ -267,7 +182,7 @@ class DCGAN_D(nn.Module):
                                     size_in=config.gan_size,
                                     size_conved=config.gan_size_conved,
                                     channel_times=config.gan_channel_times,
-                                    depth_in = 4,
+                                    depth_in = (config.gan_state_lenth+1),
                                     depth_conved=1)
 
         # rn layer
@@ -300,50 +215,6 @@ class DCGAN_D(nn.Module):
         # return
         return error.view(1), output
 
-class DCGAN_C(nn.Module):
-
-    def __init__(self):
-        super(DCGAN_C, self).__init__()
-
-        self.conv = conv3d_layers(  num_channel_in=config.gan_nc,
-                                    size_in=config.gan_size,
-                                    size_conved=config.gan_size_conved,
-                                    channel_times=config.gan_channel_times,
-                                    depth_in = 4,
-                                    depth_conved=1)
-
-        # rn layer
-        self.cat = cat_layer(   conved_lenth=self.conv.size_out*self.conv.size_out*self.conv.num_channel_out,
-                                encoded_lenth=config.gan_nz,
-                                aux_lenth=config.gan_aux_size*1,
-                                output_lenth=1)
-
-        self.cat.add_module('sigmoid',nn.Sigmoid())
-
-    def forward(self, input_image_v, input_aux_v):
-
-        input_image_v = to_3d(input_image_v,config.gan_nc)
-
-        # compute output according to GPU parallel
-        if config.gan_ngpu > 1:
-            conved_v = nn.parallel.data_parallel(self.conv, input_image_v, range(config.gan_ngpu))
-        else: 
-            conved_v = self.conv(input_image_v)
-
-        conved_v = to_2d(conved_v)
-
-        x = to_cat( input_conved_v=conved_v,
-                    input_aux_v=input_aux_v,
-                    input_noise_v=None)
-
-        # compute output according to GPU parallel
-        if config.gan_ngpu > 1:
-            x = nn.parallel.data_parallel(self.cat, x, range(config.gan_ngpu))
-        else: 
-            x = self.cat(x)
-
-        return x
-
 class DCGAN_G(nn.Module):
 
     def __init__(self):
@@ -353,7 +224,7 @@ class DCGAN_G(nn.Module):
                                     size_in=config.gan_size,
                                     size_conved=config.gan_size_conved,
                                     channel_times=config.gan_channel_times,
-                                    depth_in = 3,
+                                    depth_in = config.gan_state_lenth,
                                     depth_conved=1)
 
         # rn layer
@@ -366,7 +237,7 @@ class DCGAN_G(nn.Module):
                                         size_in=config.gan_size,
                                         size_conved=config.gan_size_conved,
                                         channel_times=config.gan_channel_times,
-                                        depth_in = 4,
+                                        depth_in = (config.gan_state_lenth+1),
                                         depth_conved=1)
         self.bloom_noise_offset = long(1)
 
@@ -381,7 +252,6 @@ class DCGAN_G(nn.Module):
             conved_v = nn.parallel.data_parallel(self.conv, input_image_v, range(config.gan_ngpu))
         else: 
             conved_v = self.conv(input_image_v)
-        #(64L, 512L, 1L, 4L, 4L)
 
         conved_v = to_2d(conved_v)
 
@@ -403,27 +273,6 @@ class DCGAN_G(nn.Module):
         x = to_2d(x)
 
         return x
-
-def to_rn(input_conved_v, input_aux_v, input_noise_v=None):
-
-    concated = []
-
-    number_rn = input_conved_v.size()[2]*input_conved_v.size()[3]
-    input_conved_v = input_conved_v.view(input_conved_v.size()[0],input_conved_v.size()[1],number_rn).permute(0,2,1)
-    concated += [input_conved_v]
-
-    input_aux_v = torch.unsqueeze(input_aux_v,1)
-    input_aux_v = input_aux_v.repeat(1,number_rn,1)
-    concated += [input_aux_v]
-
-    if input_noise_v is not None:
-        input_noise_v = torch.unsqueeze(input_noise_v,1)
-        input_noise_v = input_noise_v.repeat(1,number_rn,1)
-        concated += [input_noise_v]
-
-    conved_v_noise_v_action_v = torch.cat(concated,2)
-
-    return conved_v_noise_v_action_v
 
 def to_cat(input_conved_v, input_aux_v, input_noise_v=None):
 
