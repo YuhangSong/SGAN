@@ -181,6 +181,7 @@ class gan():
         else:
             self.training_ruiner = False
             self.ruiner_ready = True
+            self.ruiner_ready_iteration = self.iteration_i
 
     def get_noise(self,size):
         # return self.noise.resize_as_(size).uniform_(0,1).round()
@@ -233,7 +234,7 @@ class gan():
                 self.recorder_loss_d_real = torch.cat([self.recorder_loss_d_real,torch.FloatTensor([0.0])],0)
                 self.recorder_loss_d_fake = torch.cat([self.recorder_loss_d_fake,torch.FloatTensor([0.0])],0)
             else:
-                if self.iteration_i % 500 == 0:
+                if (self.iteration_i % 500 == 0) or ((self.iteration_i-self.ruiner_ready_iteration)<27):
                     DCiters = 100
                 else:
                     DCiters = self.DCiters_
@@ -631,6 +632,7 @@ class gan():
                         % (self.iteration_i,errR_from_mse_numpy[0]))
                 if errR_from_mse_numpy[0] < config.ruiner_train_to_mse:
                     self.ruiner_ready = True
+                    self.ruiner_ready_iteration = self.iteration_i 
             else:
                 print(  '[iteration_i:%d] training_ruiner:%s loss_G_have_niv:%s loss_G_have_D:%s'
                         % (self.iteration_i,self.training_ruiner,loss_G_have_niv,loss_G_have_D))
