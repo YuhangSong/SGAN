@@ -137,11 +137,15 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_loss_g_from_d = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c = torch.FloatTensor(0)
-        self.recorder_loss_g_from_d_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_from_c_maped = torch.FloatTensor(0)
+        self.recorder_cur_errD = torch.FloatTensor(0)
+        self.recorder_loss_g_dc_from_d = torch.FloatTensor(0)
+        self.recorder_loss_g_dc_from_c = torch.FloatTensor(0)
+        self.recorder_loss_g_dc_from_d_maped = torch.FloatTensor(0)
+        self.recorder_loss_g_dc_from_c_maped = torch.FloatTensor(0)
+        self.recorder_loss_g_dc = torch.FloatTensor(0)
         self.recorder_loss_g = torch.FloatTensor(0)
+        self.recorder_cur_mse = torch.FloatTensor(0)
+        self.recorder_target_mse = torch.FloatTensor(0)
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
@@ -181,6 +185,11 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
+        self.target_errD = 1.0
+        self.target_mse = 1.0
+
+        self.mse_loss_model = torch.nn.MSELoss(size_average=True)
+
     def train(self):
         """
         train one iteraction
@@ -219,7 +228,7 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
+            if self.iteration_i < 0 or self.iteration_i % 500 == 0:
                 DCiters = 100
             else:
                 DCiters = self.DCiters_
@@ -261,6 +270,42 @@ class gan():
                 # indexing aux
                 self.aux = self.dataset_aux.index_select(0,indexs).cuda()
 
+                ###################### get stater #####################
+
+                # feed
+                self.prediction_gt_x = torch.cat([self.prediction_gt,self.prediction_gt,self.prediction_gt],1)
+                self.inputg_image.resize_as_(self.prediction_gt_x).copy_(self.prediction_gt_x)
+                inputg_image_v = Variable(self.inputg_image, volatile = True) # totally freeze netG
+
+                # compute encoded
+                encoded_v = self.netG_Cv(inputg_image_v)
+
+                # feed aux
+                self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
+                inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze netG
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
+                inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+
+                # feed noise
+                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
+                noise_v = Variable(self.noise, volatile = True) # totally freeze netG
+
+                # concate encoded_v, noise_v, action
+                concated = [encoded_v,inputg_aux_v,noise_v]
+                encoded_v_noise_v_action_v = torch.cat(concated,1)
+
+                # predict
+                stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+
+                stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
+
+                stater = stater_v.data
+
+                self.prediction_gt = stater.narrow(1,self.nc*0,self.nc*1)
+                self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
+
+                #####################################################
+
                 ###################### get fake #####################
 
                 # feed
@@ -284,11 +329,14 @@ class gan():
                 concated = [encoded_v,inputg_aux_v,noise_v]
                 encoded_v_noise_v_action_v = torch.cat(concated,1)
 
-                # print(encoded_v_noise_v_actionv.size()) # (64L, 512L, 1L, 1L)
-
                 # predict
-                prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+                stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+
+                prediction_v = stater_prediction_v.narrow(1,self.nc*3,self.nc*1)
+                stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
+
                 prediction = prediction_v.data
+                stater = stater_v.data
 
                 # get state_prediction
                 self.state_prediction = torch.cat([self.state, prediction], 1)
@@ -334,7 +382,8 @@ class gan():
                     #####################################################
 
                     # optmize
-                    errD = errD_real - errD_fake
+                    cur_errD_v = (errD_real - errD_fake).abs()
+                    self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD_v.data.cpu()],0)
 
                     self.optimizerD.step()
 
@@ -367,7 +416,14 @@ class gan():
 
                     self.optimizerC.step()
 
-                #####################################################
+                    #####################################################
+
+            if cur_errD_v.data.cpu().numpy()[0] < self.target_errD:
+                self.target_mse = self.target_mse / 2.0
+            else:
+                self.target_mse = self.target_mse * 2.0
+            self.target_mse = np.clip(self.target_mse,0.0,1.0)
+            self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 
             ######################################################################
             ####################### End of Update D network ######################
@@ -416,7 +472,13 @@ class gan():
             encoded_v_noise_v_action_v = torch.cat(concated,1)
 
             # predict
-            prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+            stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+
+            prediction_v = stater_prediction_v.narrow(1,self.nc*3,self.nc*1)
+            stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
+
+            prediction = prediction_v.data
+            stater = stater_v.data
 
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
@@ -436,13 +498,13 @@ class gan():
                 '''it is from -4 to 4 about
                 if the generated one is more real, it would be smaller'''
                 errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
-                self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data.cpu()],0)
+                self.recorder_loss_g_dc_from_d = torch.cat([self.recorder_loss_g_dc_from_d,errG_from_D_v.data.cpu()],0)
 
                 # avoid grandient
                 errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
 
                 errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data.cpu()],0)
+                self.recorder_loss_g_dc_from_d_maped = torch.cat([self.recorder_loss_g_dc_from_d_maped,errG_from_D_v_maped.data.cpu()],0)
 
             if config.gan_gloss_c_porpotion > 0.0:
 
@@ -457,13 +519,13 @@ class gan():
                 outputc = self.netC(inputc_image_v, inputc_aux_v)
 
                 errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
-                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data.cpu()],0)
+                self.recorder_loss_g_dc_from_c = torch.cat([self.recorder_loss_g_dc_from_c,errG_from_C_v.data.cpu()],0)
 
                 # avoid grandient
                 errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
 
                 errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
+                self.recorder_loss_g_dc_from_c_maped = torch.cat([self.recorder_loss_g_dc_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
 
             if (config.gan_gloss_c_porpotion > 0.0) and (config.gan_gloss_c_porpotion < 1.0):
                 errG = errG_from_D_v_maped + errG_from_C_v_maped
@@ -471,6 +533,13 @@ class gan():
                 errG = errG_from_D_v
             elif config.gan_gloss_c_porpotion == 1.0:
                 errG = errG_from_C_v
+
+            self.recorder_loss_g_dc = torch.cat([self.recorder_loss_g_dc,errG.data.cpu()],0)
+
+            cur_mse_v = self.mse_loss_model(stater_v, Variable(self.state))
+            self.recorder_cur_mse = torch.cat([self.recorder_cur_mse,cur_mse_v.data.cpu()],0)
+            if cur_mse_v.data.cpu().numpy()[0] > self.target_mse:
+                errG = errG + cur_mse_v
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
@@ -503,7 +572,6 @@ class gan():
 
                 # feed
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
-                # print(s)
                 self.inputg_image.resize_as_(multiple_one_state).copy_(multiple_one_state)
                 inputg_image_v = Variable(self.inputg_image)
 
@@ -526,7 +594,13 @@ class gan():
                 encoded_v_noise_v_action_v = torch.cat(concated,1)
 
                 # predict
-                prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+                stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+
+                prediction_v = stater_prediction_v.narrow(1,self.nc*3,self.nc*1)
+                stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
+
+                prediction = prediction_v.data
+                stater = stater_v.data
 
                 # get state_predictionv, this is a Variable cat 
                 state_v_prediction_v = torch.cat([Variable(multiple_one_state), prediction_v], 1)
@@ -547,16 +621,24 @@ class gan():
                 self.save_sample(state_prediction_gt_channelled,'mean')
 
                 '''log'''
-                if config.gan_gloss_c_porpotion < 1.0:
-                    self.line(self.recorder_loss_g_from_d,'self.recorder_loss_g_from_d')
-                if config.gan_gloss_c_porpotion > 0.0:
-                    self.line(self.recorder_loss_g_from_c,'self.recorder_loss_g_from_c')
+
+                self.line(self.recorder_cur_errD,'self.recorder_cur_errD')
+                self.line(self.recorder_target_mse,'self.recorder_target_mse')
 
                 if config.gan_gloss_c_porpotion < 1.0:
-                    self.line(self.recorder_loss_g_from_d_maped,'self.recorder_loss_g_from_d_maped')
+                    self.line(self.recorder_loss_g_dc_from_d,'self.recorder_loss_g_dc_from_d')
                 if config.gan_gloss_c_porpotion > 0.0:
-                    self.line(self.recorder_loss_g_from_c_maped,'self.recorder_loss_g_from_c_maped')
+                    self.line(self.recorder_loss_g_dc_from_c,'self.recorder_loss_g_dc_from_c')
+
+                if config.gan_gloss_c_porpotion < 1.0:
+                    self.line(self.recorder_loss_g_dc_from_d_maped,'self.recorder_loss_g_dc_from_d_maped')
+                if config.gan_gloss_c_porpotion > 0.0:
+                    self.line(self.recorder_loss_g_dc_from_c_maped,'self.recorder_loss_g_dc_from_c_maped')
                 
+                self.line(self.recorder_loss_g_dc,'self.recorder_loss_g_dc')
+
+                self.line(self.recorder_cur_mse,'self.recorder_cur_mse')
+
                 self.line(self.recorder_loss_g,'self.recorder_loss_g')
 
                 self.last_save_image_time = time.time()

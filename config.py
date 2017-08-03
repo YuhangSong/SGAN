@@ -1,10 +1,10 @@
 # exp time
-gan_ngpu = range(4)
+gan_ngpu = range(2)
 
-t = 23
-lable = 'c_only'
-sess = 'grl2'
-port = 72212
+t = 2
+lable = '_d_r'
+sess = 'grl1'
+port = 82212
 
 # mode
 run_on = 'agent' # agent, video
@@ -41,7 +41,7 @@ if run_on is 'agent':
     config rl env here
     """ 
     overwirite_with_grid = True
-    grid_type = 'simple_one_move'
+    grid_type = 'normal'
     action_space = 4
     grid_size = 8
     grid_target_x = 4
@@ -58,7 +58,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 1.0
+    gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64

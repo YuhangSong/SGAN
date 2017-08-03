@@ -65,10 +65,18 @@ class env():
 
             action_dic_p = np.zeros((config.action_space))
             for i in range(len(action_dic_p)):
+                
                 distance = abs(i-self.action)
                 if distance > (config.action_space/2):
                     distance = distance - (config.action_space/2)
-                action_dic_p[i] = config.grid_action_random_discounter**(distance)
+                
+                if distance==0:
+                    action_dic_p[i]=0.25
+                elif distance==1:
+                    action_dic_p[i]=0.25
+                elif distance==2:
+                    action_dic_p[i]=0.25
+
             action_dic_p = action_dic_p / np.sum(action_dic_p)
 
             self.action = np.random.choice(a=action_dic, 
