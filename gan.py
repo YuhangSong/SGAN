@@ -228,10 +228,7 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            if self.iteration_i < 0 or self.iteration_i % 500 == 0:
-                DCiters = 100
-            else:
-                DCiters = self.DCiters_
+            DCiters = self.DCiters_
 
             '''
                 start interation training of D network
@@ -491,7 +488,7 @@ class gan():
                 errG = cur_mse_v
 
             else:
-                
+
                 if config.gan_gloss_c_porpotion < 1.0:
 
                     # feed, this state_predictionv is Variable

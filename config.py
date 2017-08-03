@@ -1,8 +1,8 @@
 # exp time
-gan_ngpu = range(2)
+gan_ngpu = range(4)
 
 t = 2
-lable = '_dgr_control'
+lable = '_dgr_control_stable_d_i'
 sess = 'grl1'
 port = 82212
 
@@ -61,6 +61,6 @@ if run_on is 'agent':
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
-    gan_recent_dataset = 64
-    gan_worker_com_internal = 1
+    # gan_recent_dataset = 64
+    # gan_worker_com_internal = 1
 
