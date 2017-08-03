@@ -483,63 +483,67 @@ class gan():
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
 
-            if config.gan_gloss_c_porpotion < 1.0:
-
-                # feed, this state_predictionv is Variable
-                inputd_image_v = state_v_prediction_v
-
-                # feed
-                self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
-                inputd_aux_v = Variable(self.inputd_aux)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
-
-                # compute errG_from_D_v
-                '''it is from -4 to 4 about
-                if the generated one is more real, it would be smaller'''
-                errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
-                self.recorder_loss_g_dc_from_d = torch.cat([self.recorder_loss_g_dc_from_d,errG_from_D_v.data.cpu()],0)
-
-                # avoid grandient
-                errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
-
-                errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_dc_from_d_maped = torch.cat([self.recorder_loss_g_dc_from_d_maped,errG_from_D_v_maped.data.cpu()],0)
-
-            if config.gan_gloss_c_porpotion > 0.0:
-
-                inputc_image_v = state_v_prediction_v
-
-                self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
-                inputc_aux_v = Variable(self.inputc_aux)
-                inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
-                inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
-
-                # compute
-                outputc = self.netC(inputc_image_v, inputc_aux_v)
-
-                errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
-                self.recorder_loss_g_dc_from_c = torch.cat([self.recorder_loss_g_dc_from_c,errG_from_C_v.data.cpu()],0)
-
-                # avoid grandient
-                errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
-
-                errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_dc_from_c_maped = torch.cat([self.recorder_loss_g_dc_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
-
-            if (config.gan_gloss_c_porpotion > 0.0) and (config.gan_gloss_c_porpotion < 1.0):
-                errG = errG_from_D_v_maped + errG_from_C_v_maped
-            elif config.gan_gloss_c_porpotion == 0.0:
-                errG = errG_from_D_v
-            elif config.gan_gloss_c_porpotion == 1.0:
-                errG = errG_from_C_v
-
-            self.recorder_loss_g_dc = torch.cat([self.recorder_loss_g_dc,errG.data.cpu()],0)
-
             cur_mse_v = self.mse_loss_model(stater_v, Variable(self.state))
             self.recorder_cur_mse = torch.cat([self.recorder_cur_mse,cur_mse_v.data.cpu()],0)
+
             if cur_mse_v.data.cpu().numpy()[0] > self.target_mse:
-                errG = errG + cur_mse_v
+
+                errG = cur_mse_v
+
+            else:
+                
+                if config.gan_gloss_c_porpotion < 1.0:
+
+                    # feed, this state_predictionv is Variable
+                    inputd_image_v = state_v_prediction_v
+
+                    # feed
+                    self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
+                    inputd_aux_v = Variable(self.inputd_aux)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
+
+                    # compute errG_from_D_v
+                    '''it is from -4 to 4 about
+                    if the generated one is more real, it would be smaller'''
+                    errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
+                    self.recorder_loss_g_dc_from_d = torch.cat([self.recorder_loss_g_dc_from_d,errG_from_D_v.data.cpu()],0)
+
+                    # avoid grandient
+                    errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
+
+                    errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
+                    self.recorder_loss_g_dc_from_d_maped = torch.cat([self.recorder_loss_g_dc_from_d_maped,errG_from_D_v_maped.data.cpu()],0)
+
+                if config.gan_gloss_c_porpotion > 0.0:
+
+                    inputc_image_v = state_v_prediction_v
+
+                    self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
+                    inputc_aux_v = Variable(self.inputc_aux)
+                    inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
+                    inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
+
+                    # compute
+                    outputc = self.netC(inputc_image_v, inputc_aux_v)
+
+                    errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
+                    self.recorder_loss_g_dc_from_c = torch.cat([self.recorder_loss_g_dc_from_c,errG_from_C_v.data.cpu()],0)
+
+                    # avoid grandient
+                    errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
+
+                    errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
+                    self.recorder_loss_g_dc_from_c_maped = torch.cat([self.recorder_loss_g_dc_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
+
+                if (config.gan_gloss_c_porpotion > 0.0) and (config.gan_gloss_c_porpotion < 1.0):
+                    errG = errG_from_D_v_maped + errG_from_C_v_maped
+                elif config.gan_gloss_c_porpotion == 0.0:
+                    errG = errG_from_D_v
+                elif config.gan_gloss_c_porpotion == 1.0:
+                    errG = errG_from_C_v
+
+                self.recorder_loss_g_dc = torch.cat([self.recorder_loss_g_dc,errG.data.cpu()],0)
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
