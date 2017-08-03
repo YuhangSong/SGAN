@@ -1,12 +1,13 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2'
+t = 2
+lable = 'single_frame'
 
 # mode
 run_on = 'agent' # agent, video
 
 gan_size = 128
-gan_nc = 3
+gan_nc = 1
+gan_state_lenth = 1
 
 if run_on is 'video':
     dataset_path = '../../dataset/'
@@ -19,10 +20,10 @@ elif run_on is 'agent':
     dataset_name_ = 'agent'
 
 # gan model
-gan_batchsize = 64
+gan_ngpu = 4
+gan_batchsize = 64 * gan_ngpu
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 4
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
@@ -38,16 +39,17 @@ if run_on is 'agent':
     config rl env here
     """ 
     overwirite_with_grid = True
-    grid_type = 'simple_one_move'
+    grid_type = 'simple_one_move' # simple_one_move, normal
+    grid_random_type = 'russell' # discount
     action_space = 4
-    grid_size = 8
+    grid_size = 5
     grid_target_x = 4
     grid_target_y = 4
     grid_action_random_discounter = 0.5
     gan_worker_com_internal = 10
-    gan_save_image_internal = 60*1
-    gan_dataset_limit = 1000
-    gan_dataset_full_no_update = True
+    gan_save_image_internal = 60*5
+    gan_dataset_limit = 1024*2
+    gan_dataset_full_no_update = False
     '''since'''
     gan_recent_dataset = 10
     lower_gan_worker = 0.0
@@ -59,5 +61,5 @@ if run_on is 'agent':
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64
-    # gan_worker_com_internal = 1
+    # gan_worker_com_internal = 3
 
