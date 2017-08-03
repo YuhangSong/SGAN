@@ -4,8 +4,9 @@ lable = 'c_only'
 
 sess = 'grl2'
 port = 22212
-gan_ngpu = [2,3]
+gpu_version = '0,1'
 
+gan_ngpu = range(2)
 
 # mode
 run_on = 'agent' # agent, video
