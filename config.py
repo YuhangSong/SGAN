@@ -1,10 +1,10 @@
 # exp time
 gan_ngpu = range(4)
 
-t = 21
-lable = 'd_only'
-sess = 'grl1'
-port = 62212
+t = 23
+lable = 'c_only'
+sess = 'grl2'
+port = 72212
 
 # mode
 run_on = 'agent' # agent, video
@@ -58,7 +58,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.0
+    gan_gloss_c_porpotion = 1.0
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64

@@ -162,9 +162,6 @@ class gan():
             self.inputg_image = self.inputg_image.cuda()
             self.inputg_aux = self.inputg_aux.cuda()
 
-            self.dataset_image = self.dataset_image.cuda()
-            self.dataset_aux = self.dataset_aux.cuda()
-
             self.one = self.one.cuda()
             self.mone = self.mone.cuda()
             self.zero = self.zero.cuda()
@@ -173,12 +170,6 @@ class gan():
             self.ones = self.ones.cuda()
             self.ones_v = self.ones_v.cuda()
             self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
-
-            self.recorder_loss_g_from_d = self.recorder_loss_g_from_d.cuda()
-            self.recorder_loss_g_from_c = self.recorder_loss_g_from_c.cuda()
-            self.recorder_loss_g_from_d_maped = self.recorder_loss_g_from_d.cuda()
-            self.recorder_loss_g_from_c_maped = self.recorder_loss_g_from_c.cuda()
-            self.recorder_loss_g = self.recorder_loss_g.cuda()
 
         '''create optimizer'''
         self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
@@ -257,18 +248,18 @@ class gan():
                 ################# load a trained batch #####################
 
                 # generate indexs
-                indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0]).cuda()
+                indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0])
 
                 # indexing image
                 image = self.dataset_image.index_select(0,indexs)
                 state_prediction_gt = torch.cat([image.narrow(1,0,1),image.narrow(1,1,1),image.narrow(1,2,1),image.narrow(1,3,1)],2)
                 # image part to
-                self.state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
-                self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
+                self.state_prediction_gt = torch.squeeze(state_prediction_gt,1).cuda()
+                self.state = self.state_prediction_gt.narrow(1,0*self.nc,3*self.nc).cuda()
+                self.prediction_gt = self.state_prediction_gt.narrow(1,3*self.nc,1*self.nc).cuda()
                 
                 # indexing aux
-                self.aux = self.dataset_aux.index_select(0,indexs)
+                self.aux = self.dataset_aux.index_select(0,indexs).cuda()
 
                 ###################### get fake #####################
 
@@ -445,13 +436,13 @@ class gan():
                 '''it is from -4 to 4 about
                 if the generated one is more real, it would be smaller'''
                 errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
-                self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data],0)
+                self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data.cpu()],0)
 
                 # avoid grandient
                 errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
 
                 errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data],0)
+                self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data.cpu()],0)
 
             if config.gan_gloss_c_porpotion > 0.0:
 
@@ -466,13 +457,13 @@ class gan():
                 outputc = self.netC(inputc_image_v, inputc_aux_v)
 
                 errG_from_C_v = torch.nn.functional.binary_cross_entropy(outputc,self.ones_v)
-                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data],0)
+                self.recorder_loss_g_from_c = torch.cat([self.recorder_loss_g_from_c,errG_from_C_v.data.cpu()],0)
 
                 # avoid grandient
                 errG_from_C_const = errG_from_C_v.data.cpu().numpy()[0]
 
                 errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
-                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data],0)
+                self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data.cpu()],0)
 
             if (config.gan_gloss_c_porpotion > 0.0) and (config.gan_gloss_c_porpotion < 1.0):
                 errG = errG_from_D_v_maped + errG_from_C_v_maped
@@ -481,7 +472,7 @@ class gan():
             elif config.gan_gloss_c_porpotion == 1.0:
                 errG = errG_from_C_v
 
-            self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data],0)
+            self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data.cpu()],0)
 
             errG.backward(self.one)
 
@@ -591,7 +582,7 @@ class gan():
         if np.shape(data)[0] is 0:
             return
 
-        data = torch.FloatTensor(data).cuda()
+        data = torch.FloatTensor(data)
 
         data_image = data[:,0:4,:,:,:]
 
@@ -680,6 +671,6 @@ class gan():
             return False
 
     def line(self,x,name):
-        vis.line(   x.cpu(),
+        vis.line(   x,
                     win=(name+'_'+config.lable),
                     opts=dict(title=(name+'_'+config.lable)))
