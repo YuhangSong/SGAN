@@ -49,7 +49,7 @@ if run_on is 'agent':
     grid_action_random_discounter = 0.5
     gan_worker_com_internal = 10
     gan_save_image_internal = 60*1
-    gan_dataset_limit = 1000
+    gan_dataset_limit = 1024 * 2
     gan_dataset_full_no_update = True
     '''since'''
     gan_recent_dataset = 10
