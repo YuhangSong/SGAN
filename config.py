@@ -2,7 +2,7 @@
 gan_ngpu = range(2)
 
 t = 2
-lable = '_d_r'
+lable = '_dgr_control'
 sess = 'grl1'
 port = 82212
 
