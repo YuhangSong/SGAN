@@ -681,5 +681,5 @@ class gan():
 
     def line(self,x,name):
         vis.line(   x.cpu(),
-                    win=name,
-                    opts=dict(title=name))
+                    win=(name+config.lable),
+                    opts=dict(title=(name+config.lable)))
