@@ -3,7 +3,7 @@ t = 2
 lable = 'c_only'
 
 sess = 'grl2'
-port = 12213
+port = 22212
 gan_ngpu = [2,3]
 
 
