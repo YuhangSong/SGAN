@@ -137,15 +137,15 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_cur_errD = torch.FloatTensor(0)
-        self.recorder_loss_g_dc_from_d = torch.FloatTensor(0)
-        self.recorder_loss_g_dc_from_c = torch.FloatTensor(0)
-        self.recorder_loss_g_dc_from_d_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_dc_from_c_maped = torch.FloatTensor(0)
-        self.recorder_loss_g_dc = torch.FloatTensor(0)
-        self.recorder_loss_g = torch.FloatTensor(0)
-        self.recorder_cur_mse = torch.FloatTensor(0)
-        self.recorder_target_mse = torch.FloatTensor(0)
+        self.recorder_cur_errD = torch.FloatTensor([0])
+        self.recorder_loss_g_dc_from_d = torch.FloatTensor([0])
+        self.recorder_loss_g_dc_from_c = torch.FloatTensor([0])
+        self.recorder_loss_g_dc_from_d_maped = torch.FloatTensor([0])
+        self.recorder_loss_g_dc_from_c_maped = torch.FloatTensor([0])
+        self.recorder_loss_g_dc = torch.FloatTensor([0])
+        self.recorder_loss_g = torch.FloatTensor([0])
+        self.recorder_cur_mse = torch.FloatTensor([0])
+        self.recorder_target_mse = torch.FloatTensor([0])
 
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
