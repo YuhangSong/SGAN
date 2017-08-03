@@ -1,10 +1,10 @@
 # exp time
 t = 2
-lable = 'd_only'
+lable = 'c_only'
 
-sess = 'grl1'
-port = 12212
-gan_ngpu = [0,1]
+sess = 'grl2'
+port = 12213
+gan_ngpu = [2,3]
 
 
 # mode
@@ -59,7 +59,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.0
+    gan_gloss_c_porpotion = 1.0
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64
