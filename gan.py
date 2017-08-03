@@ -671,8 +671,8 @@ class gan():
         '''log real result'''
         sample=sample2image(sample).cpu().numpy()
         vis.images( sample,
-                    win=name,
-                    opts=dict(caption=name+str(self.iteration_i)))
+                    win=(name+'_'+config.lable),
+                    opts=dict(caption=(name+'_'+config.lable)+str(self.iteration_i)))
     def if_dataset_full(self):
         if self.dataset_image.size()[0] >= self.dataset_limit:
             return True
@@ -681,5 +681,5 @@ class gan():
 
     def line(self,x,name):
         vis.line(   x.cpu(),
-                    win=(name+config.lable),
-                    opts=dict(title=(name+config.lable)))
+                    win=(name+'_'+config.lable),
+                    opts=dict(title=(name+'_'+config.lable)))
