@@ -34,6 +34,8 @@ import multiprocessing
 import matplotlib  
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import visdom
+vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 class gan():
@@ -540,22 +542,16 @@ class gan():
                     state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
                 self.save_sample(state_prediction_gt_channelled,'mean')
 
-                self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
-                self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
+                # self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
+                # self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
 
                 '''log'''
-                plt.figure()
-                line_loss_d, = plt.plot(self.recorder_loss_g_from_d.cpu().numpy(),alpha=0.5,label='loss_d')
-                line_loss_c, = plt.plot(self.recorder_loss_g_from_c.cpu().numpy(),alpha=0.5,label='loss_c')
-                plt.legend(handles=[line_loss_d, line_loss_c])
-                plt.savefig(self.experiment+'/loss_d_c.jpg')
+                self.line(self.recorder_loss_g_from_d,'self.recorder_loss_g_from_d')
+                self.line(self.recorder_loss_g_from_c,'self.recorder_loss_g_from_c')
 
-                plt.figure()
-                line_loss_g_from_d_maped, = plt.plot(self.recorder_loss_g_from_d_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_d_maped')
-                line_loss_g_from_c_maped, = plt.plot(self.recorder_loss_g_from_c_maped.cpu().numpy(),alpha=0.5,label='loss_g_from_c_maped')
-                line_loss_g, = plt.plot(self.recorder_loss_g.cpu().numpy(),alpha=0.5,label='loss_g')
-                plt.legend(handles=[line_loss_g_from_d_maped, line_loss_g_from_c_maped, line_loss_g])
-                plt.savefig(self.experiment+'/loss_g.jpg')
+                self.line(self.recorder_loss_g_from_d_maped,'self.recorder_loss_g_from_d_maped')
+                self.line(self.recorder_loss_g_from_c_maped,'self.recorder_loss_g_from_c_maped')
+                self.line(self.recorder_loss_g,'self.recorder_loss_g')
 
                 self.last_save_image_time = time.time()
 
@@ -658,10 +654,17 @@ class gan():
         number_rows = 4
 
         '''log real result'''
-        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
-
+        sample=sample2image(sample).cpu().numpy()
+        vis.images( sample,
+                    win=name,
+                    opts=dict(caption=name+str(self.iteration_i)))
     def if_dataset_full(self):
         if self.dataset_image.size()[0] >= self.dataset_limit:
             return True
         else:
             return False
+
+    def line(self,x,name):
+        vis.line(   x.cpu(),
+                    win=name,
+                    opts=dict(title=name))

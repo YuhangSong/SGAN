@@ -1,6 +1,6 @@
 # exp time
 t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2'
+lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_reproduce'
 
 # mode
 run_on = 'agent' # agent, video
@@ -22,7 +22,7 @@ elif run_on is 'agent':
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 4
+gan_ngpu = 2
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
