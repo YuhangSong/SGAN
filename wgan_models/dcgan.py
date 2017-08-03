@@ -61,20 +61,14 @@ class DCGAN_D(nn.Module):
         '''
 
         # compute output according to GPU parallel
-        if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
-        else: 
-            output_encoded = self.main(input_image)
+        output_encoded = nn.parallel.data_parallel(self.main, input_image, self.ngpu)
 
         cated = torch.cat([output_encoded, input_aux], 1)
         cated = torch.squeeze(cated,2)
         cated = torch.squeeze(cated,2)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
-        else: 
-            output = self.cat_layer(cated)
+        output = nn.parallel.data_parallel(self.cat_layer, cated, self.ngpu)
 
         # compute error
         error = output.mean(0)
@@ -144,10 +138,7 @@ class DCGAN_C(nn.Module):
         '''
 
         # compute output according to GPU parallel
-        if isinstance(input_image.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output_encoded = nn.parallel.data_parallel(self.main, input_image, range(self.ngpu))
-        else: 
-            output_encoded = self.main(input_image)
+        output_encoded = nn.parallel.data_parallel(self.main, input_image, self.ngpu)
 
         # cat them
         cated = torch.cat([output_encoded, input_aux], 1)
@@ -155,10 +146,7 @@ class DCGAN_C(nn.Module):
         cated = torch.squeeze(cated,2)
 
         # compute output according to GPU parallel
-        if isinstance(cated.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.cat_layer, cated, range(self.ngpu))
-        else: 
-            output = self.cat_layer(cated)
+        output = nn.parallel.data_parallel(self.cat_layer, cated, self.ngpu)
 
         return output
 
@@ -219,10 +207,7 @@ class DCGAN_G_Cv(nn.Module):
         '''
 
         # compute output according to gpu parallel
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else: 
-            output = self.main(input)
+        output = nn.parallel.data_parallel(self.main, input, self.ngpu)
 
         # return
         return output
@@ -289,10 +274,7 @@ class DCGAN_G_DeCv(nn.Module):
         '''
 
         # compute output according to gpu parallel
-        if isinstance(input.data, torch.cuda.FloatTensor) and self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
-        else: 
-            output = self.main(input)
+        output = nn.parallel.data_parallel(self.main, input, self.ngpu)
 
         # return
         return output

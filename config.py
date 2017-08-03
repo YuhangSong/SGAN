@@ -1,6 +1,11 @@
 # exp time
-t = 1
-lable = 'd05_c05_auto_loss_fix_exp_simple_one_move_fix_auto_dc_f2_reproduce'
+t = 2
+lable = 'd_only'
+
+sess = 'grl1'
+port = 12212
+gan_ngpu = [0,1]
+
 
 # mode
 run_on = 'agent' # agent, video
@@ -22,7 +27,6 @@ elif run_on is 'agent':
 gan_batchsize = 64
 gan_nz = 256
 gan_aux_size = gan_nz/2
-gan_ngpu = 4
 gan_dct = 4
 gan_gctc = 4
 gan_gctd = 4
@@ -38,7 +42,7 @@ if run_on is 'agent':
     config rl env here
     """ 
     overwirite_with_grid = True
-    grid_type = 'normal'
+    grid_type = 'simple_one_move'
     action_space = 4
     grid_size = 8
     grid_target_x = 4
@@ -55,7 +59,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.5
+    gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
 
     # gan_recent_dataset = 64

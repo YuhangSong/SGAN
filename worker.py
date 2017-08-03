@@ -9,6 +9,7 @@ import time
 import os
 from envs import create_env
 import distutils.version
+import config
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ def cluster_spec(num_workers, num_ps):
 More tensorflow setup for data parallelism
 """
     cluster = {}
-    port = 4132
+    port = config.port
 
     all_ps = []
     host = '127.0.0.1'

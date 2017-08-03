@@ -209,10 +209,11 @@ class gan():
                 reset requires_grad of D network to true.
                 (they are set to False below in netG update)
             '''
-            for p in self.netD.parameters():
-                p.requires_grad = True
+            if config.gan_gloss_c_porpotion < 1.0:
+                for p in self.netD.parameters():
+                    p.requires_grad = True
                 
-            if config.gan_gloss_c_porpotion is not 0.0:
+            if config.gan_gloss_c_porpotion > 0.0:
                 for p in self.netC.parameters():
                     p.requires_grad = True
 
@@ -243,12 +244,15 @@ class gan():
 
                 j += 1
 
-                # clamp parameters to a cube
-                for p in self.netD.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
-                # clamp parameters to a cube
-                for p in self.netC.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+                if config.gan_gloss_c_porpotion < 1.0:
+                    # clamp parameters to a cube
+                    for p in self.netD.parameters():
+                        p.data.clamp_(self.clamp_lower, self.clamp_upper)
+
+                if config.gan_gloss_c_porpotion > 0.0:
+                    # clamp parameters to a cube
+                    for p in self.netC.parameters():
+                        p.data.clamp_(self.clamp_lower, self.clamp_upper)
 
                 ################# load a trained batch #####################
 
@@ -265,25 +269,6 @@ class gan():
                 
                 # indexing aux
                 self.aux = self.dataset_aux.index_select(0,indexs)
-
-                ################# train D with real #################
-
-                # reset grandient
-                self.netD.zero_grad()
-
-                # feed
-                self.inputd_image.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
-                inputd_image_v = Variable(self.inputd_image)
-                self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
-                inputd_aux_v = Variable(self.inputd_aux)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
-
-                # compute
-                errD_real, outputD_real = self.netD(inputd_image_v, inputd_aux_v)
-                errD_real.backward(self.one)
-
-                #####################################################
 
                 ###################### get fake #####################
 
@@ -314,61 +299,84 @@ class gan():
                 prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
                 prediction = prediction_v.data
 
-                #####################################################
-                
-                ################# train D with fake #################
-
                 # get state_prediction
                 self.state_prediction = torch.cat([self.state, prediction], 1)
 
-                # feed
-                self.inputd_image.resize_as_(self.state_prediction).copy_(self.state_prediction)
-                inputd_image_v = Variable(self.inputd_image)
-                self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
-                inputd_aux_v = Variable(self.inputd_aux)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
-                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
+                #####################################################
+                    
 
-                # compute
-                errD_fake, outputD_fake = self.netD(inputd_image_v, inputd_aux_v)
-                errD_fake.backward(self.mone)
+                if config.gan_gloss_c_porpotion < 1.0:
 
-                # optmize
-                errD = errD_real - errD_fake
+                    # reset grandient
+                    self.netD.zero_grad()
+
+                    ################# train D with real #################
+
+                    # feed
+                    self.inputd_image.resize_as_(self.state_prediction_gt).copy_(self.state_prediction_gt)
+                    inputd_image_v = Variable(self.inputd_image)
+                    self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
+                    inputd_aux_v = Variable(self.inputd_aux)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
+
+                    # compute
+                    errD_real, outputD_real = self.netD(inputd_image_v, inputd_aux_v)
+                    errD_real.backward(self.one)
+
+                    #####################################################
+
+                    ################# train D with fake #################
+
+                    # feed
+                    self.inputd_image.resize_as_(self.state_prediction).copy_(self.state_prediction)
+                    inputd_image_v = Variable(self.inputd_image)
+                    self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
+                    inputd_aux_v = Variable(self.inputd_aux)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                    inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
+
+                    # compute
+                    errD_fake, outputD_fake = self.netD(inputd_image_v, inputd_aux_v)
+                    errD_fake.backward(self.mone)
+
+                    #####################################################
+
+                    # optmize
+                    errD = errD_real - errD_fake
+
+                    self.optimizerD.step()
+
+                if config.gan_gloss_c_porpotion > 0.0:
+
+                    # reset grandient
+                    self.netC.zero_grad()
+
+                    ############# train C with real & fake ##############
+                                    
+                    # feed real
+                    self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
+                    self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
+                    inputc_image_v = Variable(self.inputc_image_2)
+
+                    self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
+                    self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
+                    inputc_aux_v = Variable(self.inputc_aux_2)
+                    inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
+                    inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
+
+                    # compute
+                    outputc = self.netC(inputc_image_v, inputc_aux_v)
+
+                    outputc_gt_ = outputc
+     
+                    lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
+
+                    lossc.backward()
+
+                    self.optimizerC.step()
 
                 #####################################################
-
-                self.optimizerD.step()
-
-                ############# train C with real & fake ##############
-
-                # reset grandient
-                self.netC.zero_grad()
-
-                # feed real
-
-                self.state_prediction_gt_ = torch.cat([self.state_prediction_gt, self.state_prediction], 0)
-                self.inputc_image_2.resize_as_(self.state_prediction_gt_).copy_(self.state_prediction_gt_)
-                inputc_image_v = Variable(self.inputc_image_2)
-
-                self.aux_gt_ = torch.cat([self.aux, self.aux], 0)
-                self.inputc_aux_2.resize_as_(self.aux_gt_).copy_(self.aux_gt_)
-                inputc_aux_v = Variable(self.inputc_aux_2)
-                inputc_aux_v = torch.unsqueeze(inputc_aux_v,2)
-                inputc_aux_v = torch.unsqueeze(inputc_aux_v,3)
-
-                # compute
-                outputc = self.netC(inputc_image_v, inputc_aux_v)
-
-                outputc_gt_ = outputc
- 
-                lossc = torch.nn.functional.binary_cross_entropy(outputc,self.ones_zeros_v)
-
-                lossc.backward()
-
-                #####################################################
-
-                self.optimizerC.step()
 
             ######################################################################
             ####################### End of Update D network ######################
@@ -383,10 +391,11 @@ class gan():
                 to avoid computation on grad
                 this is reset to true when training D network
             '''
-            for p in self.netD.parameters():
-                p.requires_grad = False
+            if config.gan_gloss_c_porpotion < 1.0:
+                for p in self.netD.parameters():
+                    p.requires_grad = False
 
-            if config.gan_gloss_c_porpotion is not 0.0:
+            if config.gan_gloss_c_porpotion > 0.0:
                 for p in self.netC.parameters():
                     p.requires_grad = False
 
@@ -421,30 +430,32 @@ class gan():
             # get state_predictionv, this is a Variable cat 
             state_v_prediction_v = torch.cat([Variable(self.state), prediction_v], 1)
 
-            # feed, this state_predictionv is Variable
-            inputd_image_v = state_v_prediction_v
+            if config.gan_gloss_c_porpotion < 1.0:
 
-            # feed
-            self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
-            inputd_aux_v = Variable(self.inputd_aux)
-            inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
-            inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
+                # feed, this state_predictionv is Variable
+                inputd_image_v = state_v_prediction_v
 
-            # compute errG_from_D_v
-            '''it is from -4 to 4 about
-            if the generated one is more real, it would be smaller'''
-            errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
-            self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data],0)
+                # feed
+                self.inputd_aux.resize_as_(self.aux).copy_(self.aux)
+                inputd_aux_v = Variable(self.inputd_aux)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,2)
+                inputd_aux_v = torch.unsqueeze(inputd_aux_v,3)
 
-            # avoid grandient
-            errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
+                # compute errG_from_D_v
+                '''it is from -4 to 4 about
+                if the generated one is more real, it would be smaller'''
+                errG_from_D_v, _ = self.netD(inputd_image_v, inputd_aux_v)
+                self.recorder_loss_g_from_d = torch.cat([self.recorder_loss_g_from_d,errG_from_D_v.data],0)
 
-            errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
-            self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data],0)
+                # avoid grandient
+                errG_from_D_const = errG_from_D_v.data.cpu().numpy()[0]
 
-            if config.gan_gloss_c_porpotion is not 0.0:
+                errG_from_D_v_maped = torch.mul(torch.mul(errG_from_D_v,(config.auto_d_c_factor**errG_from_D_const)),(1-config.gan_gloss_c_porpotion))
+                self.recorder_loss_g_from_d_maped = torch.cat([self.recorder_loss_g_from_d_maped,errG_from_D_v_maped.data],0)
 
-                inputc_image_v = inputd_image_v
+            if config.gan_gloss_c_porpotion > 0.0:
+
+                inputc_image_v = state_v_prediction_v
 
                 self.inputc_aux.resize_as_(self.aux).copy_(self.aux)
                 inputc_aux_v = Variable(self.inputc_aux)
@@ -463,10 +474,12 @@ class gan():
                 errG_from_C_v_maped = torch.mul(torch.mul(errG_from_C_v,(config.auto_d_c_factor**errG_from_C_const)),(config.gan_gloss_c_porpotion))
                 self.recorder_loss_g_from_c_maped = torch.cat([self.recorder_loss_g_from_c_maped,errG_from_C_v_maped.data],0)
 
-            if config.gan_gloss_c_porpotion is not 0.0:
+            if (config.gan_gloss_c_porpotion > 0.0) and (config.gan_gloss_c_porpotion < 1.0):
                 errG = errG_from_D_v_maped + errG_from_C_v_maped
-            else:
+            elif config.gan_gloss_c_porpotion == 0.0:
                 errG = errG_from_D_v
+            elif config.gan_gloss_c_porpotion == 1.0:
+                errG = errG_from_C_v
 
             self.recorder_loss_g = torch.cat([self.recorder_loss_g,errG.data],0)
 
@@ -486,9 +499,9 @@ class gan():
             ######################################################################
 
             '''log result'''
-            print('[iteration_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
+            print('[iteration_i:%d] Loss_G: %.4f'
                 % (self.iteration_i,
-                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+                errG.data[0]))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
@@ -542,15 +555,17 @@ class gan():
                     state_prediction_gt_channelled = torch.cat([state_prediction_gt_channelled,state_prediction_gt_[batch_i]],0)
                 self.save_sample(state_prediction_gt_channelled,'mean')
 
-                # self.save_sample(self.state_prediction_gt[0],'real_'+('%.5f'%(outputc_gt_[0].data.cpu().numpy()[0])).replace('.',''))
-                # self.save_sample(self.state_prediction[0],'fake_'+('%.5f'%(outputc_gt_[self.batchSize].data.cpu().numpy()[0])).replace('.',''))
-
                 '''log'''
-                self.line(self.recorder_loss_g_from_d,'self.recorder_loss_g_from_d')
-                self.line(self.recorder_loss_g_from_c,'self.recorder_loss_g_from_c')
+                if config.gan_gloss_c_porpotion < 1.0:
+                    self.line(self.recorder_loss_g_from_d,'self.recorder_loss_g_from_d')
+                if config.gan_gloss_c_porpotion > 0.0:
+                    self.line(self.recorder_loss_g_from_c,'self.recorder_loss_g_from_c')
 
-                self.line(self.recorder_loss_g_from_d_maped,'self.recorder_loss_g_from_d_maped')
-                self.line(self.recorder_loss_g_from_c_maped,'self.recorder_loss_g_from_c_maped')
+                if config.gan_gloss_c_porpotion < 1.0:
+                    self.line(self.recorder_loss_g_from_d_maped,'self.recorder_loss_g_from_d_maped')
+                if config.gan_gloss_c_porpotion > 0.0:
+                    self.line(self.recorder_loss_g_from_c_maped,'self.recorder_loss_g_from_c_maped')
+                
                 self.line(self.recorder_loss_g,'self.recorder_loss_g')
 
                 self.last_save_image_time = time.time()
