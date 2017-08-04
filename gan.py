@@ -57,7 +57,7 @@ class gan():
         self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.DCiters_ = 5
+        self.DCiters_ = 6
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
@@ -185,8 +185,8 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.target_errD = 4.0
-        self.target_mse_p = 0.5
+        self.target_errD = 3.0
+        self.target_mse_p = 0.25
         self.target_mse = 1.0
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -422,9 +422,8 @@ class gan():
             if self.recorder_cur_errD_mid_numpy[-1] < self.target_errD:
                 self.target_mse = self.target_mse - self.target_mse * self.target_mse_p
             else:
-                pass
-                # self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
-            # self.target_mse = 0.0
+                self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
+
             self.target_mse = np.clip(self.target_mse,0.0,1.0)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 
