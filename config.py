@@ -1,8 +1,8 @@
 # exp time
-gan_ngpu = range(4)
+gan_ngpu = range(2)
 
-t = 3
-lable = 'disable_r'
+t = 4
+lable = 'disable_r_dc_all'
 sess = 'grl3'
 port = 92212
 
@@ -58,7 +58,7 @@ if run_on is 'agent':
     agent_learning = False
     agent_acting = False
 
-    gan_gloss_c_porpotion = 0.0
+    gan_gloss_c_porpotion = 0.5
     auto_d_c_factor = 2
 
     disable_r = True

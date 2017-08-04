@@ -91,7 +91,7 @@ class gan():
         self.netG_Cv = dcgan.DCGAN_G_Cv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, 3, self.n_extra_layers)
         self.netG_DeCv = dcgan.DCGAN_G_DeCv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, 4, self.n_extra_layers)
         self.netD = dcgan.DCGAN_D(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, 4, self.n_extra_layers)
-        self.netC = dcgan.DCGAN_C(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
+        self.netC = dcgan.DCGAN_C(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, 4, self.n_extra_layers)
 
         '''init models'''
         self.netG_Cv.apply(weights_init)
@@ -230,7 +230,7 @@ class gan():
                 the rest of the training as well.
             '''
             # train the discriminator Diters times
-            if self.iteration_i % 500 == 0:
+            if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
                 DCiters = 100
             else:
                 DCiters = self.DCiters_
@@ -759,7 +759,9 @@ class gan():
         number_rows = 4
 
         '''log real result'''
-        sample=sample2image(sample).cpu().numpy()
+        sample = sample2image(sample)
+        vutils.save_image(sample, ('{0}/'+(name+'<'+config.lable+'>')+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        sample = sample.cpu().numpy()
         vis.images( sample,
                     win=(name+'<'+config.lable+'>'),
                     opts=dict(caption=(name+'<'+config.lable+'>')+str(self.iteration_i)))
@@ -773,3 +775,7 @@ class gan():
         vis.line(   x,
                     win=(name+'<'+config.lable+'>'),
                     opts=dict(title=(name+'<'+config.lable+'>')))
+        plt.figure()
+        temp, = plt.plot(x.cpu().numpy(),alpha=0.5,label=(name+'<'+config.lable+'>'))
+        plt.legend(handles=[temp])
+        plt.savefig(self.experiment+'/'+(name+'<'+config.lable+'>')+'.jpg')

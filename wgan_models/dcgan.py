@@ -92,7 +92,7 @@ class DCGAN_C(nn.Module):
         deep conv GAN: D
     '''
 
-    def __init__(self, isize, nz, nc, ndf, ngpu, n_extra_layers=0):
+    def __init__(self, isize, nz, nc, ngf, ngpu, depth, n_extra_layers=0):
 
         '''
             build the model
@@ -101,35 +101,43 @@ class DCGAN_C(nn.Module):
         # basic init
         super(DCGAN_C, self).__init__()
         self.ngpu = ngpu
+        self.nc = nc
         assert isize % 16 == 0, "isize has to be a multiple of 16"
 
         # starting main model
         main = nn.Sequential()
 
-        # input is (4*nc) x isize x isize
-        # the first (3*nc) channels are state, the 4th nc channel is prediction
-        main.add_module('initial.conv_c.{0}-{1}'.format(4*nc, ndf),
-                        nn.Conv2d(4*nc, ndf, 4, 2, 1, bias=False))
-        main.add_module('initial.relu_c.{0}'.format(ndf),
-                        nn.LeakyReLU(0.2, inplace=True))
-        csize, cndf = isize / 2, ndf
+        # input is (3*nc) x isize x isize
+        # which is 3 sequential states
+        # initial conv
+        main.add_module('initial.conv_gc.{0}-{1}'.format(nc, ngf),
+                                               nn.Conv3d(nc, ngf, (2,4,4), (1,2,2), (0,1,1), bias=False))
+        main.add_module('initial.relu_gc.{0}'.format(ngf),
+                                                       nn.LeakyReLU(0.2, inplace=True))
+        csize, cndf, depth = isize / 2, ngf, depth - 1
 
-        # keep conv till
-        while csize > config.gan_dct:
+        # conv till
+        while csize > config.gan_gctc:
             in_feat = cndf
             out_feat = cndf * 2
-            main.add_module('pyramid.{0}-{1}.conv_c'.format(in_feat, out_feat),
-                            nn.Conv2d(in_feat, out_feat, 4, 2, 1, bias=False))
-            main.add_module('pyramid.{0}.batchnorm_c'.format(out_feat),
-                            nn.BatchNorm2d(out_feat))
-            main.add_module('pyramid.{0}.relu_c'.format(out_feat),
+            if depth > 1:
+                kernel_size = (2,4,4)
+            else:
+                kernel_size = (1,4,4)
+            main.add_module('pyramid.{0}-{1}.conv_gc'.format(in_feat, out_feat),
+                            nn.Conv3d(in_feat, out_feat, kernel_size, (1,2,2), (0,1,1), bias=False))
+            main.add_module('pyramid.{0}.batchnorm_gc'.format(out_feat),
+                            nn.BatchNorm3d(out_feat))
+            main.add_module('pyramid.{0}.relu_gc'.format(out_feat),
                             nn.LeakyReLU(0.2, inplace=True))
-            cndf = cndf * 2
+            cndf = cndf * 2  
             csize = csize / 2
+            depth = depth - 1
 
-        # state size K x 4 x 4
-        main.add_module('final.{0}-{1}.conv_c'.format(cndf, nz),
-                        nn.Conv2d(cndf, nz, config.gan_dct, 1, 0, bias=False))
+        # conv final to nz
+        # state size. K x 1 x 4 x 4
+        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
+                        nn.Conv3d(cndf, nz, (1,csize,csize), (1,1,1), (0,0,0), bias=False))
 
         # main model done
         self.main = main
