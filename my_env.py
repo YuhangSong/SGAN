@@ -49,7 +49,7 @@ class env():
         return self.observation
 
     def act(self, action):
-
+        time.sleep(0.5)
         self.action = action
         self.step += 1
         
