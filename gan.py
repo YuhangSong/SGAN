@@ -230,7 +230,7 @@ class gan():
                 the rest of the training as well.
             '''
             # train the discriminator Diters times
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
+            if self.iteration_i % 500 == 0:
                 Diters = 100
             else:
                 Diters = self.DCiters_
