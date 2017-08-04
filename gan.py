@@ -383,7 +383,7 @@ class gan():
                     cur_errD_v = (errD_real - errD_fake).abs()
                     self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD_v.data.cpu()],0)
 
-                    self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),21)
+                    self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),25)
 
                     self.optimizerD.step()
 
@@ -422,8 +422,9 @@ class gan():
             if self.recorder_cur_errD_mid_numpy[-1] < self.target_errD:
                 self.target_mse = self.target_mse - self.target_mse * self.target_mse_p
             else:
-                self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
-            self.target_mse = 0.0
+                pass
+                # self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
+            # self.target_mse = 0.0
             self.target_mse = np.clip(self.target_mse,0.0,1.0)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 
