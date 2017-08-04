@@ -1,8 +1,8 @@
 # exp time
-gan_ngpu = range(4)
+gan_ngpu = range(2)
 
 t = 2
-lable = '_dgr_control_stable_d_i_stable_t_mse'
+lable = '_dgr_control_stable_d_i_stable_t_mse_t_errD_2'
 sess = 'grl1'
 port = 82212
 
