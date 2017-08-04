@@ -1,5 +1,5 @@
 # exp time
-gan_ngpu = range(2)
+gan_ngpu = range(4)
 
 t = 3
 lable = '3d_cnn_filtered_test_mse'
