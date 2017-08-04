@@ -416,9 +416,9 @@ class gan():
                     #####################################################
 
             if cur_errD_v.data.cpu().numpy()[0] < self.target_errD:
-                self.target_mse = self.target_mse / 2.0
+                self.target_mse = self.target_mse - self.target_mse / 2.0
             else:
-                self.target_mse = self.target_mse * 2.0
+                self.target_mse = self.target_mse + self.target_mse / 2.0
             self.target_mse = np.clip(self.target_mse,0.0,1.0)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 
