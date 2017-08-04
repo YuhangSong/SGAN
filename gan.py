@@ -88,9 +88,9 @@ class gan():
                 m.bias.data.fill_(0)
 
         '''create models'''
-        self.netG_Cv = dcgan.DCGAN_G_Cv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
-        self.netG_DeCv = dcgan.DCGAN_G_DeCv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
-        self.netD = dcgan.DCGAN_D(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
+        self.netG_Cv = dcgan.DCGAN_G_Cv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, 3, self.n_extra_layers)
+        self.netG_DeCv = dcgan.DCGAN_G_DeCv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, 4, self.n_extra_layers)
+        self.netD = dcgan.DCGAN_D(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, 4, self.n_extra_layers)
         self.netC = dcgan.DCGAN_C(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
 
         '''init models'''
@@ -185,7 +185,8 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.target_errD = 2.0
+        self.target_errD = 4.0
+        self.target_mse_p = 0.5
         self.target_mse = 1.0
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -382,6 +383,8 @@ class gan():
                     cur_errD_v = (errD_real - errD_fake).abs()
                     self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD_v.data.cpu()],0)
 
+                    self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),21)
+
                     self.optimizerD.step()
 
                 if config.gan_gloss_c_porpotion > 0.0:
@@ -415,10 +418,12 @@ class gan():
 
                     #####################################################
 
-            if cur_errD_v.data.cpu().numpy()[0] < self.target_errD:
-                self.target_mse = self.target_mse - self.target_mse / 2.0
+            
+            if self.recorder_cur_errD_mid_numpy[-1] < self.target_errD:
+                self.target_mse = self.target_mse - self.target_mse * self.target_mse_p
             else:
-                self.target_mse = self.target_mse + self.target_mse / 2.0
+                self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
+            self.target_mse = 0.0
             self.target_mse = np.clip(self.target_mse,0.0,1.0)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 
@@ -624,6 +629,8 @@ class gan():
                 '''log'''
 
                 self.line(self.recorder_cur_errD,'self.recorder_cur_errD')
+                self.line(torch.FloatTensor(self.recorder_cur_errD_mid_numpy),'self.recorder_cur_errD_mid_numpy')
+
                 self.line(self.recorder_target_mse,'self.recorder_target_mse')
 
                 if config.gan_gloss_c_porpotion < 1.0:
