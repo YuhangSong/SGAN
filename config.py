@@ -2,7 +2,7 @@
 gan_ngpu = range(4)
 
 t = 3
-lable = 'dc_iter_original'
+lable = 'dc_iter_original_but_no_init'
 sess = 'grl3'
 port = 92212
 
