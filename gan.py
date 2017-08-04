@@ -57,7 +57,7 @@ class gan():
         self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.DCiters_ = 6
+        self.DCiters_ = 5
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
@@ -229,7 +229,11 @@ class gan():
                 This is also why the first 25 iterations take significantly longer than
                 the rest of the training as well.
             '''
-            DCiters = self.DCiters_
+            # train the discriminator Diters times
+            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
+                Diters = 100
+            else:
+                Diters = self.DCiters_
 
             '''
                 start interation training of D network
@@ -752,8 +756,8 @@ class gan():
         '''log real result'''
         sample=sample2image(sample).cpu().numpy()
         vis.images( sample,
-                    win=(name+'_'+config.lable),
-                    opts=dict(caption=(name+'_'+config.lable)+str(self.iteration_i)))
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(caption=(name+'<'+config.lable+'>')+str(self.iteration_i)))
     def if_dataset_full(self):
         if self.dataset_image.size()[0] >= self.dataset_limit:
             return True
@@ -762,5 +766,5 @@ class gan():
 
     def line(self,x,name):
         vis.line(   x,
-                    win=(name+'_'+config.lable),
-                    opts=dict(title=(name+'_'+config.lable)))
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(title=(name+'<'+config.lable+'>')))

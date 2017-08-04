@@ -2,7 +2,7 @@
 gan_ngpu = range(4)
 
 t = 3
-lable = 'stable_control'
+lable = 'dc_iter_original'
 sess = 'grl3'
 port = 92212
 
