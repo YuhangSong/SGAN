@@ -231,9 +231,9 @@ class gan():
             '''
             # train the discriminator Diters times
             if self.iteration_i % 500 == 0:
-                Diters = 100
+                DCiters = 100
             else:
-                Diters = self.DCiters_
+                DCiters = self.DCiters_
 
             '''
                 start interation training of D network
@@ -272,41 +272,43 @@ class gan():
                 # indexing aux
                 self.aux = self.dataset_aux.index_select(0,indexs).cuda()
 
-                ###################### get stater #####################
+                if not config.disable_r:
 
-                # feed
-                self.prediction_gt_x = torch.cat([self.prediction_gt,self.prediction_gt,self.prediction_gt],1)
-                self.inputg_image.resize_as_(self.prediction_gt_x).copy_(self.prediction_gt_x)
-                inputg_image_v = Variable(self.inputg_image, volatile = True) # totally freeze netG
+                    ###################### get stater #####################
 
-                # compute encoded
-                encoded_v = self.netG_Cv(inputg_image_v)
+                    # feed
+                    self.prediction_gt_x = torch.cat([self.prediction_gt,self.prediction_gt,self.prediction_gt],1)
+                    self.inputg_image.resize_as_(self.prediction_gt_x).copy_(self.prediction_gt_x)
+                    inputg_image_v = Variable(self.inputg_image, volatile = True) # totally freeze netG
 
-                # feed aux
-                self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
-                inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze netG
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
-                inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
+                    # compute encoded
+                    encoded_v = self.netG_Cv(inputg_image_v)
 
-                # feed noise
-                self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
-                noise_v = Variable(self.noise, volatile = True) # totally freeze netG
+                    # feed aux
+                    self.inputg_aux.resize_as_(self.aux).copy_(self.aux)
+                    inputg_aux_v = Variable(self.inputg_aux, volatile = True) # totally freeze netG
+                    inputg_aux_v = torch.unsqueeze(inputg_aux_v,2)
+                    inputg_aux_v = torch.unsqueeze(inputg_aux_v,3)
 
-                # concate encoded_v, noise_v, action
-                concated = [encoded_v,inputg_aux_v,noise_v]
-                encoded_v_noise_v_action_v = torch.cat(concated,1)
+                    # feed noise
+                    self.noise.resize_(self.batchSize, self.aux_size, 1, 1).normal_(0, 1)
+                    noise_v = Variable(self.noise, volatile = True) # totally freeze netG
 
-                # predict
-                stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
+                    # concate encoded_v, noise_v, action
+                    concated = [encoded_v,inputg_aux_v,noise_v]
+                    encoded_v_noise_v_action_v = torch.cat(concated,1)
 
-                stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
+                    # predict
+                    stater_prediction_v = self.netG_DeCv(encoded_v_noise_v_action_v)
 
-                stater = stater_v.data
+                    stater_v = stater_prediction_v.narrow(1,self.nc*0,self.nc*3)
 
-                self.prediction_gt = stater.narrow(1,self.nc*0,self.nc*1)
-                self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
+                    stater = stater_v.data
 
-                #####################################################
+                    self.prediction_gt = stater.narrow(1,self.nc*0,self.nc*1)
+                    self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
+
+                    #####################################################
 
                 ###################### get fake #####################
 
@@ -428,6 +430,9 @@ class gan():
             else:
                 self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
 
+            if config.disable_r:
+                # disable r, so that r is not updated
+                self.target_mse = 1.0
             self.target_mse = np.clip(self.target_mse,0.0,1.0)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
 

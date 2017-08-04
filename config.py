@@ -2,7 +2,7 @@
 gan_ngpu = range(4)
 
 t = 3
-lable = 'dc_iter_original_but_no_init'
+lable = 'disable_r'
 sess = 'grl3'
 port = 92212
 
@@ -60,6 +60,8 @@ if run_on is 'agent':
 
     gan_gloss_c_porpotion = 0.0
     auto_d_c_factor = 2
+
+    disable_r = True
 
     # gan_recent_dataset = 64
     # gan_worker_com_internal = 1
