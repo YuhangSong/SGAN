@@ -2,10 +2,10 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 14
-lable = '1d_fall'
+t = 27
+lable = '1d_fall_r'
 sess = 'grl3'
-port = 14212
+port = 15212
 
 '''model'''
 gan_size = 128
@@ -43,7 +43,7 @@ gan_save_image_internal = 60*1
 gan_dataset_limit = 1024 * 2
 gan_dataset_full_no_update = True
 gan_recent_dataset = 10
-using_r = False
+using_r = True
 
 
 '''debug'''

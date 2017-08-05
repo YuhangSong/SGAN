@@ -64,7 +64,6 @@ class gan():
         self.dataset_limit = config.gan_dataset_limit
         self.aux_size = config.gan_aux_size
         
-
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
         '''random seed for torch'''
@@ -99,6 +98,9 @@ class gan():
 
         '''print the models'''
         print(self.netD)
+        self.netG.deconv_layer_1.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
+        self.netG.deconv_layer_2.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
+        self.netG.deconv_layer_3.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
         print(self.netG)
 
         # noise
@@ -133,8 +135,8 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.target_errD = 3.0
-        self.target_mse_p = 0.25
+        self.target_errD = 0.001
+        self.target_mse_p = 0.2
         self.target_mse = 1.0
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -156,10 +158,11 @@ class gan():
             for p in self.netD.parameters():
                 p.requires_grad = True
 
-            if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
-                DCiters = 100
-            else:
-                DCiters = self.DCiters_
+            # if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
+            #     DCiters = 100
+            # else:
+            #     DCiters = self.DCiters_
+            DCiters = self.DCiters_
 
             j = 0
             while j < DCiters:
@@ -346,10 +349,6 @@ class gan():
                 except Exception, e:
                     self.recorder_prediction_heatmap = self.prediction.mean(0)
                 self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
-
-                # self.line(self.prediction_gt_raw.mean(0)[0][0], 'prediction_gt_raw')
-                # self.line(self.prediction_gt.mean(0)[0][0], 'prediction_gt')
-                # self.line(self.prediction.mean(0)[0][0], 'prediction')
 
                 self.line(self.recorder_cur_errD,'recorder_cur_errD')
                 self.line(torch.FloatTensor(self.recorder_cur_errD_mid_numpy),'recorder_cur_errD_mid_numpy')
