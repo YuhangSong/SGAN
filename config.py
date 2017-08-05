@@ -3,7 +3,7 @@ gan_ngpu = range(2)
 
 '''expperiment'''
 t = 27
-lable = '1d_fall_r'
+lable = '1d_fall_baseline'
 sess = 'grl3'
 port = 15212
 
@@ -43,7 +43,7 @@ gan_save_image_internal = 60*1
 gan_dataset_limit = 1024 * 2
 gan_dataset_full_no_update = True
 gan_recent_dataset = 10
-using_r = True
+using_r = False
 
 
 '''debug'''
