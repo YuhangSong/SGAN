@@ -136,7 +136,7 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.target_errD = 0.0
+        self.target_errD = 0.01
         self.target_mse_p = 0.01
         self.target_mse = 1.0
 
@@ -286,7 +286,7 @@ class gan():
             loss_g_final_v = loss_g_v
 
             if self.updata_a:
-                loss_a_v = self.mse_loss_model(self.prediction_gt_v, self.prediction_v)
+                loss_a_v = self.mse_loss_model(self.prediction_gt_v, Variable(self.prediction_v.data))
                 self.recorder_loss_a = torch.cat([self.recorder_loss_a,loss_a_v.data.cpu()],0)
 
                 loss_g_final_v = loss_g_final_v + loss_a_v
