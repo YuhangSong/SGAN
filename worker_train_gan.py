@@ -59,7 +59,7 @@ class GanTrainer():
                 # print(str(Exception)+": "+str(e))
 
             '''delete any way too avoid futher bug'''
-            subprocess.call(["rm", "-r", config.datadir+'data.npz'])
+            subprocess.call(["rm", "-r", "-f", config.datadir+'data.npz'])
 
             if data is not None:
                 self.last_load_time = time.time() # record last load time
@@ -79,8 +79,6 @@ class GanTrainer():
                 self.load_data()
                 
             self.gan.train()
-
-            time.sleep(config.lower_gan_worker)
 
 
 if __name__ == "__main__":

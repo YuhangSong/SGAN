@@ -5,170 +5,58 @@ import config
 
 class DCGAN_D(nn.Module):
 
-    '''
-        deep conv GAN: D
-    '''
-
-    def __init__(self, isize, nz, nc, ngf, ngpu, depth, n_extra_layers=0):
-
-        '''
-            build the model
-        '''
-
-        # basic init
+    def __init__(self):
         super(DCGAN_D, self).__init__()
-        self.ngpu = ngpu
-        self.nc = nc
-        assert isize % 16 == 0, "isize has to be a multiple of 16"
 
-        # starting main model
-        main = nn.Sequential()
+        self.conv_layer = torch.nn.Linear(config.action_space*4, config.gan_nz)
 
-        # input is (3*nc) x isize x isize
-        # which is 3 sequential states
-        # initial conv
-        main.add_module('initial.conv_gc.{0}-{1}'.format(nc, ngf),
-                                               nn.Conv3d(nc, ngf, (2,4,4), (1,2,2), (0,1,1), bias=False))
-        main.add_module('initial.relu_gc.{0}'.format(ngf),
-                                                       nn.LeakyReLU(0.2, inplace=True))
-        csize, cndf, depth = isize / 2, ngf, depth - 1
-
-        # conv till
-        while csize > config.gan_gctc:
-            in_feat = cndf
-            out_feat = cndf * 2
-            if depth > 1:
-                kernel_size = (2,4,4)
-            else:
-                kernel_size = (1,4,4)
-            main.add_module('pyramid.{0}-{1}.conv_gc'.format(in_feat, out_feat),
-                            nn.Conv3d(in_feat, out_feat, kernel_size, (1,2,2), (0,1,1), bias=False))
-            main.add_module('pyramid.{0}.batchnorm_gc'.format(out_feat),
-                            nn.BatchNorm3d(out_feat))
-            main.add_module('pyramid.{0}.relu_gc'.format(out_feat),
-                            nn.LeakyReLU(0.2, inplace=True))
-            cndf = cndf * 2  
-            csize = csize / 2
-            depth = depth - 1
-
-        # conv final to nz
-        # state size. K x 1 x 4 x 4
-        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-                        nn.Conv3d(cndf, nz, (1,csize,csize), (1,1,1), (0,0,0), bias=False))
-
-        # main model done
-        self.main = main
-
-        # cat_layer
-        self.cat_layer = torch.nn.Linear(nz+config.gan_aux_size, 1)
+        self.cat_layer = torch.nn.Linear(config.gan_nz+config.gan_aux_size, 1)
 
     def forward(self, input_image, input_aux):
 
-        '''
-            specific return when comute forward
-        '''
+        input_image = input_image.contiguous()
+        input_image = input_image.view(input_image.size()[0],-1)
 
-        # compute output according to GPU parallel
-        input_image = to_3d(input_image,self.nc)
-        output_encoded = nn.parallel.data_parallel(self.main, input_image, self.ngpu)
-        output_encoded = to_2d(output_encoded)
+        encoded = nn.parallel.data_parallel(    self.conv_layer, 
+                                                input_image,
+                                                config.gan_ngpu)
 
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
+        x = nn.parallel.data_parallel(          self.cat_layer,
+                                                torch.cat([encoded,input_aux],1),
+                                                config.gan_ngpu)
 
-        # compute output according to GPU parallel
-        output = nn.parallel.data_parallel(self.cat_layer, cated, self.ngpu)
+        return x
 
-        # compute error
-        error = output.mean(0)
+class DCGAN_G(nn.Module):
 
-        # return
-        return error.view(1), output
+    def __init__(self):
+        super(DCGAN_G, self).__init__()
 
-class DCGAN_C(nn.Module):
+        self.conv_layer     = torch.nn.Linear(3*config.action_space,                config.gan_nz)
 
-    '''
-        deep conv GAN: D
-    '''
+        self.cat_layer      = torch.nn.Linear(config.gan_nz+2*config.gan_aux_size,  config.gan_nz)
 
-    def __init__(self, isize, nz, nc, ngf, ngpu, depth, n_extra_layers=0):
+        self.deconv_layer   = torch.nn.Linear(config.gan_nz,                        4*config.action_space)
 
-        '''
-            build the model
-        '''
+    def forward(self, input_image, input_aux, input_noise):
+        input_image = input_image.contiguous()
+        input_image = input_image.view(input_image.size()[0],-1)
 
-        # basic init
-        super(DCGAN_C, self).__init__()
-        self.ngpu = ngpu
-        self.nc = nc
-        assert isize % 16 == 0, "isize has to be a multiple of 16"
+        encoded = nn.parallel.data_parallel(    self.conv_layer, 
+                                                input_image, 
+                                                config.gan_ngpu)
 
-        # starting main model
-        main = nn.Sequential()
+        x       = nn.parallel.data_parallel(    self.cat_layer,
+                                                torch.cat([encoded,input_aux,input_noise],1),
+                                                config.gan_ngpu)
 
-        # input is (3*nc) x isize x isize
-        # which is 3 sequential states
-        # initial conv
-        main.add_module('initial.conv_gc.{0}-{1}'.format(nc, ngf),
-                                               nn.Conv3d(nc, ngf, (2,4,4), (1,2,2), (0,1,1), bias=False))
-        main.add_module('initial.relu_gc.{0}'.format(ngf),
-                                                       nn.LeakyReLU(0.2, inplace=True))
-        csize, cndf, depth = isize / 2, ngf, depth - 1
+        x       = nn.parallel.data_parallel(    self.deconv_layer, 
+                                                x, 
+                                                config.gan_ngpu)
 
-        # conv till
-        while csize > config.gan_gctc:
-            in_feat = cndf
-            out_feat = cndf * 2
-            if depth > 1:
-                kernel_size = (2,4,4)
-            else:
-                kernel_size = (1,4,4)
-            main.add_module('pyramid.{0}-{1}.conv_gc'.format(in_feat, out_feat),
-                            nn.Conv3d(in_feat, out_feat, kernel_size, (1,2,2), (0,1,1), bias=False))
-            main.add_module('pyramid.{0}.batchnorm_gc'.format(out_feat),
-                            nn.BatchNorm3d(out_feat))
-            main.add_module('pyramid.{0}.relu_gc'.format(out_feat),
-                            nn.LeakyReLU(0.2, inplace=True))
-            cndf = cndf * 2  
-            csize = csize / 2
-            depth = depth - 1
+        x = x.view(x.size()[0],4,config.action_space)
 
-        # conv final to nz
-        # state size. K x 1 x 4 x 4
-        main.add_module('final.{0}-{1}.conv_gc'.format(cndf, nz),
-                        nn.Conv3d(cndf, nz, (1,csize,csize), (1,1,1), (0,0,0), bias=False))
-
-        # main model done
-        self.main = main
-
-        cat_layer = nn.Sequential()
-        cat_layer.add_module('cat_linear',
-                        nn.Linear(nz+config.gan_aux_size, 1))
-        cat_layer.add_module('sigmoid_out',
-                        nn.Sigmoid())
-        self.cat_layer = cat_layer
-
-    def forward(self, input_image, input_aux):
-
-        '''
-            specific return when comute forward
-        '''
-
-        input_image = to_3d(input_image,self.nc)
-        # compute output according to GPU parallel
-        output_encoded = nn.parallel.data_parallel(self.main, input_image, self.ngpu)
-        output_encoded = to_2d(output_encoded)
-
-        # cat them
-        cated = torch.cat([output_encoded, input_aux], 1)
-        cated = torch.squeeze(cated,2)
-        cated = torch.squeeze(cated,2)
-
-        # compute output according to GPU parallel
-        output = nn.parallel.data_parallel(self.cat_layer, cated, self.ngpu)
-
-        return output
+        return x
 
 class DCGAN_G_Cv(nn.Module):
 
