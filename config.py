@@ -2,10 +2,10 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 39
-lable = '1d_fall_r_a'
+t = 1
+lable = '1d_fall_r'
 sess = 'grl1'
-port = 16212
+port = 10100
 
 '''model'''
 gan_size = 128
@@ -16,7 +16,7 @@ gan_aux_size = gan_nz/2
 gan_batchsize = 128
 
 # generate logdir according to config
-logdir = '../../result/gmbrl_1/'+lable+'_t'+str(t)+'/'
+logdir = '../../result/gmbrl_2/'+lable+'_t'+str(t)+'/'
 modeldir = logdir+'model/'
 datadir = logdir+'data/'
 
@@ -45,7 +45,7 @@ gan_dataset_full_no_update = True
 gan_recent_dataset = 10
 gan_recent_recorder = 20
 using_r = True
-using_a = True
+using_a = False
 
 
 '''debug'''
