@@ -37,7 +37,10 @@ import matplotlib.pyplot as plt
 import visdom
 vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
-
+def cut_recorder(x):
+    if x.size()[0] > config.gan_recent_recorder:
+        x = x.narrow(0,x.size()[0]-config.gan_recent_recorder,x.size()[0])
+    return x
 class gan():
     """
     This thread runs gan training
@@ -98,9 +101,6 @@ class gan():
 
         '''print the models'''
         print(self.netD)
-        self.netG.deconv_layer_1.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
-        self.netG.deconv_layer_2.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
-        self.netG.deconv_layer_3.weight.data.copy_(self.netG.deconv_layer_0.weight.data)
         print(self.netG)
 
         # noise
@@ -112,9 +112,9 @@ class gan():
 
         '''dataset intialize'''
         if config.grid_type is '1d_fall':
-            self.dataset_image = torch.FloatTensor(np.zeros((1, 4, config.action_space)))
+            self.dataset_image = torch.FloatTensor(np.zeros((1, (config.state_depth+1), config.action_space)))
         else:
-            self.dataset_image = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
+            self.dataset_image = torch.FloatTensor(np.zeros((1, (config.state_depth+1), self.nc, self.imageSize, self.imageSize)))
 
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
@@ -136,10 +136,11 @@ class gan():
         self.last_save_image_time = 0
 
         self.target_errD = 0.001
-        self.target_mse_p = 0.2
+        self.target_mse_p = 0.01
         self.target_mse = 1.0
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
+        self.zero_state = torch.FloatTensor(self.batchSize,1,config.gan_aux_size).fill_(0.0).cuda()
 
     def train(self):
         """
@@ -184,15 +185,17 @@ class gan():
                 
                 # indexing aux
                 self.aux = torch.index_select(self.dataset_aux,0,indexs).cuda()
-                #############################################################################################
 
+                self.noise = self.noise.normal_(0, 1)
+
+                #############################################################################################
                 if config.using_r:
                     ################################## go through r #############################################
                     self.prediction_gt = self.netG( input_image = Variable( self.state_prediction_gt_raw.narrow(1,1,config.state_depth),
                                                                             volatile = True),
                                                     input_aux   = Variable( self.aux,
                                                                             volatile = True),
-                                                    input_noise = Variable( self.noise.normal_(0, 1),
+                                                    input_noise = Variable( self.noise,
                                                                             volatile = True)
                                                     ).narrow(1,config.state_depth-1,1).data
                     ##############################################################################################
@@ -205,7 +208,7 @@ class gan():
                                                                         volatile = True),
                                                 input_aux   = Variable( self.aux,
                                                                         volatile = True),
-                                                input_noise = Variable( self.noise.normal_(0, 1),
+                                                input_noise = Variable( self.noise,
                                                                         volatile = True)
                                                 ).narrow(1,config.state_depth,1).data
                 self.state_prediction = torch.cat([self.state, self.prediction], 1)
@@ -229,7 +232,7 @@ class gan():
                 errD_fake_v.backward(self.mone)
                 #####################################################
 
-                cur_errD = (errD_real_v - errD_fake_v).data.abs()
+                cur_errD = (errD_real_v - errD_fake_v).data
                 self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD.cpu()],0)
                 self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),25)
 
@@ -262,7 +265,7 @@ class gan():
 
             x =  self.netG( input_image = Variable( self.state),
                             input_aux   = Variable( self.aux),
-                            input_noise = Variable( self.noise.normal_(0, 1))
+                            input_noise = Variable( self.noise)
                             )
             self.stater_v = x.narrow(1,0,config.state_depth)
             self.prediction_v = x.narrow(1,config.state_depth,1)
@@ -270,17 +273,17 @@ class gan():
             loss_mse_v = self.mse_loss_model(self.stater_v, Variable(self.state))
             self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse_v.data.cpu()],0)
 
+            loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
+                                    input_aux   = Variable(self.aux)
+                                    ).mean(0).view(1)
+            self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
+
             if loss_mse_v.data.cpu().numpy()[0] > self.target_mse:
 
-                loss_g_mse_v = loss_mse_v
+                loss_g_mse_v = loss_g_v + loss_mse_v
                 self.recorder_loss_g_mse = torch.cat([self.recorder_loss_g_mse,torch.FloatTensor([1.0])],0)
 
             else:
-
-                loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
-                                        input_aux   = Variable(self.aux)
-                                        ).mean(0).view(1)
-                self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
 
                 loss_g_mse_v = loss_g_v
                 self.recorder_loss_g_mse = torch.cat([self.recorder_loss_g_mse,torch.FloatTensor([-1.0])],0)
@@ -308,12 +311,28 @@ class gan():
 
             if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
 
+                check_D_in = np.zeros((self.batchSize,1,config.gan_aux_size))
+                for ii in range(np.shape(check_D_in)[0]):
+                    check_D_in[ii,0,ii] = 1.0
+                check_D_in = torch.FloatTensor(check_D_in).cuda()
+                check_D_in = torch.cat([self.zero_state,check_D_in],1)
+
+                check_D_out =        self.netD( input_image = Variable( check_D_in),
+                                                input_aux   = Variable( self.aux)
+                                                ).data.squeeze(1).unsqueeze(0)
+                try:
+                    self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
+                except Exception, e:
+                    self.recorder_check_D_out = check_D_out
+                self.heatmap(self.recorder_check_D_out, 'recorder_check_D_out')
+
+
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
                 multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
 
                 self.prediction =  self.netG(   input_image = Variable( multiple_one_state),
                                                 input_aux   = Variable( self.aux),
-                                                input_noise = Variable( self.noise.normal_(0, 1))
+                                                input_noise = Variable( self.noise)
                                                 ).narrow(1,config.state_depth,1).data
 
                 def to_one_hot(x):
@@ -333,19 +352,19 @@ class gan():
                 self.prediction_gt = to_one_hot(self.prediction_gt)
 
                 try:
-                    self.recorder_prediction_gt_raw_heatmap = torch.cat([self.recorder_prediction_gt_raw_heatmap,self.prediction_gt_raw.mean(0)],0)
+                    self.recorder_prediction_gt_raw_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_raw_heatmap,self.prediction_gt_raw.mean(0)],0))
                 except Exception, e:
                     self.recorder_prediction_gt_raw_heatmap = self.prediction_gt_raw.mean(0)
                 self.heatmap(self.recorder_prediction_gt_raw_heatmap, 'recorder_prediction_gt_raw_heatmap')
                 
                 try:
-                    self.recorder_prediction_gt_heatmap = torch.cat([self.recorder_prediction_gt_heatmap,self.prediction_gt.mean(0)],0)
+                    self.recorder_prediction_gt_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_heatmap,self.prediction_gt.mean(0)],0))
                 except Exception, e:
                     self.recorder_prediction_gt_heatmap = self.prediction_gt.mean(0)
                 self.heatmap(self.recorder_prediction_gt_heatmap, 'recorder_prediction_gt_heatmap')
 
                 try:
-                    self.recorder_prediction_heatmap = torch.cat([self.recorder_prediction_heatmap,self.prediction.mean(0)],0)
+                    self.recorder_prediction_heatmap = cut_recorder(torch.cat([self.recorder_prediction_heatmap,self.prediction.mean(0)],0))
                 except Exception, e:
                     self.recorder_prediction_heatmap = self.prediction.mean(0)
                 self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
@@ -386,9 +405,9 @@ class gan():
         data = torch.FloatTensor(data)
 
         if config.grid_type is '1d_fall':
-            data_image = data[:,0:4,0,0,0:config.action_space]
+            data_image = data[:,(4-(config.state_depth+1)):4,0,0,0:config.action_space]
         else:
-            data_image = data[:,0:4,:,:,:]
+            data_image = data[:,(4-(config.state_depth+1)):4,:,:,:]
 
         data_aux = data[:,4:5,0:1,0:1,0:self.aux_size]
         data_aux = torch.squeeze(data_aux,1)
@@ -481,3 +500,8 @@ class gan():
         vis.heatmap(    x,
                         win=(name+'<'+config.lable+'>'),
                         opts=dict(title=(name+'<'+config.lable+'>')))
+    def surf(self, x, name):
+        x = x.cpu()
+        vis.surf(   x,
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(title=(name+'<'+config.lable+'>')))

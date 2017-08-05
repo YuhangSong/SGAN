@@ -8,7 +8,7 @@ class DCGAN_D(nn.Module):
     def __init__(self):
         super(DCGAN_D, self).__init__()
 
-        self.conv_layer = torch.nn.Linear(config.action_space*4, config.gan_nz)
+        self.conv_layer = torch.nn.Linear(config.action_space*(config.state_depth+1), config.gan_nz)
 
         self.cat_layer = torch.nn.Linear(config.gan_nz+config.gan_aux_size, 1)
 
@@ -32,20 +32,13 @@ class DCGAN_G(nn.Module):
     def __init__(self):
         super(DCGAN_G, self).__init__()
 
-        self.conv_layer     = torch.nn.Linear(3*config.action_space,                config.gan_nz)
+        self.conv_layer     = torch.nn.Linear(config.state_depth*config.action_space,                config.gan_nz)
 
         self.cat_layer      = torch.nn.Linear(config.gan_nz+2*config.gan_aux_size,  config.gan_nz)
 
-        self.deconv_layer_0   = torch.nn.Linear(config.gan_nz,                        config.action_space)
-        self.deconv_layer_1   = torch.nn.Linear(config.gan_nz,                        config.action_space)
-        self.deconv_layer_2   = torch.nn.Linear(config.gan_nz,                        config.action_space)
-        self.deconv_layer_3   = torch.nn.Linear(config.gan_nz,                        config.action_space)
-
-        self.deconv_layer_0.add_module('final.tanh_gd',nn.Tanh())
-        self.deconv_layer_1.add_module('final.tanh_gd',nn.Tanh())
-        self.deconv_layer_2.add_module('final.tanh_gd',nn.Tanh())
-        self.deconv_layer_3.add_module('final.tanh_gd',nn.Tanh())
-
+        self.deconv_layer   = torch.nn.Linear(config.gan_nz,                        (config.state_depth+1)*config.action_space)
+        self.deconv_layer.add_module(   'final.tanh_gd',
+                                        nn.Tanh())
 
     def forward(self, input_image, input_aux, input_noise):
         input_image = input_image.contiguous()
@@ -59,19 +52,11 @@ class DCGAN_G(nn.Module):
                                                 torch.cat([encoded,input_aux,input_noise],1),
                                                 config.gan_ngpu)
 
-        x_0       = nn.parallel.data_parallel(  self.deconv_layer_0, 
+        x       = nn.parallel.data_parallel(    self.deconv_layer, 
                                                 x, 
-                                                config.gan_ngpu).unsqueeze(1)
-        x_1       = nn.parallel.data_parallel(  self.deconv_layer_1, 
-                                                x, 
-                                                config.gan_ngpu).unsqueeze(1)
-        x_2       = nn.parallel.data_parallel(  self.deconv_layer_2, 
-                                                x, 
-                                                config.gan_ngpu).unsqueeze(1)
-        x_3       = nn.parallel.data_parallel(  self.deconv_layer_3, 
-                                                x, 
-                                                config.gan_ngpu).unsqueeze(1)
-        x = torch.cat([x_0,x_1,x_2,x_3],1)
+                                                config.gan_ngpu)
+
+        x = x.view(x.size()[0],(config.state_depth+1),config.action_space)
 
         return x
 
