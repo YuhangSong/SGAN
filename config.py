@@ -2,8 +2,8 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 4
-lable = '1d_fall_r_a'
+t = 5
+lable = '1d_fall_r_a_param'
 sess = 'grl1'
 port = 10300
 
