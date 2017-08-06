@@ -60,7 +60,7 @@ class gan():
         self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.DCiters_ = 5
+        self.DCiters_ = 6
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
@@ -137,7 +137,7 @@ class gan():
         self.last_save_image_time = 0
 
         self.target_errD = 0.01
-        self.target_mse_p = 0.01
+        self.target_mse_p = 0.001
         self.target_mse = 1.0
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -160,10 +160,11 @@ class gan():
             for p in self.netD.parameters():
                 p.requires_grad = True
 
-            if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
-                DCiters = 100
-            else:
-                DCiters = self.DCiters_
+            # if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
+            #     DCiters = 100
+            # else:
+            #     DCiters = self.DCiters_
+            DCiters = self.DCiters_
 
             j = 0
             while j < DCiters:
@@ -232,7 +233,7 @@ class gan():
 
                 cur_errD = (errD_fake_v - errD_real_v).data
                 self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD.cpu()],0)
-                self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),25)
+                self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),65)
 
                 self.optimizerD.step()
                 ##############################################################################################

@@ -2,10 +2,10 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 3
+t = 4
 lable = '1d_fall_r_a'
 sess = 'grl1'
-port = 10200
+port = 10300
 
 '''model'''
 gan_size = 128
