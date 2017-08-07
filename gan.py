@@ -137,9 +137,9 @@ class gan():
         self.last_save_image_time = 0
 
         '''config'''
-        self.target_errD = 0.01
+        self.target_errD = 0.0
 
-        self.baseline_mse = 0.1
+        self.baseline_mse = 0.04
         self.target_mse_p = 0.001
         '''end'''
 

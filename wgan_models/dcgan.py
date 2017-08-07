@@ -36,9 +36,11 @@ class DCGAN_G(nn.Module):
 
         self.cat_layer      = torch.nn.Linear(config.gan_nz+2*config.gan_aux_size,  config.gan_nz)
 
-        self.deconv_layer   = torch.nn.Linear(config.gan_nz,                        (config.state_depth+1)*config.action_space)
-        self.deconv_layer.add_module(   'final.tanh_gd',
-                                        nn.Tanh())
+        self.deconv_layer   = nn.Sequential()
+        self.deconv_layer.add_module(   'deconv.Linear',
+                                        nn.Linear(config.gan_nz,(config.state_depth+1)*config.action_space))
+        self.deconv_layer.add_module(   'final.Sigmoid',
+                                        nn.Sigmoid())
 
     def forward(self, input_image, input_aux, input_noise):
         input_image = input_image.contiguous()
