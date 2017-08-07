@@ -2,8 +2,8 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 5
-lable = 'test_memory'
+t = 2
+lable = '1d_fall_r_a_or_iter_baseline_mse'
 sess = 'grl1'
 port = 10300
 
@@ -40,7 +40,7 @@ grid_size = 8
 '''behaviour'''
 gan_worker_com_internal = 10
 gan_save_image_internal = 60*1
-gan_dataset_limit = 1024 * 2
+gan_dataset_limit = 1024
 gan_dataset_full_no_update = True
 gan_recent_dataset = 10
 gan_recent_recorder = 20

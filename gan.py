@@ -136,9 +136,14 @@ class gan():
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
-        self.target_errD = 0.0
+        '''config'''
+        self.target_errD = 0.01
+
+        self.baseline_mse = 0.1
         self.target_mse_p = 0.001
-        self.target_mse = 1.0
+        '''end'''
+
+        self.target_mse = self.baseline_mse
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
         self.zero_state = torch.FloatTensor(self.batchSize,1,config.gan_aux_size).fill_(0.0).cuda()
@@ -232,7 +237,7 @@ class gan():
 
                 cur_errD = (errD_fake_v - errD_real_v).data
                 self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD.cpu()],0)
-                self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),65)
+                self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),1)
 
                 self.optimizerD.step()
                 ##############################################################################################
@@ -244,17 +249,17 @@ class gan():
                 else:
                     self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
             else:
-                self.target_mse = 1.0
+                self.target_mse = self.baseline_mse
 
             if config.using_a:
-                if self.target_mse > 1.0:
+                if self.target_mse > self.baseline_mse:
                     self.updata_a = True
                 else:
                     self.updata_a = False
             else:
                 self.updata_a = False
 
-            self.target_mse = np.clip(self.target_mse,0.0,1.0)
+            self.target_mse = np.clip(self.target_mse,0.0,self.baseline_mse)
             self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
             ##############################################################################################
 
@@ -304,7 +309,6 @@ class gan():
                     self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
 
             loss_g_final_v.backward(self.one)
-            self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
 
             self.optimizerG.step()
             ########################################################################################################
@@ -336,11 +340,11 @@ class gan():
                 check_D_out =        self.netD( input_image = Variable( check_D_in),
                                                 input_aux   = Variable( self.aux)
                                                 ).data.squeeze(1).unsqueeze(0)
-                # try:
-                #     self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
-                # except Exception, e:
-                #     self.recorder_check_D_out = check_D_out
-                # self.heatmap(self.recorder_check_D_out, 'recorder_check_D_out')
+                try:
+                    self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
+                except Exception, e:
+                    self.recorder_check_D_out = check_D_out
+                self.heatmap(self.recorder_check_D_out, 'recorder_check_D_out')
 
 
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
@@ -367,23 +371,23 @@ class gan():
                 self.prediction_gt_raw = to_one_hot(self.prediction_gt_raw)
                 self.prediction_gt = to_one_hot(self.prediction_gt)
 
-                # try:
-                #     self.recorder_prediction_gt_raw_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_raw_heatmap,self.prediction_gt_raw.mean(0)],0))
-                # except Exception, e:
-                #     self.recorder_prediction_gt_raw_heatmap = self.prediction_gt_raw.mean(0)
-                # self.heatmap(self.recorder_prediction_gt_raw_heatmap, 'recorder_prediction_gt_raw_heatmap')
+                try:
+                    self.recorder_prediction_gt_raw_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_raw_heatmap,self.prediction_gt_raw.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_gt_raw_heatmap = self.prediction_gt_raw.mean(0)
+                self.heatmap(self.recorder_prediction_gt_raw_heatmap, 'recorder_prediction_gt_raw_heatmap')
                 
-                # try:
-                #     self.recorder_prediction_gt_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_heatmap,self.prediction_gt.mean(0)],0))
-                # except Exception, e:
-                #     self.recorder_prediction_gt_heatmap = self.prediction_gt.mean(0)
-                # self.heatmap(self.recorder_prediction_gt_heatmap, 'recorder_prediction_gt_heatmap')
+                try:
+                    self.recorder_prediction_gt_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_heatmap,self.prediction_gt.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_gt_heatmap = self.prediction_gt.mean(0)
+                self.heatmap(self.recorder_prediction_gt_heatmap, 'recorder_prediction_gt_heatmap')
 
-                # try:
-                #     self.recorder_prediction_heatmap = cut_recorder(torch.cat([self.recorder_prediction_heatmap,self.prediction.mean(0)],0))
-                # except Exception, e:
-                #     self.recorder_prediction_heatmap = self.prediction.mean(0)
-                # self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
+                try:
+                    self.recorder_prediction_heatmap = cut_recorder(torch.cat([self.recorder_prediction_heatmap,self.prediction.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_heatmap = self.prediction.mean(0)
+                self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
 
                 self.line(self.recorder_cur_errD,'recorder_cur_errD')
                 self.line(torch.FloatTensor(self.recorder_cur_errD_mid_numpy),'recorder_cur_errD_mid_numpy')
@@ -511,6 +515,7 @@ class gan():
         temp, = plt.plot(x.numpy(),alpha=0.5,label=(name+'<'+config.lable+'>'))
         plt.legend(handles=[temp])
         plt.savefig(self.experiment+'/'+(name+'<'+config.lable+'>')+'.jpg')
+        plt.close('all')
 
     def heatmap(self, x, name):
         x = x.permute(1,0)
