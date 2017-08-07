@@ -39,8 +39,8 @@ class DCGAN_G(nn.Module):
         self.deconv_layer   = nn.Sequential()
         self.deconv_layer.add_module(   'deconv.Linear',
                                         nn.Linear(config.gan_nz,(config.state_depth+1)*config.action_space))
-        self.deconv_layer.add_module(   'final.Sigmoid',
-                                        nn.Sigmoid())
+        self.deconv_layer.add_module(   'final.Tanh',
+                                        nn.Tanh())
 
     def forward(self, input_image, input_aux, input_noise):
         input_image = input_image.contiguous()
