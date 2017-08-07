@@ -137,13 +137,8 @@ class gan():
         self.last_save_image_time = 0
 
         '''config'''
-        self.target_errD = 0.01
-
-        self.baseline_mse = 0.25
-        self.target_mse_p = 0.01
+        self.target_errD = 0.0
         '''end'''
-
-        self.target_mse = self.baseline_mse
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
         self.zero_state = torch.FloatTensor(self.batchSize,1,config.gan_aux_size).fill_(0.0).cuda()
@@ -245,22 +240,11 @@ class gan():
             ######################################## control target mse #################################
             if config.using_r:
                 if self.recorder_cur_errD_mid_numpy[-1] < self.target_errD:
-                    self.target_mse = self.target_mse - self.target_mse * self.target_mse_p
+                    self.update = 'r'
                 else:
-                    self.target_mse = self.target_mse + self.target_mse * self.target_mse_p
+                    self.update = 'g'
             else:
-                self.target_mse = self.baseline_mse
-
-            if config.using_a:
-                if self.target_mse > self.baseline_mse:
-                    self.updata_a = True
-                else:
-                    self.updata_a = False
-            else:
-                self.updata_a = False
-
-            self.target_mse = np.clip(self.target_mse,0.0,self.baseline_mse)
-            self.recorder_target_mse = torch.cat([self.recorder_target_mse,torch.FloatTensor([self.target_mse])],0)
+                self.update = 'g'
             ##############################################################################################
 
             ########################################################################################################
@@ -283,30 +267,21 @@ class gan():
             self.stater_v = x.narrow(1,0,config.state_depth)
             self.prediction_v = x.narrow(1,config.state_depth,1)
 
-            if self.updata_a:
-                loss_a_v = self.mse_loss_model(self.prediction_gt_v, Variable(self.prediction_v.data))
-                self.recorder_loss_a = torch.cat([self.recorder_loss_a,loss_a_v.data.cpu()],0)
-
-                loss_g_final_v = loss_a_v
-                self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([1.0])],0)
-
-            else:
+            if self.update is 'r':
                 loss_mse_v = self.mse_loss_model(self.stater_v, Variable(self.state))
                 self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse_v.data.cpu()],0)
 
-                if loss_mse_v.data.cpu().numpy()[0] > self.target_mse:
-                    
-                    loss_g_final_v = loss_mse_v
-                    self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([0.0])],0)
+                loss_g_final_v = loss_mse_v
+                self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([0.0])],0)
 
-                else:
-                    loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
-                                            input_aux   = Variable(self.aux)
-                                            ).mean(0).view(1)
-                    self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
+            elif self.update is 'g':
+                loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
+                                        input_aux   = Variable(self.aux)
+                                        ).mean(0).view(1)
+                self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
 
-                    loss_g_final_v = loss_g_v
-                    self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
+                loss_g_final_v = loss_g_v
+                self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
 
             loss_g_final_v.backward(self.one)
 
@@ -343,8 +318,8 @@ class gan():
                 try:
                     self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
                 except Exception, e:
-                    self.recorder_check_D_out = check_D_out
-                self.heatmap(self.recorder_check_D_out, 'recorder_check_D_out')
+                    self.recorder_check_D_out = cut_recorder(torch.cat([check_D_out]*2,0))
+                self.surf(self.recorder_check_D_out, 'recorder_check_D_out')
 
 
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
@@ -391,11 +366,8 @@ class gan():
 
                 self.line(self.recorder_cur_errD,'recorder_cur_errD')
                 self.line(torch.FloatTensor(self.recorder_cur_errD_mid_numpy),'recorder_cur_errD_mid_numpy')
-                self.line(self.recorder_target_mse,'recorder_target_mse')
                 
                 self.line(self.recorder_loss_mse,'recorder_loss_mse')
-
-                self.line(self.recorder_loss_a,'recorder_loss_a')
 
                 self.line(self.recorder_loss_g,'recorder_loss_g')
 
@@ -525,6 +497,8 @@ class gan():
                         opts=dict(title=(name+'<'+config.lable+'>')))
     def surf(self, x, name):
         x = x.cpu()
+        x = x.numpy().astype(float)
+        x = torch.from_numpy(x)
         vis.surf(   x,
                     win=(name+'<'+config.lable+'>'),
                     opts=dict(title=(name+'<'+config.lable+'>')))

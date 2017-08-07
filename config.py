@@ -2,10 +2,10 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 9
-lable = 'try_sigmoid_errD_0'
-sess = 'grl1'
-port = 10300
+t = 1
+lable = 'dir_control'
+sess = 'grl2'
+port = 10500
 
 '''model'''
 gan_size = 128
@@ -50,7 +50,7 @@ using_a = True
 
 '''debug'''
 gan_recent_dataset = 64
-gan_worker_com_internal = 1
+gan_worker_com_internal = 5
 gan_save_image_internal = 0.0
 
 
