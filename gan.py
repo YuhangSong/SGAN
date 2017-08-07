@@ -145,7 +145,7 @@ class gan():
 
         self.target_mse = self.baseline_mse
 
-        self.mse_loss_model = torch.nn.MSELoss(size_average=True)
+        self.mse_loss_model = torch.nn.KLDivLoss(size_average=True)
         self.zero_state = torch.FloatTensor(self.batchSize,1,config.gan_aux_size).fill_(0.0).cuda()
 
     def train(self):
@@ -284,18 +284,18 @@ class gan():
             self.prediction_v = x.narrow(1,config.state_depth,1)
 
             if self.updata_a:
-                loss_a_v = self.mse_loss_model(self.prediction_gt_v, Variable(self.prediction_v.data))
+                loss_a_v = self.mse_loss_model(input=self.prediction_gt_v, target=Variable(self.prediction_v.data))
                 self.recorder_loss_a = torch.cat([self.recorder_loss_a,loss_a_v.data.cpu()],0)
 
                 loss_g_final_v = loss_a_v
                 self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([1.0])],0)
 
             else:
-                loss_mse_v = self.mse_loss_model(self.stater_v, Variable(self.state))
+                loss_mse_v = self.mse_loss_model(input=self.stater_v, target=Variable(self.state))
                 self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse_v.data.cpu()],0)
 
                 if loss_mse_v.data.cpu().numpy()[0] > self.target_mse:
-                    
+
                     loss_g_final_v = loss_mse_v
                     self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([0.0])],0)
 
