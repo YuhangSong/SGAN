@@ -105,6 +105,9 @@ class gan():
 
         # noise
         self.noise = torch.FloatTensor(self.batchSize, self.aux_size).cuda()
+        self.alpha = torch.FloatTensor(self.batchSize).cuda()
+        self.alpha_multi_image_ones = torch.FloatTensor(self.batchSize, (config.state_depth+1), config.action_space).fill_(1.0).cuda()
+        self.slopes_multi_ones = torch.FloatTensor(self.batchSize).fill_(1.0).cuda()
 
         # constent
         self.one = torch.FloatTensor([1]).cuda()
@@ -119,7 +122,7 @@ class gan():
         self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
 
         '''recorders'''
-        self.recorder_cur_errD = torch.FloatTensor([0])
+        self.recorder_cur_errD_rf = torch.FloatTensor([0])
         self.recorder_target_mse = torch.FloatTensor([0])
         self.recorder_loss_mse = torch.FloatTensor([0])
         self.recorder_loss_a = torch.FloatTensor([0])
@@ -138,6 +141,7 @@ class gan():
 
         '''config'''
         self.target_errD = 0.0
+        self.LAMBDA = 10
         '''end'''
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -171,8 +175,8 @@ class gan():
                 j += 1
 
                 # clamp parameters to a cube
-                for p in self.netD.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+                # for p in self.netD.parameters():
+                #     p.data.clamp_(self.clamp_lower, self.clamp_upper)
 
                 ################################## load a trained batch #####################################
                 # generate indexs
@@ -191,11 +195,13 @@ class gan():
                 #############################################################################################
                 if config.using_r:
                     ################################## go through r #############################################
-                    self.prediction_gt_v = self.netG(   input_image = Variable( self.state_prediction_gt_raw.narrow(1,1,config.state_depth)),
-                                                        input_aux   = Variable( self.aux),
-                                                        input_noise = Variable( self.noise)
-                                                        ).narrow(1,config.state_depth-1,1)
-                    self.prediction_gt = self.prediction_gt_v.data
+                    self.prediction_gt = self.netG(   input_image = Variable( self.state_prediction_gt_raw.narrow(1,1,config.state_depth),
+                                                                                volatile=True),
+                                                        input_aux   = Variable( self.aux,
+                                                                                volatile=True),
+                                                        input_noise = Variable( self.noise,
+                                                                                volatile=True)
+                                                        ).narrow(1,config.state_depth-1,1).data
                     ##############################################################################################
                 else:
                     self.prediction_gt = self.prediction_gt_raw
@@ -211,35 +217,61 @@ class gan():
                                                 ).narrow(1,config.state_depth,1).data
                 self.state_prediction = torch.cat([self.state, self.prediction], 1)
                 ##############################################################################################
-                    
 
                 ######################################## train D #############################################
-                self.netD.zero_grad()
 
                 ################# train D with real #################
-                errD_real_v =        self.netD( input_image = Variable( self.state_prediction_gt),
-                                                input_aux   = Variable( self.aux)
+                errD_real_v =        self.netD( input_image = Variable(self.state_prediction_gt),
+                                                input_aux   = Variable(self.aux)
                                                 ).mean(0).view(1)
-                errD_real_v.backward(self.one)
                 #####################################################
 
                 ################# train D with fake #################
-                errD_fake_v =        self.netD( input_image = Variable( self.state_prediction),
-                                                input_aux   = Variable( self.aux)
+                errD_fake_v =        self.netD( input_image = Variable(self.state_prediction),
+                                                input_aux   = Variable(self.aux)
                                                 ).mean(0).view(1)
-                errD_fake_v.backward(self.mone)
                 #####################################################
 
-                cur_errD = (errD_fake_v - errD_real_v).data
-                self.recorder_cur_errD = torch.cat([self.recorder_cur_errD,cur_errD.cpu()],0)
-                self.recorder_cur_errD_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD.numpy(),1)
+                ################# train D with gp ###################
+                self.alpha = self.alpha.uniform_(0, 1)
+                alpha_multi_image = self.alpha.unsqueeze(1).unsqueeze(2).repeat(1,(config.state_depth+1),config.action_space)
 
+                self.interpolates_image = ((self.alpha_multi_image_ones-alpha_multi_image) * self.state_prediction_gt) + (alpha_multi_image * self.state_prediction)
+
+                interpolates_image_v = Variable(self.interpolates_image,
+                                                requires_grad=True)
+
+                interpolates_aux_v = Variable(  self.aux,
+                                                requires_grad=True)
+
+                errD_interpolates_v =        self.netD( input_image = interpolates_image_v,
+                                                        input_aux   = interpolates_aux_v
+                                                        ).mean(0).view(1)
+                self.netD.zero_grad()
+                errD_interpolates_v.backward(self.one)
+                interpolates_image_v.grad.volatile = False
+                interpolates_aux_v.grad.volatile = False
+
+                slopes_image = interpolates_image_v.grad.pow(2).sum(2).squeeze(2).sum(1).squeeze(1).sqrt()
+                slopes_aux = interpolates_aux_v.grad.pow(2).sum(1).squeeze(1).sqrt()
+                slopes = slopes_image + slopes_aux
+                gradient_penalty = (slopes- Variable(self.slopes_multi_ones)).pow(2).mean(0).squeeze(0)
+                #####################################################
+
+                errD_final = errD_real_v - errD_fake_v + self.LAMBDA*gradient_penalty
+
+                self.netD.zero_grad()
+                errD_final.backward(self.one)
                 self.optimizerD.step()
+
+                cur_errD_rf = (errD_fake_v - errD_real_v).data
+                self.recorder_cur_errD_rf = torch.cat([self.recorder_cur_errD_rf,cur_errD_rf.cpu()],0)
+                self.recorder_cur_errD_rf_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD_rf.numpy(),1)
                 ##############################################################################################
 
             ######################################## control target mse #################################
             if config.using_r:
-                if self.recorder_cur_errD_mid_numpy[-1] < self.target_errD:
+                if self.recorder_cur_errD_rf_mid_numpy[-1] < self.target_errD:
                     self.update = 'r'
                 else:
                     self.update = 'g'
@@ -312,8 +344,10 @@ class gan():
                 check_D_in = torch.FloatTensor(check_D_in).cuda()
                 check_D_in = torch.cat([self.zero_state,check_D_in],1)
 
-                check_D_out =        self.netD( input_image = Variable( check_D_in),
-                                                input_aux   = Variable( self.aux)
+                check_D_out =        self.netD( input_image = Variable( check_D_in,
+                                                                        volatile=True),
+                                                input_aux   = Variable( self.aux,
+                                                                        volatile=True)
                                                 ).data.squeeze(1).unsqueeze(0)
                 try:
                     self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
@@ -325,9 +359,12 @@ class gan():
                 multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
                 multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
 
-                self.prediction =  self.netG(   input_image = Variable( multiple_one_state),
-                                                input_aux   = Variable( self.aux),
-                                                input_noise = Variable( self.noise)
+                self.prediction =  self.netG(   input_image = Variable( multiple_one_state,
+                                                                        volatile=True),
+                                                input_aux   = Variable( self.aux,
+                                                                        volatile=True),
+                                                input_noise = Variable( self.noise,
+                                                                        volatile=True)
                                                 ).narrow(1,config.state_depth,1).data
 
                 def to_one_hot(x):
@@ -364,8 +401,8 @@ class gan():
                     self.recorder_prediction_heatmap = self.prediction.mean(0)
                 self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
 
-                self.line(self.recorder_cur_errD,'recorder_cur_errD')
-                self.line(torch.FloatTensor(self.recorder_cur_errD_mid_numpy),'recorder_cur_errD_mid_numpy')
+                self.line(self.recorder_cur_errD_rf,'recorder_cur_errD_rf')
+                self.line(torch.FloatTensor(self.recorder_cur_errD_rf_mid_numpy),'recorder_cur_errD_rf_mid_numpy')
                 
                 self.line(self.recorder_loss_mse,'recorder_loss_mse')
 

@@ -3,7 +3,7 @@ gan_ngpu = range(2)
 
 '''expperiment'''
 t = 1
-lable = 'dir_control'
+lable = 'pn_d'
 sess = 'grl2'
 port = 10500
 
@@ -44,8 +44,7 @@ gan_dataset_limit = 1024
 gan_dataset_full_no_update = True
 gan_recent_dataset = 10
 gan_recent_recorder = 20
-using_r = True
-using_a = True
+using_r = False
 
 
 '''debug'''
