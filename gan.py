@@ -137,10 +137,10 @@ class gan():
         self.last_save_image_time = 0
 
         '''config'''
-        self.target_errD = 0.0
+        self.target_errD = 0.01
 
-        self.baseline_mse = 0.04
-        self.target_mse_p = 0.001
+        self.baseline_mse = 0.25
+        self.target_mse_p = 0.01
         '''end'''
 
         self.target_mse = self.baseline_mse
@@ -283,18 +283,11 @@ class gan():
             self.stater_v = x.narrow(1,0,config.state_depth)
             self.prediction_v = x.narrow(1,config.state_depth,1)
 
-            loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
-                                    input_aux   = Variable(self.aux)
-                                    ).mean(0).view(1)
-            self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
-
-            loss_g_final_v = loss_g_v
-
             if self.updata_a:
                 loss_a_v = self.mse_loss_model(self.prediction_gt_v, Variable(self.prediction_v.data))
                 self.recorder_loss_a = torch.cat([self.recorder_loss_a,loss_a_v.data.cpu()],0)
 
-                loss_g_final_v = loss_g_final_v + loss_a_v
+                loss_g_final_v = loss_a_v
                 self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([1.0])],0)
 
             else:
@@ -302,10 +295,17 @@ class gan():
                 self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse_v.data.cpu()],0)
 
                 if loss_mse_v.data.cpu().numpy()[0] > self.target_mse:
-                    loss_g_final_v = loss_g_final_v + loss_mse_v
+                    
+                    loss_g_final_v = loss_mse_v
                     self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([0.0])],0)
 
                 else:
+                    loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
+                                            input_aux   = Variable(self.aux)
+                                            ).mean(0).view(1)
+                    self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
+
+                    loss_g_final_v = loss_g_v
                     self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
 
             loss_g_final_v.backward(self.one)

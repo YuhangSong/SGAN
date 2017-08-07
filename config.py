@@ -2,7 +2,7 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 3
+t = 9
 lable = 'try_sigmoid_errD_0'
 sess = 'grl1'
 port = 10300
