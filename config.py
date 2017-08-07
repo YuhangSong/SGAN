@@ -1,9 +1,9 @@
 '''machine'''
-gan_ngpu = range(2)
+gan_ngpu = range(4)
 
 '''expperiment'''
-t = 3
-lable = 'try_sigmoid_errD_0'
+t = 4
+lable = 'baseline_new'
 sess = 'grl1'
 port = 10300
 
@@ -44,13 +44,13 @@ gan_dataset_limit = 1024
 gan_dataset_full_no_update = True
 gan_recent_dataset = 10
 gan_recent_recorder = 20
-using_r = True
-using_a = True
+using_r = False
+using_a = False
 
 
 '''debug'''
 gan_recent_dataset = 64
-gan_worker_com_internal = 1
+gan_worker_com_internal = 5
 gan_save_image_internal = 0.0
 
 
