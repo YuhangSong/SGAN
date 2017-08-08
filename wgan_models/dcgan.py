@@ -8,22 +8,52 @@ class DCGAN_D(nn.Module):
     def __init__(self):
         super(DCGAN_D, self).__init__()
 
-        self.conv_layer = torch.nn.Linear(config.action_space*(config.state_depth+1), config.gan_nz)
+        conv_layer = nn.Sequential(
+            nn.Linear(config.action_space*(config.state_depth+1), config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+        )
+        self.conv_layer = conv_layer
 
-        self.cat_layer = torch.nn.Linear(config.gan_nz+config.gan_aux_size, 1)
+        cat_layer = nn.Sequential(
+            nn.Linear(config.gan_nz+config.gan_aux_size, config.gan_nz),
+        )
+        self.cat_layer = cat_layer
+
+        final_layer = nn.Sequential(
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, 1),
+        )
+        self.final_layer = final_layer
 
     def forward(self, input_image, input_aux):
 
         input_image = input_image.contiguous()
         input_image = input_image.view(input_image.size()[0],-1)
 
-        encoded = nn.parallel.data_parallel(    self.conv_layer, 
-                                                input_image,
-                                                config.gan_ngpu)
+        encoded = nn.parallel.data_parallel(
+                    self.conv_layer, 
+                    input_image,
+                    config.gan_ngpu)
 
-        x = nn.parallel.data_parallel(          self.cat_layer,
-                                                torch.cat([encoded,input_aux],1),
-                                                config.gan_ngpu)
+        x = nn.parallel.data_parallel(
+                self.cat_layer,
+                torch.cat([encoded,input_aux],1),
+                config.gan_ngpu)
+
+        x = nn.parallel.data_parallel(
+                self.final_layer,
+                x,
+                config.gan_ngpu)
 
         return x
 
@@ -32,31 +62,51 @@ class DCGAN_G(nn.Module):
     def __init__(self):
         super(DCGAN_G, self).__init__()
 
-        self.conv_layer     = torch.nn.Linear(config.state_depth*config.action_space,                config.gan_nz)
+        conv_layer = nn.Sequential(
+            nn.Linear(config.state_depth*config.action_space, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+        )
+        self.conv_layer = conv_layer
 
-        self.cat_layer      = torch.nn.Linear(config.gan_nz+2*config.gan_aux_size,  config.gan_nz)
+        cat_layer = nn.Sequential(
+            nn.Linear(config.gan_nz+2*config.gan_aux_size, config.gan_nz),
+        )
+        self.cat_layer = cat_layer
 
-        self.deconv_layer   = nn.Sequential()
-        self.deconv_layer.add_module(   'deconv.Linear',
-                                        nn.Linear(config.gan_nz,(config.state_depth+1)*config.action_space))
-        self.deconv_layer.add_module(   'final.Sigmoid',
-                                        nn.Sigmoid())
+        deconv_layer = nn.Sequential(
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, config.gan_nz),
+            nn.ReLU(True),
+            nn.Linear(config.gan_nz, (config.state_depth+1)*config.action_space),
+        )
+        self.deconv_layer = deconv_layer
 
     def forward(self, input_image, input_aux, input_noise):
         input_image = input_image.contiguous()
         input_image = input_image.view(input_image.size()[0],-1)
 
-        encoded = nn.parallel.data_parallel(    self.conv_layer, 
-                                                input_image, 
-                                                config.gan_ngpu)
+        encoded = nn.parallel.data_parallel(
+                    self.conv_layer, 
+                    input_image, 
+                    config.gan_ngpu)
 
-        x       = nn.parallel.data_parallel(    self.cat_layer,
-                                                torch.cat([encoded,input_aux,input_noise],1),
-                                                config.gan_ngpu)
+        x = nn.parallel.data_parallel(
+                self.cat_layer,
+                torch.cat([encoded,input_aux,input_noise],1),
+                config.gan_ngpu)
 
-        x       = nn.parallel.data_parallel(    self.deconv_layer, 
-                                                x, 
-                                                config.gan_ngpu)
+        x = nn.parallel.data_parallel(
+                self.deconv_layer, 
+                x, 
+                config.gan_ngpu)
 
         x = x.view(x.size()[0],(config.state_depth+1),config.action_space)
 

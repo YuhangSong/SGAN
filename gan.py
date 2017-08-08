@@ -1,6 +1,9 @@
 from __future__ import print_function
 import torch
+import torch.autograd as autograd
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
@@ -37,10 +40,40 @@ import matplotlib.pyplot as plt
 import visdom
 vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
+
+LAMBDA = .1
+
 def cut_recorder(x):
     if x.size()[0] > config.gan_recent_recorder:
         x = x.narrow(0,x.size()[0]-config.gan_recent_recorder,x.size()[0])
     return x
+def calc_gradient_penalty(netD, real_data, fake_data, aux):
+    alpha = torch.rand(BATCH_SIZE, 1)
+    alpha = alpha.expand(real_data.size())
+    alpha = alpha.cuda()
+
+    print(alpha)
+    print(real_data)
+    print(fake_data)
+    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+    print(interpolates)
+    print(r)
+
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
+
+    disc_interpolates = netD(  
+                            input_image = interpolates,
+                            input_aux   = aux
+                            ).mean(0).view(1)
+
+    gradients = autograd.grad(
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+    return gradient_penalty
 class gan():
     """
     This thread runs gan training
@@ -60,7 +93,6 @@ class gan():
         self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.DCiters_ = 5
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
@@ -132,16 +164,17 @@ class gan():
         self.indexs_selector = torch.LongTensor(self.batchSize)
 
         '''create optimizer'''
-        self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
-        self.optimizerG = optim.RMSprop(self.netG.parameters(), lr = self.lrG)
+        self.optimizerD = optim.Adam(self.netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+        self.optimizerG = optim.Adam(self.netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
 
         self.iteration_i = 0
         self.last_save_model_time = 0
         self.last_save_image_time = 0
 
         '''config'''
+        self.DCiters_ = 5
+        self.mid_filter_kernel = 1
         self.target_errD = 0.0
-        self.LAMBDA = 10
         '''end'''
 
         self.mse_loss_model = torch.nn.MSELoss(size_average=True)
@@ -164,10 +197,7 @@ class gan():
             for p in self.netD.parameters():
                 p.requires_grad = True
 
-            if (self.iteration_i < 25) or (self.iteration_i % 500 == 0):
-                DCiters = 100
-            else:
-                DCiters = self.DCiters_
+            DCiters = self.DCiters_
 
             j = 0
             while j < DCiters:
@@ -215,59 +245,38 @@ class gan():
                 ##############################################################################################
 
                 ######################################## train D #############################################
-
+                self.netD.zero_grad()
                 ################# train D with real #################
                 errD_real_v =        self.netD( input_image = Variable(self.state_prediction_gt),
                                                 input_aux   = Variable(self.aux)
                                                 ).mean(0).view(1)
+                errD_real_v.backward(self.mone)
                 #####################################################
 
                 ################# train D with fake #################
                 errD_fake_v =        self.netD( input_image = Variable(self.state_prediction),
                                                 input_aux   = Variable(self.aux)
                                                 ).mean(0).view(1)
+                errD_fake_v.backward(self.one)
                 #####################################################
 
                 ################# train D with gp ###################
-                self.alpha = self.alpha.uniform_(0, 1)
-                alpha_multi_image = self.alpha.unsqueeze(1).unsqueeze(2).repeat(1,(config.state_depth+1),config.action_space)
-
-                self.interpolates_image = ((self.alpha_multi_image_ones-alpha_multi_image) * self.state_prediction_gt) + (alpha_multi_image * self.state_prediction)
-
-                interpolates_image_v = Variable(self.interpolates_image,
-                                                requires_grad=True)
-
-                interpolates_aux_v = Variable(  self.aux,
-                                                requires_grad=True)
-
-                errD_interpolates_v =        self.netD( input_image = interpolates_image_v,
-                                                        input_aux   = interpolates_aux_v
-                                                        ).mean(0).view(1)
-                self.netD.zero_grad()
-                errD_interpolates_v.backward(self.one)
-                interpolates_image_v.grad.volatile = False
-                interpolates_aux_v.grad.volatile = False
-
-                slopes_image = interpolates_image_v.grad.pow(2).sum(2).squeeze(2).sum(1).squeeze(1).sqrt()
-                slopes_aux = interpolates_aux_v.grad.pow(2).sum(1).squeeze(1).sqrt()
-                slopes = slopes_image + slopes_aux
-                gradient_penalty = (slopes- Variable(self.slopes_multi_ones)).pow(2).mean(0).squeeze(0)
+                # train with gradient penalty
+                gradient_penalty = calc_gradient_penalty(
+                                    netD = netD,
+                                    real_data = self.state_prediction_gt,
+                                    fake_data = self.state_prediction)
+                gradient_penalty.backward()
                 #####################################################
-
-                errD_final = errD_real_v - errD_fake_v + self.LAMBDA*gradient_penalty
-
-                self.netD.zero_grad()
-                errD_final.backward(self.one)
                 self.optimizerD.step()
-
-                cur_errD_rf = (errD_fake_v - errD_real_v).data
-                self.recorder_cur_errD_rf = torch.cat([self.recorder_cur_errD_rf,cur_errD_rf.cpu()],0)
-                self.recorder_cur_errD_rf_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD_rf.numpy(),1)
                 ##############################################################################################
 
             ######################################## control target mse #################################
+            cur_errD_rf = (errD_fake_v - errD_real_v).data
+            self.recorder_cur_errD_rf = torch.cat([self.recorder_cur_errD_rf,cur_errD_rf.cpu()],0)
+            self.recorder_cur_errD_rf_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD_rf.numpy(),self.mid_filter_kernel)
             if config.using_r:
-                if self.recorder_cur_errD_rf_mid_numpy[-1] < self.target_errD:
+                if self.recorder_cur_errD_rf_mid_numpy[-1-((self.mid_filter_kernel-1)/2)] < self.target_errD:
                     self.update = 'r'
                 else:
                     self.update = 'g'

@@ -2,16 +2,16 @@
 gan_ngpu = range(2)
 
 '''expperiment'''
-t = 1
-lable = 'pn_d_r'
+t = 7
+lable = 'try_gp'
 sess = 'grl2'
-port = 10500
+port = 10100
 
 '''model'''
 gan_size = 128
 gan_nc = 3
 state_depth = 1
-gan_nz = 256
+gan_nz = 512
 gan_aux_size = gan_nz/2
 gan_batchsize = 128
 
