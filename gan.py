@@ -174,10 +174,6 @@ class gan():
 
                 j += 1
 
-                # clamp parameters to a cube
-                # for p in self.netD.parameters():
-                #     p.data.clamp_(self.clamp_lower, self.clamp_upper)
-
                 ################################## load a trained batch #####################################
                 # generate indexs
                 indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0])
