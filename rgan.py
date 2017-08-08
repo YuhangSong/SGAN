@@ -20,6 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import subprocess
+from PIL import Image
 
 import visdom
 vis = visdom.Visdom()
@@ -47,6 +48,24 @@ def prepare_dir():
 prepare_dir()
 
 # ==================Definition Start======================
+
+def plt_to_vis(fig,win,name):
+    canvas=fig.canvas
+    import io
+    buf = io.BytesIO()
+    canvas.print_png(buf)
+    data=buf.getvalue()
+    buf.close()
+
+    buf=io.BytesIO()
+    buf.write(data)
+    img=Image.open(buf)
+    img = np.asarray(img)/255.0
+    img = img.astype(float)[:,:,0:3]
+    img = torch.FloatTensor(img).permute(2,0,1)
+    vis.image(  img,
+                win=win,
+                opts=dict(title=name))
 
 class Generator(nn.Module):
 
@@ -122,6 +141,7 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 frame_index = [0]
+
 def generate_image():
     """
     Generates and saves a plot of the true distribution, the generator, and the
@@ -129,18 +149,14 @@ def generate_image():
     """
     plt.clf()
 
-    data_fix_state = inf_train_gen(fix_state=True,batch_size=(N_POINTS**2))
+    data_fix_state = inf_train_gen(fix_state=True,fix_state_to=[5,0],batch_size=(N_POINTS**2))
     state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
     state = state_prediction_gt.narrow(1,0,1)
     prediction_gt = state_prediction_gt.narrow(1,1,1)
 
     '''true_dist'''
-    true_dist = prediction_gt.squeeze(1).cpu().numpy()
+    true_dist = prediction_gt.narrow(0,0,BATCH_SIZE).squeeze(1).cpu().numpy()
     plt.scatter(true_dist[:, 0], true_dist[:, 1], c='orange', marker='+', alpha=0.5)
-    vis.scatter(
-        X=torch.from_numpy(true_dist.astype(float)),
-        win='true_dist',
-        opts=dict(title='true_dist'))
 
 
     '''disc_map'''
@@ -157,9 +173,6 @@ def generate_image():
     x = y = np.linspace(0, GRID_SIZE, N_POINTS)
     disc_map = disc_map.reshape((len(x), len(y))).transpose()
     plt.contour(x, y, disc_map)
-    vis.surf(   torch.from_numpy(disc_map.astype(float)),
-                win='disc_map',
-                opts=dict(title='disc_map'))
 
     '''samples'''
     noise = torch.randn((BATCH_SIZE), 2).cuda()
@@ -172,18 +185,16 @@ def generate_image():
 
     samples = prediction.squeeze(1).cpu().numpy()
     plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
-    vis.scatter(
-        X=torch.from_numpy(samples.astype(float)),
-        win='samples',
-        opts=dict(title='samples'))
 
     plt.savefig(LOGDIR + DATASET + '/' + 'frame' + str(frame_index[0]) + '.jpg')
+
+    plt_to_vis(plt.gcf(),'vis','fram_'+str(frame_index[0]))
 
     frame_index[0] += 1
 
 
 # Dataset iterator
-def inf_train_gen(fix_state=False, batch_size=BATCH_SIZE):
+def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
 
     if DATASET == '2grid':
 
@@ -200,8 +211,8 @@ def inf_train_gen(fix_state=False, batch_size=BATCH_SIZE):
                     cur_x = random.choice(range(GRID_SIZE))
                     cur_y = random.choice(range(GRID_SIZE))
                 else:
-                    cur_x = GRID_SIZE/2
-                    cur_y = GRID_SIZE/2
+                    cur_x = fix_state_to[0]
+                    cur_y = fix_state_to[1]
                 action = random.choice(range(4))
                 next_x = cur_x
                 next_y = cur_y
