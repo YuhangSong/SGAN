@@ -26,9 +26,11 @@ vis = visdom.Visdom()
 
 torch.manual_seed(1)
 
-LOGDIR = '../../result/rgan_3/'
+LOGDIR = '../../result/add_r_ro_gp_3/'
 MODE = 'wgan-gp'  # wgan or wgan-gp
-DATASET = '2gaussians'  # 8gaussians, 25gaussians, swissroll, 2gaussians
+DATASET = '2grid'  # 8gaussians, 25gaussians, swissroll, 2gaussians, 2grid
+if DATASET is '2grid':
+    GRID_SIZE = 8
 DIM = 512  # Model dimensionality
 FIXED_GENERATOR = False  # whether to hold the generator fixed at real data plus
 # Gaussian noise, as in the plots in the paper
@@ -37,6 +39,7 @@ CRITIC_ITERS = 5  # How many critic iterations per generator iteration
 BATCH_SIZE = 256  # Batch size
 ITERS = 100000  # how many generator iterations to train for
 use_cuda = True
+N_POINTS = 128
 
 def prepare_dir():
     subprocess.call(["mkdir", "-p", LOGDIR])
@@ -51,22 +54,31 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
 
         main = nn.Sequential(
-            nn.Linear(2, DIM),
+            nn.Linear(2+2, DIM),
             nn.ReLU(True),
             nn.Linear(DIM, DIM),
             nn.ReLU(True),
             nn.Linear(DIM, DIM),
             nn.ReLU(True),
-            nn.Linear(DIM, 2),
+            nn.Linear(DIM, 2+2),
         )
         self.main = main
 
-    def forward(self, noise, real_data):
-        if FIXED_GENERATOR:
-            return noise + real_data
-        else:
-            output = self.main(noise)
-            return output
+    def forward(self, noise_v, state_v):
+
+        '''prepare'''
+        state_v = state_v.squeeze(1)
+        x = torch.cat([state_v,noise_v],1)
+
+        '''forward'''
+        x = self.main(x)
+
+        '''decompose'''
+        stater_v = x.narrow(1,0,2).unsqueeze(1)
+        prediction_v = x.narrow(1,2,2).unsqueeze(1)
+        x = torch.cat([stater_v,prediction_v],1)
+
+        return x
 
 
 class Discriminator(nn.Module):
@@ -75,7 +87,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
 
         main = nn.Sequential(
-            nn.Linear(2, DIM),
+            nn.Linear(2+2, DIM),
             nn.ReLU(True),
             nn.Linear(DIM, DIM),
             nn.ReLU(True),
@@ -85,9 +97,18 @@ class Discriminator(nn.Module):
         )
         self.main = main
 
-    def forward(self, inputs):
-        output = self.main(inputs)
-        return output.view(-1)
+    def forward(self, state_v, prediction_v):
+
+        '''prepare'''
+        state_v = state_v.squeeze(1)
+        prediction_v = prediction_v.squeeze(1)
+        x = torch.cat([state_v,prediction_v],1)
+
+        '''forward'''
+        x = self.main(x)
+        x = x.view(-1)
+
+        return x
 
 
 # custom weights initialization called on netG and netD
@@ -101,51 +122,60 @@ def weights_init(m):
         m.bias.data.fill_(0)
 
 frame_index = [0]
-def generate_image(true_dist):
+def generate_image():
     """
     Generates and saves a plot of the true distribution, the generator, and the
     critic.
     """
-    N_POINTS = 128
-    RANGE = 3
-
-    points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
-    points[:, :, 0] = np.linspace(-RANGE, RANGE, N_POINTS)[:, None]
-    points[:, :, 1] = np.linspace(-RANGE, RANGE, N_POINTS)[None, :]
-    points = points.reshape((-1, 2))
-
-    points_v = autograd.Variable(torch.Tensor(points), volatile=True)
-    if use_cuda:
-        points_v = points_v.cuda()
-    disc_map = netD(points_v).cpu().data.numpy()
-
-    noise = torch.randn(BATCH_SIZE, 2)
-    if use_cuda:
-        noise = noise.cuda()
-    noisev = autograd.Variable(noise, volatile=True)
-    true_dist_v = autograd.Variable(torch.Tensor(true_dist).cuda() if use_cuda else torch.Tensor(true_dist))
-    samples = netG(noisev, true_dist_v).cpu().data.numpy()
-
     plt.clf()
 
-    x = y = np.linspace(-RANGE, RANGE, N_POINTS)
+    data_fix_state = inf_train_gen(fix_state=True,batch_size=(N_POINTS**2))
+    state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
+    state = state_prediction_gt.narrow(1,0,1)
+    prediction_gt = state_prediction_gt.narrow(1,1,1)
+
+    '''true_dist'''
+    true_dist = prediction_gt.squeeze(1).cpu().numpy()
+    plt.scatter(true_dist[:, 0], true_dist[:, 1], c='orange', marker='+', alpha=0.5)
+    vis.scatter(
+        X=torch.from_numpy(true_dist.astype(float)),
+        win='true_dist',
+        opts=dict(title='true_dist'))
+
+
+    '''disc_map'''
+    points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
+    points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
+    points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
+    points = points.reshape((-1, 2))
+    points = np.expand_dims(points,1)
+
+    disc_map =  netD(
+                    state_v = autograd.Variable(state, volatile=True),
+                    prediction_v = autograd.Variable(torch.Tensor(points).cuda(), volatile=True)
+                ).cpu().data.numpy()
+    x = y = np.linspace(0, GRID_SIZE, N_POINTS)
     disc_map = disc_map.reshape((len(x), len(y))).transpose()
     plt.contour(x, y, disc_map)
-    
     vis.surf(   torch.from_numpy(disc_map.astype(float)),
                 win='disc_map',
                 opts=dict(title='disc_map'))
 
-    plt.scatter(true_dist[:, 0], true_dist[:, 1], c='orange', marker='+')
-    vis.scatter(   X=torch.from_numpy(true_dist.astype(float)),
-                    win='true_dist',
-                    opts=dict(title='true_dist'))
+    '''samples'''
+    noise = torch.randn((BATCH_SIZE), 2).cuda()
+    stater_prediction = netG(
+                                noise_v = autograd.Variable(noise, volatile=True),
+                                state_v = autograd.Variable(state.narrow(0,0,BATCH_SIZE), volatile=True)
+                            ).data
+    stater = stater_prediction.narrow(1,0,1)
+    prediction = stater_prediction.narrow(1,1,1)
 
-    if not FIXED_GENERATOR:
-        plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+')
-        vis.scatter(   X=torch.from_numpy(samples.astype(float)),
-                        win='samples',
-                        opts=dict(title='samples'))
+    samples = prediction.squeeze(1).cpu().numpy()
+    plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
+    vis.scatter(
+        X=torch.from_numpy(samples.astype(float)),
+        win='samples',
+        opts=dict(title='samples'))
 
     plt.savefig(LOGDIR + DATASET + '/' + 'frame' + str(frame_index[0]) + '.jpg')
 
@@ -153,62 +183,9 @@ def generate_image(true_dist):
 
 
 # Dataset iterator
-def inf_train_gen():
-    if DATASET == '25gaussians':
+def inf_train_gen(fix_state=False, batch_size=BATCH_SIZE):
 
-        dataset = []
-        for i in xrange(100000 / 25):
-            for x in xrange(-2, 3):
-                for y in xrange(-2, 3):
-                    point = np.random.randn(2) * 0.05
-                    point[0] += 2 * x
-                    point[1] += 2 * y
-                    dataset.append(point)
-        dataset = np.array(dataset, dtype='float32')
-        np.random.shuffle(dataset)
-        dataset /= 2.828  # stdev
-        while True:
-            for i in xrange(len(dataset) / BATCH_SIZE):
-                yield dataset[i * BATCH_SIZE:(i + 1) * BATCH_SIZE]
-
-    elif DATASET == 'swissroll':
-
-        while True:
-            data = sklearn.datasets.make_swiss_roll(
-                n_samples=BATCH_SIZE,
-                noise=0.25
-            )[0]
-            data = data.astype('float32')[:, [0, 2]]
-            data /= 7.5  # stdev plus a little
-            yield data
-
-    elif DATASET == '8gaussians':
-
-        scale = 2.
-        centers = [
-            (1, 0),
-            (-1, 0),
-            (0, 1),
-            (0, -1),
-            (1. / np.sqrt(2), 1. / np.sqrt(2)),
-            (1. / np.sqrt(2), -1. / np.sqrt(2)),
-            (-1. / np.sqrt(2), 1. / np.sqrt(2)),
-            (-1. / np.sqrt(2), -1. / np.sqrt(2))
-        ]
-        centers = [(scale * x, scale * y) for x, y in centers]
-        while True:
-            dataset = []
-            for i in xrange(BATCH_SIZE):
-                point = np.random.randn(2) * .02
-                center = random.choice(centers)
-                point[0] += center[0]
-                point[1] += center[1]
-                dataset.append(point)
-            dataset = np.array(dataset, dtype='float32')
-            dataset /= 1.414  # stdev
-            yield dataset
-
-    elif DATASET == '2gaussians':
+    if DATASET == '2grid':
 
         scale = 2.
         centers = [
@@ -218,36 +195,61 @@ def inf_train_gen():
         centers = [(scale * x, scale * y) for x, y in centers]
         while True:
             dataset = []
-            for i in xrange(BATCH_SIZE):
-                point = np.random.randn(2) * .02
-                center = random.choice(centers)
-                point[0] += center[0]
-                point[1] += center[1]
-                dataset.append(point)
+            for i in xrange(batch_size):
+                if not fix_state:
+                    cur_x = random.choice(range(GRID_SIZE))
+                    cur_y = random.choice(range(GRID_SIZE))
+                else:
+                    cur_x = GRID_SIZE/2
+                    cur_y = GRID_SIZE/2
+                action = random.choice(range(4))
+                next_x = cur_x
+                next_y = cur_y
+                if action==0:
+                    next_x = cur_x + 1
+                elif action==2:
+                    next_x = cur_x - 1
+                elif action==1:
+                    next_y = cur_y + 1
+                elif action==3:
+                    next_y = cur_y - 1
+                next_x = np.clip(next_x,0,GRID_SIZE)
+                next_y = np.clip(next_y,0,GRID_SIZE)
+
+                data = np.array([[cur_x,cur_y],
+                                 [next_x,next_y]])
+                dataset.append(data)
             dataset = np.array(dataset, dtype='float32')
-            dataset /= 1.414  # stdev
             yield dataset
 
 
-def calc_gradient_penalty(netD, real_data, fake_data):
-    alpha = torch.rand(BATCH_SIZE, 1)
-    alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda() if use_cuda else alpha
+def calc_gradient_penalty(netD, state, prediction_gt, prediction):
 
-    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+    prediction_gt = prediction_gt.squeeze(1)
+    prediction = prediction.squeeze(1)
 
-    if use_cuda:
-        interpolates = interpolates.cuda()
-    interpolates = autograd.Variable(interpolates, requires_grad=True)
+    alpha = torch.rand(BATCH_SIZE, 1).cuda()
+    alpha = alpha.expand(prediction_gt.size())
 
-    disc_interpolates = netD(interpolates)
+    interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
 
-    gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-                              grad_outputs=torch.ones(disc_interpolates.size()).cuda() if use_cuda else torch.ones(
-                                  disc_interpolates.size()),
-                              create_graph=True, retain_graph=True, only_inputs=True)[0]
+    interpolates = autograd.Variable(interpolates, requires_grad=True).unsqueeze(1)
+
+    disc_interpolates = netD(
+                            state_v = autograd.Variable(state),
+                            prediction_v = interpolates
+                        )
+
+    gradients = autograd.grad(
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True)[0]
 
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+
     return gradient_penalty
 
 # ==================Definition End======================
@@ -274,6 +276,18 @@ if use_cuda:
 
 data = inf_train_gen()
 
+print('Trying load models....')
+try:
+    netD.load_state_dict(torch.load('{0}/netD.pth'.format(LOGDIR)))
+    print('Previous checkpoint for netD founded')
+except Exception, e:
+    print('Previous checkpoint for netD unfounded')
+try:
+    netG.load_state_dict(torch.load('{0}/netG.pth'.format(LOGDIR)))
+    print('Previous checkpoint for netC founded')
+except Exception, e:
+    print('Previous checkpoint for netC unfounded')
+
 for iteration in xrange(ITERS):
     ############################
     # (1) Update D network
@@ -282,71 +296,86 @@ for iteration in xrange(ITERS):
         p.requires_grad = True  # they are set to False below in netG update
 
     for iter_d in xrange(CRITIC_ITERS):
-        _data = data.next()
-        real_data = torch.Tensor(_data)
-        if use_cuda:
-            real_data = real_data.cuda()
-        real_data_v = autograd.Variable(real_data)
+
+        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state = state_prediction_gt.narrow(1,0,1)
+        prediction_gt = state_prediction_gt.narrow(1,1,1)
 
         netD.zero_grad()
 
-        # train with real
-        D_real = netD(real_data_v)
-        D_real = D_real.mean()
+        '''train with real'''
+        D_real =    netD(
+                        state_v = autograd.Variable(state),
+                        prediction_v = autograd.Variable(prediction_gt)
+                    ).mean()
         D_real.backward(mone)
 
-        # train with fake
-        noise = torch.randn(BATCH_SIZE, 2)
-        if use_cuda:
-            noise = noise.cuda()
-        noisev = autograd.Variable(noise, volatile=True)  # totally freeze netG
-        fake = autograd.Variable(netG(noisev, real_data_v).data)
-        inputv = fake
-        D_fake = netD(inputv)
-        D_fake = D_fake.mean()
+        '''train with fake'''
+        noise = torch.randn(BATCH_SIZE, 2).cuda()
+        stater_prediction =  netG(
+                                noise_v = autograd.Variable(noise, volatile=True),
+                                state_v = autograd.Variable(state, volatile=True)
+                            ).data
+        prediction = stater_prediction.narrow(1,1,1)
+
+        D_fake =    netD(
+                        state_v = autograd.Variable(state),
+                        prediction_v = autograd.Variable(prediction)
+                    ).mean()
         D_fake.backward(one)
 
-        # train with gradient penalty
-        gradient_penalty = calc_gradient_penalty(netD, real_data_v.data, fake.data)
+        '''train with gradient penalty'''
+        gradient_penalty =  calc_gradient_penalty(
+                                netD = netD,
+                                state = state,
+                                prediction_gt = prediction_gt,
+                                prediction = prediction
+                            )
         gradient_penalty.backward()
 
         D_cost = D_fake - D_real + gradient_penalty
         Wasserstein_D = D_real - D_fake
         optimizerD.step()
 
-    if not FIXED_GENERATOR:
-        ############################
-        # (2) Update G network
-        ###########################
-        for p in netD.parameters():
-            p.requires_grad = False  # to avoid computation
-        netG.zero_grad()
+    ############################
+    # (2) Update G network
+    ###########################
+    for p in netD.parameters():
+        p.requires_grad = False  # to avoid computation
 
-        _data = data.next()
-        real_data = torch.Tensor(_data)
-        if use_cuda:
-            real_data = real_data.cuda()
-        real_data_v = autograd.Variable(real_data)
+    state_prediction_gt = torch.Tensor(data.next()).cuda()
+    state = state_prediction_gt.narrow(1,0,1)
+    prediction_gt = state_prediction_gt.narrow(1,1,1)
 
-        noise = torch.randn(BATCH_SIZE, 2)
-        if use_cuda:
-            noise = noise.cuda()
-        noisev = autograd.Variable(noise)
-        fake = netG(noisev, real_data_v)
-        G = netD(fake)
-        G = G.mean()
-        G.backward(mone)
-        G_cost = -G
-        optimizerG.step()
+    netG.zero_grad()
+
+    noise = torch.randn(BATCH_SIZE, 2).cuda()
+    stater_prediction_v = netG(
+                            noise_v = autograd.Variable(noise),
+                            state_v = autograd.Variable(state)
+                        )
+    prediction_v = stater_prediction_v.narrow(1,1,1)
+
+    G = netD(
+            state_v = autograd.Variable(state),
+            prediction_v = prediction_v
+        )
+    G = G.mean()
+    G.backward(mone)
+    G_cost = -G
+    optimizerG.step()
 
     # Write logs and save samples
     lib.plot.plot(LOGDIR + DATASET + '/' + 'disc cost', D_cost.cpu().data.numpy())
     lib.plot.plot(LOGDIR + DATASET + '/' + 'wasserstein distance', Wasserstein_D.cpu().data.numpy())
-    if not FIXED_GENERATOR:
-        lib.plot.plot(LOGDIR + DATASET + '/' + 'gen cost', G_cost.cpu().data.numpy())
-    if iteration % 10 == 1:
+    lib.plot.plot(LOGDIR + DATASET + '/' + 'gen cost', G_cost.cpu().data.numpy())
+
+    if iteration % 100 == 1:
         lib.plot.flush()
-        generate_image(_data)
+        torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
+        torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
+        generate_image()
+
     lib.plot.tick()
 
     print('[iteration:'+str(iteration)+']')
