@@ -1,6 +1,9 @@
 from __future__ import print_function
 import torch
+import torch.autograd as autograd
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim as optim
@@ -31,8 +34,46 @@ import config
 import subprocess
 import time
 import multiprocessing
+import matplotlib  
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import visdom
+vis = visdom.Visdom()
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
+LAMBDA = .1
+
+def cut_recorder(x):
+    if x.size()[0] > config.gan_recent_recorder:
+        x = x.narrow(0,x.size()[0]-config.gan_recent_recorder,x.size()[0])
+    return x
+def calc_gradient_penalty(netD, real_data, fake_data, aux):
+    alpha = torch.rand(BATCH_SIZE, 1)
+    alpha = alpha.expand(real_data.size())
+    alpha = alpha.cuda()
+
+    print(alpha)
+    print(real_data)
+    print(fake_data)
+    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+    print(interpolates)
+    print(r)
+
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
+
+    disc_interpolates = netD(  
+                            input_image = interpolates,
+                            input_aux   = aux
+                            ).mean(0).view(1)
+
+    gradients = autograd.grad(
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                    create_graph=True, retain_graph=True, only_inputs=True)[0]
+
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+    return gradient_penalty
 class gan():
     """
     This thread runs gan training
@@ -49,14 +90,15 @@ class gan():
         self.n_extra_layers = 0
         self.imageSize = config.gan_size
         self.lrD = 0.00005
+        self.lrC = 0.00005
         self.lrG = 0.00005
         self.batchSize = config.gan_batchsize
-        self.Diters_ = 5
         self.clamp_lower = -0.01
         self.clamp_upper = 0.01
         self.experiment = config.logdir
-        self.dataset_limit = 500
-
+        self.dataset_limit = config.gan_dataset_limit
+        self.aux_size = config.gan_aux_size
+        
         self.empty_dataset_with_aux = np.zeros((0, 5, self.nc, self.imageSize, self.imageSize))
 
         '''random seed for torch'''
@@ -80,56 +122,63 @@ class gan():
                 m.bias.data.fill_(0)
 
         '''create models'''
-        self.netG_Cv = dcgan.DCGAN_G_Cv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
-        self.netG_DeCv = dcgan.DCGAN_G_DeCv(self.imageSize, self.nz, self.nc, self.ngf, self.ngpu, self.n_extra_layers)
-        self.netD = dcgan.DCGAN_D(self.imageSize, self.nz, self.nc, self.ndf, self.ngpu, self.n_extra_layers)
+        self.netG = dcgan.DCGAN_G().cuda()
+        self.netD = dcgan.DCGAN_D().cuda()
 
         '''init models'''
-        self.netG_Cv.apply(weights_init)
-        self.netG_DeCv.apply(weights_init)
+        self.netG.apply(weights_init)
         self.netD.apply(weights_init)
 
         self.load_models()
 
         '''print the models'''
-        print(self.netG_Cv)
-        print(self.netG_DeCv)
         print(self.netD)
+        print(self.netG)
 
-        self.inputd = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
-        self.inputd_real_part = torch.FloatTensor(self.batchSize, 4, self.imageSize, self.imageSize)
-        self.inputg = torch.FloatTensor(self.batchSize, 3, self.imageSize, self.imageSize)
-        self.inputg_action = torch.FloatTensor(self.batchSize, 1, 1, 1)
-        self.noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1)
-        self.fixed_noise = torch.FloatTensor(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
-        self.one = torch.FloatTensor([1])
+        # noise
+        self.noise = torch.FloatTensor(self.batchSize, self.aux_size).cuda()
+        self.alpha = torch.FloatTensor(self.batchSize).cuda()
+        self.alpha_multi_image_ones = torch.FloatTensor(self.batchSize, (config.state_depth+1), config.action_space).fill_(1.0).cuda()
+        self.slopes_multi_ones = torch.FloatTensor(self.batchSize).fill_(1.0).cuda()
+
+        # constent
+        self.one = torch.FloatTensor([1]).cuda()
         self.mone = self.one * -1
 
         '''dataset intialize'''
-        self.dataset_image        = torch.FloatTensor(np.zeros((1, 4, self.nc, self.imageSize, self.imageSize)))
-        self.dataset_aux = torch.FloatTensor(np.zeros((1, 1, 1, 1)))
+        if config.grid_type is '1d_fall':
+            self.dataset_image = torch.FloatTensor(np.zeros((1, (config.state_depth+1), config.action_space)))
+        else:
+            self.dataset_image = torch.FloatTensor(np.zeros((1, (config.state_depth+1), self.nc, self.imageSize, self.imageSize)))
 
-        '''convert tesors to cuda type'''
-        if self.cuda:
-            self.netD.cuda()
-            self.netG_Cv.cuda()
-            self.netG_DeCv.cuda()
-            self.inputd = self.inputd.cuda()
-            self.inputg = self.inputg.cuda()
-            self.inputg_action = self.inputg_action.cuda()
-            self.one, self.mone = self.one.cuda(), self.mone.cuda()
-            self.noise, self.fixed_noise = self.noise.cuda(), self.fixed_noise.cuda()
-            self.dataset_image = self.dataset_image.cuda()
-            self.dataset_aux = self.dataset_aux.cuda()
+        self.dataset_aux = torch.FloatTensor(np.zeros((1, self.aux_size)))
+
+        '''recorders'''
+        self.recorder_cur_errD_rf = torch.FloatTensor([0])
+        self.recorder_target_mse = torch.FloatTensor([0])
+        self.recorder_loss_mse = torch.FloatTensor([0])
+        self.recorder_loss_a = torch.FloatTensor([0])
+        self.recorder_loss_g = torch.FloatTensor([0])
+        self.recorder_loss_g_final = torch.FloatTensor([0])
+
+        self.indexs_selector = torch.LongTensor(self.batchSize)
 
         '''create optimizer'''
-        self.optimizerD = optim.RMSprop(self.netD.parameters(), lr = self.lrD)
-        self.optimizerG_Cv = optim.RMSprop(self.netG_Cv.parameters(), lr = self.lrG)
-        self.optimizerG_DeCv = optim.RMSprop(self.netG_DeCv.parameters(), lr = self.lrG)
+        self.optimizerD = optim.Adam(self.netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+        self.optimizerG = optim.Adam(self.netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
 
         self.iteration_i = 0
         self.last_save_model_time = 0
-        self.last_save_image = 0
+        self.last_save_image_time = 0
+
+        '''config'''
+        self.DCiters_ = 5
+        self.mid_filter_kernel = 1
+        self.target_errD = 0.0
+        '''end'''
+
+        self.mse_loss_model = torch.nn.MSELoss(size_average=True)
+        self.zero_state = torch.FloatTensor(self.batchSize,1,config.gan_aux_size).fill_(0.0).cuda()
 
     def train(self):
         """
@@ -141,202 +190,238 @@ class gan():
             '''only train when have enough dataset'''
             print('Train on dataset: '+str(int(self.dataset_image.size()[0])))
 
-            ######################################################################
-            ########################### Update D network #########################
-            ######################################################################
+            ########################################################################################################
+            ############################################ Update D network ##########################################
+            ########################################################################################################
 
-            '''
-                when train D network, paramters of D network in trained,
-                reset requires_grad of D network to true.
-                (they are set to False below in netG update)
-            '''
             for p in self.netD.parameters():
                 p.requires_grad = True
 
-            '''
-                train the discriminator Diters times
-                Diters is set to 100 only on the first 25 generator iterations or
-                very sporadically (once every 500 generator iterations).
-                This helps to start with the critic at optimum even in the first iterations.
-                There shouldn't be a major difference in performance, but it can help,
-                especially when visualizing learning curves (since otherwise you'd see the
-                loss going up until the critic is properly trained).
-                This is also why the first 25 iterations take significantly longer than
-                the rest of the training as well.
-            '''
-            if self.iteration_i < 25 or self.iteration_i % 500 == 0:
-                Diters = 100
-            else:
-                Diters = self.Diters_
+            DCiters = self.DCiters_
 
-            '''
-                start interation training of D network
-                D network is trained for sevrel steps when 
-                G network is trained for one time
-            '''
             j = 0
-            while j < Diters:
+            while j < DCiters:
+
                 j += 1
 
-                # clamp parameters to a cube
-                for p in self.netD.parameters():
-                    p.data.clamp_(self.clamp_lower, self.clamp_upper)
+                ################################## load a trained batch #####################################
+                # generate indexs
+                indexs = self.indexs_selector.random_(0,self.dataset_image.size()[0])
 
-                ######## train D network with real #######
-
-                ## random sample from dataset ##
-                raw    = self.dataset_image.narrow(       0, self.dataset_image.size()[0]        - self.batchSize, self.batchSize)
-                action = self.dataset_aux.narrow(0, self.dataset_aux.size()[0] - self.batchSize, self.batchSize)
-                state_prediction_gt = torch.cat([raw.narrow(1,0,1),raw.narrow(1,1,1),raw.narrow(1,2,1),raw.narrow(1,3,1)],2)
-                state_prediction_gt = torch.squeeze(state_prediction_gt,1)
-                state = state_prediction_gt.narrow(1,0*self.nc,3*self.nc)
-                prediction_gt = state_prediction_gt.narrow(1,3*self.nc,1*self.nc)
-
-                ######### train D with real ########
-
-                # reset grandient
-                self.netD.zero_grad()
-
-                # feed
-                self.inputd.resize_as_(state_prediction_gt).copy_(state_prediction_gt)
-                inputdv = Variable(self.inputd)
-
-                # compute
-                errD_real, outputD_real = self.netD(inputdv)
-                errD_real.backward(self.one)
-
-                ########### get fake #############
-
-                # feed
-                self.inputg.resize_as_(state).copy_(state)
-                inputgv = Variable(self.inputg, volatile = True) # totally freeze netG
-
-                # compute encoded
-                encodedv = self.netG_Cv(inputgv)
-
-                # compute noise
-                self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
-                noisev = Variable(self.noise, volatile = True) # totally freeze netG
-
-                # feed
-                self.inputg_action.resize_as_(action).copy_(action)
-                inputg_actionv = Variable(self.inputg_action, volatile = True) # totally freeze netG
-
-                # concate encodedv, noisev, action
-                concated = [inputg_actionv] * (self.nz/2)
-                concated += [encodedv]
-                concated += [noisev]
-                encodedv_noisev_actionv = torch.cat(concated,1)
-
-                # print(encodedv_noisev_actionv.size()) # (64L, 512L, 1L, 1L)
-
-                # predict
-                prediction = self.netG_DeCv(encodedv_noisev_actionv)
-                prediction = prediction.data
+                # indexing image
+                self.state_prediction_gt_raw = torch.index_select(self.dataset_image,0,indexs).cuda()
+                self.state = self.state_prediction_gt_raw.narrow(1,0,config.state_depth)
+                self.prediction_gt_raw = self.state_prediction_gt_raw.narrow(1,config.state_depth,1)
                 
-                ############ train D with fake ###########
+                # indexing aux
+                self.aux = torch.index_select(self.dataset_aux,0,indexs).cuda()
 
-                # get state_prediction
-                state_prediction = torch.cat([state, prediction], 1)
+                self.noise = self.noise.normal_(0, 1)
 
-                # feed
-                self.inputd.resize_as_(state_prediction).copy_(state_prediction)
-                inputdv = Variable(self.inputd)
+                #############################################################################################
+                if config.using_r:
+                    ################################## go through r #############################################
+                    self.prediction_gt = self.netG(   input_image = Variable( self.state_prediction_gt_raw.narrow(1,1,config.state_depth),
+                                                                                volatile=True),
+                                                        input_aux   = Variable( self.aux,
+                                                                                volatile=True),
+                                                        input_noise = Variable( self.noise,
+                                                                                volatile=True)
+                                                        ).narrow(1,config.state_depth-1,1).data
+                    ##############################################################################################
+                else:
+                    self.prediction_gt = self.prediction_gt_raw
+                
+                self.state_prediction_gt = torch.cat([self.state,self.prediction_gt],1)
+                ################################# get fake ###################################################
+                self.prediction =    self.netG( input_image = Variable( self.state,
+                                                                        volatile = True),
+                                                input_aux   = Variable( self.aux,
+                                                                        volatile = True),
+                                                input_noise = Variable( self.noise,
+                                                                        volatile = True)
+                                                ).narrow(1,config.state_depth,1).data
+                self.state_prediction = torch.cat([self.state, self.prediction], 1)
+                ##############################################################################################
 
-                # compute
-                errD_fake, outputD_fake = self.netD(inputdv)
-                errD_fake.backward(self.mone)
+                ######################################## train D #############################################
+                self.netD.zero_grad()
+                ################# train D with real #################
+                errD_real_v =        self.netD( input_image = Variable(self.state_prediction_gt),
+                                                input_aux   = Variable(self.aux)
+                                                ).mean(0).view(1)
+                errD_real_v.backward(self.mone)
+                #####################################################
 
-                # optmize
-                errD = errD_real - errD_fake
+                ################# train D with fake #################
+                errD_fake_v =        self.netD( input_image = Variable(self.state_prediction),
+                                                input_aux   = Variable(self.aux)
+                                                ).mean(0).view(1)
+                errD_fake_v.backward(self.one)
+                #####################################################
+
+                ################# train D with gp ###################
+                # train with gradient penalty
+                gradient_penalty = calc_gradient_penalty(
+                                    netD = netD,
+                                    real_data = self.state_prediction_gt,
+                                    fake_data = self.state_prediction)
+                gradient_penalty.backward()
+                #####################################################
                 self.optimizerD.step()
+                ##############################################################################################
 
-            ######################################################################
-            ####################### End of Update D network ######################
-            ######################################################################
+            ######################################## control target mse #################################
+            cur_errD_rf = (errD_fake_v - errD_real_v).data
+            self.recorder_cur_errD_rf = torch.cat([self.recorder_cur_errD_rf,cur_errD_rf.cpu()],0)
+            self.recorder_cur_errD_rf_mid_numpy = scipy.signal.medfilt(self.recorder_cur_errD_rf.numpy(),self.mid_filter_kernel)
+            if config.using_r:
+                if self.recorder_cur_errD_rf_mid_numpy[-1-((self.mid_filter_kernel-1)/2)] < self.target_errD:
+                    self.update = 'r'
+                else:
+                    self.update = 'g'
+            else:
+                self.update = 'g'
+            ##############################################################################################
 
-            ######################################################################
-            ########################## Update G network ##########################
-            ######################################################################
+            ########################################################################################################
+            ######################################## End of Update D network #######################################
+            ########################################################################################################
 
-            '''
-                when train G networks, paramters in p network is freezed
-                to avoid computation on grad
-                this is reset to true when training D network
-            '''
+            ########################################################################################################
+            ########################################### Update G network ###########################################
+            ########################################################################################################
+
             for p in self.netD.parameters():
                 p.requires_grad = False
 
-            # reset grandient
-            self.netG_Cv.zero_grad()
-            self.netG_DeCv.zero_grad()
+            self.netG.zero_grad()
 
-            # feed
-            self.inputg.resize_as_(state).copy_(state)
-            inputgv = Variable(self.inputg)
+            x =  self.netG( input_image = Variable( self.state),
+                            input_aux   = Variable( self.aux),
+                            input_noise = Variable( self.noise)
+                            )
+            self.stater_v = x.narrow(1,0,config.state_depth)
+            self.prediction_v = x.narrow(1,config.state_depth,1)
 
-            # compute encodedv
-            encodedv = self.netG_Cv(inputgv)
+            if self.update is 'r':
+                loss_mse_v = self.mse_loss_model(self.stater_v, Variable(self.state))
+                self.recorder_loss_mse = torch.cat([self.recorder_loss_mse,loss_mse_v.data.cpu()],0)
 
-            # compute noisev
-            self.noise.resize_(self.batchSize, self.nz/2, 1, 1).normal_(0, 1)
-            noisev = Variable(self.noise)
+                loss_g_final_v = loss_mse_v
+                self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([0.0])],0)
 
-            # feed
-            self.inputg_action.resize_as_(action).copy_(action)
-            inputg_actionv = Variable(self.inputg_action)
+            elif self.update is 'g':
+                loss_g_v = self.netD(   input_image = torch.cat([Variable(self.state), self.prediction_v], 1),
+                                        input_aux   = Variable(self.aux)
+                                        ).mean(0).view(1)
+                self.recorder_loss_g = torch.cat([self.recorder_loss_g,loss_g_v.data.cpu()],0)
 
-            # concate encodedv and noisev
-            concated = [inputg_actionv] * (self.nz/2)
-            concated += [encodedv]
-            concated += [noisev]
-            encodedv_noisev_actionv = torch.cat(concated,1)
+                loss_g_final_v = loss_g_v
+                self.recorder_loss_g_final = torch.cat([self.recorder_loss_g_final,torch.FloatTensor([-1.0])],0)
 
-            # predict
-            prediction = self.netG_DeCv(encodedv_noisev_actionv)
+            loss_g_final_v.backward(self.one)
 
-            # get state_predictionv, this is a Variable cat 
-            statev_predictionv = torch.cat([Variable(state), prediction], 1)
-
-            # feed, this state_predictionv is Variable
-            inputdv = statev_predictionv
-
-            # compute
-            errG, _ = self.netD(inputdv)
-            errG.backward(self.one)
-
-            # optmize
-            self.optimizerG_Cv.step()
-            self.optimizerG_DeCv.step()
-
-            ######################################################################
-            ###################### End of Update G network #######################
-            ######################################################################
+            self.optimizerG.step()
+            ########################################################################################################
+            ######################################## End of Update G network #######################################
+            ########################################################################################################
 
 
-            ######################################################################
-            ########################### One Iteration ### ########################
-            ######################################################################
+            ########################################################################################################
+            ############################################ One Iteration ### #########################################
+            ########################################################################################################
 
             '''log result'''
-            print('[iteration_i:%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-                % (self.iteration_i,
-                errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+            print(  '[iteration_i:%d]'
+                    %(self.iteration_i))
 
             '''log image result and save models'''
             if (time.time()-self.last_save_model_time) > config.gan_worker_com_internal:
                 self.save_models()
                 self.last_save_model_time = time.time()
 
-            if (time.time()-self.last_save_image) > config.gan_save_image_internal:
-                self.save_sample(state_prediction_gt[0],'real')
-                self.save_sample(state_prediction[0],'fake')
-                self.last_save_image = time.time()
+            if (time.time()-self.last_save_image_time) > config.gan_save_image_internal:
+
+                check_D_in = np.zeros((self.batchSize,1,config.gan_aux_size))
+                for ii in range(np.shape(check_D_in)[0]):
+                    check_D_in[ii,0,ii] = 1.0
+                check_D_in = torch.FloatTensor(check_D_in).cuda()
+                check_D_in = torch.cat([self.zero_state,check_D_in],1)
+
+                check_D_out =        self.netD( input_image = Variable( check_D_in,
+                                                                        volatile=True),
+                                                input_aux   = Variable( self.aux,
+                                                                        volatile=True)
+                                                ).data.squeeze(1).unsqueeze(0)
+                try:
+                    self.recorder_check_D_out = cut_recorder(torch.cat([self.recorder_check_D_out,check_D_out],0))
+                except Exception, e:
+                    self.recorder_check_D_out = cut_recorder(torch.cat([check_D_out]*2,0))
+                self.surf(self.recorder_check_D_out, 'recorder_check_D_out')
+
+
+                multiple_one_state = torch.cat([self.state[0:1]]*self.batchSize,0)
+                multiple_one_aux = torch.cat([self.aux[0:1]]*self.batchSize,0)
+
+                self.prediction =  self.netG(   input_image = Variable( multiple_one_state,
+                                                                        volatile=True),
+                                                input_aux   = Variable( self.aux,
+                                                                        volatile=True),
+                                                input_noise = Variable( self.noise,
+                                                                        volatile=True)
+                                                ).narrow(1,config.state_depth,1).data
+
+                def to_one_hot(x):
+                    x = x.squeeze(1)
+                    x = x.cpu()
+                    for w in range(x.size()[0]):
+                        l = x[w].numpy()
+                        max_ = np.max(l)
+                        l[l<max_] = 0.0
+                        l[l>=max_] = 1.0
+                        l = torch.FloatTensor(l)
+                        x[w] = l
+                    return x
+                
+                self.prediction = to_one_hot(self.prediction)
+                self.prediction_gt_raw = to_one_hot(self.prediction_gt_raw)
+                self.prediction_gt = to_one_hot(self.prediction_gt)
+
+                try:
+                    self.recorder_prediction_gt_raw_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_raw_heatmap,self.prediction_gt_raw.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_gt_raw_heatmap = self.prediction_gt_raw.mean(0)
+                self.heatmap(self.recorder_prediction_gt_raw_heatmap, 'recorder_prediction_gt_raw_heatmap')
+                
+                try:
+                    self.recorder_prediction_gt_heatmap = cut_recorder(torch.cat([self.recorder_prediction_gt_heatmap,self.prediction_gt.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_gt_heatmap = self.prediction_gt.mean(0)
+                self.heatmap(self.recorder_prediction_gt_heatmap, 'recorder_prediction_gt_heatmap')
+
+                try:
+                    self.recorder_prediction_heatmap = cut_recorder(torch.cat([self.recorder_prediction_heatmap,self.prediction.mean(0)],0))
+                except Exception, e:
+                    self.recorder_prediction_heatmap = self.prediction.mean(0)
+                self.heatmap(self.recorder_prediction_heatmap, 'recorder_prediction_heatmap')
+
+                self.line(self.recorder_cur_errD_rf,'recorder_cur_errD_rf')
+                self.line(torch.FloatTensor(self.recorder_cur_errD_rf_mid_numpy),'recorder_cur_errD_rf_mid_numpy')
+                
+                self.line(self.recorder_loss_mse,'recorder_loss_mse')
+
+                self.line(self.recorder_loss_g,'recorder_loss_g')
+
+                self.line(self.recorder_loss_g_final,'recorder_loss_g_final')
+
+                self.last_save_image_time = time.time()
 
             self.iteration_i += 1
-            ######################################################################
-            ######################### End One in Iteration  ######################
-            ######################################################################
+
+            ########################################################################################################
+            ########################################## End One in Iteration  #######################################
+            ########################################################################################################
 
         else:
 
@@ -350,54 +435,57 @@ class gan():
         push data to dataset which is a torch tensor
         """
 
-        data = torch.FloatTensor(data).cuda()
-        data_image = data[:,0:4,:,:,:]
-        data_aux = torch.squeeze(data[:,4:5,0:1,0:1,0:1],4)
+        if np.shape(data)[0] is 0:
+            return
+
+        data = torch.FloatTensor(data)
+
+        if config.grid_type is '1d_fall':
+            data_image = data[:,(4-(config.state_depth+1)):4,0,0,0:config.action_space]
+        else:
+            data_image = data[:,(4-(config.state_depth+1)):4,:,:,:]
+
+        data_aux = data[:,4:5,0:1,0:1,0:self.aux_size]
+        data_aux = torch.squeeze(data_aux,1)
+        data_aux = torch.squeeze(data_aux,1)
+        data_aux = torch.squeeze(data_aux,1)
 
         if self.dataset_image.size()[0] <= 1:
             self.dataset_image = data_image
             self.dataset_aux = data_aux
         else:
-            insert_position = np.random.randint(1, 
-                                                high=self.dataset_image.size()[0]-2,
-                                                size=None)
 
-            self.dataset_image = torch.cat(seq=[self.dataset_image.narrow(0,0,insert_position), data_image, self.dataset_image.narrow(0,insert_position,self.dataset_image.size()[0]-insert_position)],
+            self.dataset_image = torch.cat(seq=[self.dataset_image, data_image],
                                            dim=0)
-            self.dataset_aux   = torch.cat(seq=[self.dataset_aux.narrow(  0,0,insert_position), data_aux,   self.dataset_aux.narrow(  0,insert_position,self.dataset_aux.size()[0]-insert_position)],
-                                           dim=0)
+            self.dataset_aux = torch.cat(seq=[self.dataset_aux, data_aux],
+                                         dim=0)
 
             if self.dataset_image.size()[0] > self.dataset_limit:
-                self.dataset_image        = self.dataset_image.narrow(       dimension=0,
-                                                                 start=self.dataset_image.size()[0]        - self.dataset_limit,
-                                                                 length=self.dataset_limit)
+                self.dataset_image = self.dataset_image.narrow(dimension=0,
+                                                               start=self.dataset_image.size()[0] - self.dataset_limit,
+                                                               length=self.dataset_limit)
                 self.dataset_aux = self.dataset_aux.narrow(dimension=0,
-                                                                 start=self.dataset_aux.size()[0] - self.dataset_limit,
-                                                                 length=self.dataset_limit)
+                                                           start=self.dataset_aux.size()[0] - self.dataset_limit,
+                                                           length=self.dataset_limit)
 
     def load_models(self):
-        '''do auto checkpoint'''
+
+        print('Trying load models....')
         try:
-            self.netG_Cv.load_state_dict(torch.load(config.modeldir+'netG_Cv.pth'))
-            print('Previous checkpoint for netG_Cv founded')
-        except Exception, e:
-            print('Previous checkpoint for netG_Cv unfounded')
-        try:
-            self.netG_DeCv.load_state_dict(torch.load(config.modeldir+'netG_DeCv.pth'))
-            print('Previous checkpoint for netG_DeCv founded')
-        except Exception, e:
-            print('Previous checkpoint for netG_DeCv unfounded')
-        try:
-            self.netD.load_state_dict(torch.load(config.modeldir+'netD.pth'))
+            self.netD.load_state_dict(torch.load('{0}/netD.pth'.format(config.modeldir)))
             print('Previous checkpoint for netD founded')
         except Exception, e:
             print('Previous checkpoint for netD unfounded')
+        try:
+            self.netG.load_state_dict(torch.load('{0}/netG.pth'.format(config.modeldir)))
+            print('Previous checkpoint for netC founded')
+        except Exception, e:
+            print('Previous checkpoint for netC unfounded')
 
     def save_models(self):
         '''do checkpointing'''
-        torch.save(self.netG_Cv.state_dict(), '{0}/{1}/netG_Cv.pth'.format(self.experiment,config.gan_model_name_))
-        torch.save(self.netG_DeCv.state_dict(), '{0}/{1}/netG_DeCv.pth'.format(self.experiment,config.gan_model_name_))
-        torch.save(self.netD.state_dict(), '{0}/{1}/netD.pth'.format(self.experiment,config.gan_model_name_))
+        torch.save(self.netD.state_dict(), '{0}/netD.pth'.format(config.modeldir))
+        torch.save(self.netG.state_dict(), '{0}/netG.pth'.format(config.modeldir))
 
     def save_sample(self,sample,name):
 
@@ -409,12 +497,50 @@ class gan():
                 save = torch.cat([c,c,c],1)
             elif config.gan_nc is 3:
                 save = []
-                for image_i in range(4):
+                for image_i in range(sample.size()[0]/config.gan_nc):
                     save += [torch.unsqueeze(sample.narrow(0,image_i*3,3),0)]
                 save = torch.cat(save,0)
             
             # save = save.mul(0.5).add(0.5)
             return save
 
+        number_rows = 4
+
         '''log real result'''
-        vutils.save_image(sample2image(sample), ('{0}/'+name+'_{1}.png').format(self.experiment, self.iteration_i))
+        sample = sample2image(sample)
+        vutils.save_image(sample, ('{0}/'+(name+'<'+config.lable+'>')+'_{1}.png').format(self.experiment, self.iteration_i),number_rows)
+        sample = sample.cpu().numpy()
+        vis.images( sample,
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(caption=(name+'<'+config.lable+'>')+str(self.iteration_i)))
+
+    def if_dataset_full(self):
+        if self.dataset_image.size()[0] >= self.dataset_limit:
+            return True
+        else:
+            return False
+
+    def line(self,x,name):
+        x = x.cpu()
+        vis.line(   x,
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(title=(name+'<'+config.lable+'>')))
+        plt.figure()
+        temp, = plt.plot(x.numpy(),alpha=0.5,label=(name+'<'+config.lable+'>'))
+        plt.legend(handles=[temp])
+        plt.savefig(self.experiment+'/'+(name+'<'+config.lable+'>')+'.jpg')
+        plt.close('all')
+
+    def heatmap(self, x, name):
+        x = x.permute(1,0)
+        x = x.cpu()
+        vis.heatmap(    x,
+                        win=(name+'<'+config.lable+'>'),
+                        opts=dict(title=(name+'<'+config.lable+'>')))
+    def surf(self, x, name):
+        x = x.cpu()
+        x = x.numpy().astype(float)
+        x = torch.from_numpy(x)
+        vis.surf(   x,
+                    win=(name+'<'+config.lable+'>'),
+                    opts=dict(title=(name+'<'+config.lable+'>')))

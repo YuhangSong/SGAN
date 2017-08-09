@@ -61,7 +61,7 @@ def create_commands(session, num_workers, remotes, env_id, logdir, shell='bash',
     '''cmd for worker that trains gan'''
     cmds_map += [new_cmd(session, "gan", [sys.executable, 'worker_train_gan.py'], mode, logdir, shell)]
 
-    cmds_map += [new_cmd(session, "tb", [str(sys.executable).split('python')[0]+"tensorboard", "--logdir", logdir, "--port", "12345"], mode, logdir, shell)]
+    cmds_map += [new_cmd(session, "tb", [str(sys.executable).split('python')[0]+"tensorboard", "--logdir", logdir, "--port", str(config.port+1000)], mode, logdir, shell)]
 
     windows = [v[0] for v in cmds_map]
 
@@ -103,7 +103,7 @@ def prepare_dir():
 def run():
     prepare_dir()
     args = parser.parse_args()
-    cmds, notes = create_commands("a3c", args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
+    cmds, notes = create_commands(config.sess, args.num_workers, args.remotes, args.env_id, args.log_dir, mode=args.mode, visualise=args.visualise)
     if args.dry_run:
         print("Dry-run mode due to -n flag, otherwise the following commands would be executed:")
     else:

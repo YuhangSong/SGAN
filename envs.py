@@ -149,15 +149,15 @@ class DiagnosticsInfoI(vectorized.Filter):
         return observation, reward, done, to_log
 
 def _process_frame42(frame):
-    frame = frame[34:34+160, :160]
+    # frame = frame[34:34+160, :160]
     # Resize by half, then down to 42x42 (essentially mipmapping). If
     # we resize directly we lose pixels that, when mapped to 42x42,
     # aren't close enough to the pixel boundary.
     frame = cv2.resize(frame, (config.gan_size, config.gan_size))
-    frame = frame.mean(2)
     frame = frame.astype(np.float32)
     frame *= (1.0 / 255.0)
-    frame = np.reshape(frame, [config.gan_size, config.gan_size, 1])
+    frame = np.expand_dims(frame,0)
+    frame = np.concatenate((frame[:,:,:,0],frame[:,:,:,1],frame[:,:,:,2]),0)
     return frame
 
 class AtariRescale42x42(vectorized.ObservationWrapper):

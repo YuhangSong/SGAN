@@ -32,6 +32,7 @@ import subprocess
 import time
 import multiprocessing
 import gan
+import my_env
 use_tf12_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('0.12.0')
 
 def discount(x, gamma):
@@ -100,7 +101,7 @@ class RunnerThread(threading.Thread):
         threading.Thread.__init__(self)
         self.queue = queue.Queue(5)
         self.num_local_steps = num_local_steps
-        self.env = env
+        self.env = my_env.env()
         self.last_features = None
         self.policy = policy
         self.daemon = True
@@ -140,35 +141,55 @@ class GanRunnerThread(threading.Thread):
         '''dataset intialize'''
         self.reset_dateset()
 
-        '''bootstrap'''
-        np.savez(config.datadir+'data.npz',
-                 data=self.dataset)
-
-
     def push_data(self, data):
         self.dataset = np.concatenate((self.dataset,data),
                                       axis=0)
 
     def save_dataset(self):
 
-        '''Try saving data'''
+        print('Try loading previous data')
+
+        previous_data = None
         try:
+            '''
+            load previous data from disk, since there may 
+            still data that has not been take by the gan yet
+            '''
             previous_data = np.load(config.datadir+'data.npz')['data'] # load data
-            print('Previous data found: '+str(np.shape(previous_data)))
+            print('Previous data loaded: '+str(np.shape(previous_data)))
+        except Exception, e:
+            print('Loading previous data failed')
+            # print(str(Exception)+": "+str(e))
+
+        if previous_data is not None:
+            '''
+            push these previous data to dataset
+            '''
             self.push_data(previous_data)
 
-            '''
-            cat data to recent, this is only for similated env
-            since the env is so fast
-            '''
-            self.dataset=self.dataset[np.shape(self.dataset)[0]-config.gan_recent_dataset:np.shape(self.dataset)[0]]
+        '''
+        cat dataset to recent, this is only for similated env
+        since the env is so fast
+        '''
+        if config.gan_recent_dataset > -1:
+            if np.shape(self.dataset)[0] > config.gan_recent_dataset:
+                self.dataset=self.dataset[(np.shape(self.dataset)[0]-config.gan_recent_dataset):np.shape(self.dataset)[0]]
 
-            print('Save data: '+str(np.shape(self.dataset)))
+        print('Try saving data...')
+        
+        try:
+            '''save dataset'''
             np.savez(config.datadir+'data.npz',
                      data=self.dataset)
+            print('Save data: '+str(np.shape(self.dataset)))
+
+            '''after saved, reset it'''
             self.reset_dateset()
+
         except Exception, e:
-            print(str(Exception)+": "+str(e))
+
+            print('Save failed!')
+            # print(str(Exception)+": "+str(e))
 
     def reset_dateset(self):
         self.dataset = self.gan.empty_dataset_with_aux
@@ -198,97 +219,55 @@ def env_runner(env, policy, num_local_steps, summary_writer, render, gan_runner)
     last_image = None
     image = None
 
-    last_image = env.reset()
-    last_state = rbg2gray(last_image)
-    last_features = policy.get_initial_features()
-    fetched = policy.act(last_state, *last_features)
     length = 0
     rewards = 0
 
+    env.reset()
+
     while True:
         terminal_end = False
-        rollout = PartialRollout()
 
         for _ in range(num_local_steps):
 
-            if config.agent_acting:
-                '''act from model'''
-                fetched = policy.act(last_state, *last_features)
-                action, value_, features = fetched[0], fetched[1], fetched[2:]
+            #######################################################################################################
+            if config.grid_type is '1d_fall':
+                '''overwrite action_'''
+                action = 80
+            ########################################################################################################
+
+            GlobalVar.set_mq_client(action)
+            image, reward, terminal = env.act(action)
+
+            if not terminal:
+                if last_image is None or llast_image is None or lllast_image is None:
+                    pass
+                else:
+                    aux = np.zeros(np.shape(image))
+                    aux[0:1,0:1,action*config.gan_aux_size/config.action_space:(action+1)*config.gan_aux_size/config.action_space] = 1.0
+                    data = [lllast_image,llast_image,last_image,image,aux]
+                    data = np.asarray(data)
+                    gan_runner.push_data(np.expand_dims(data,0))
+
+                lllast_image = copy.deepcopy(llast_image)
+                llast_image = copy.deepcopy(last_image)
+                last_image = copy.deepcopy(image)
             else:
-                '''genrate random action'''
-                action_ = np.random.randint(0, 
-                                            high=config.action_space-1,
-                                            size=None)
-                action = np.zeros((config.action_space))
-                action[action_] = 1.0
-                value_ = 0.0
-                features = np.zeros((2,1,256))
-
-            if config.overwirite_with_grid:
-                GlobalVar.set_mq_client(action.argmax())
-                
-            # argmax to convert from one-hot
-            image, reward, terminal, info = env.step(action.argmax())
-
-            if last_image is None or llast_image is None or lllast_image is None:
-                pass
-            else:
-                aux = np.zeros(np.shape(image))
-                aux[0:1,0:1,0:1] = (1.0*action.argmax()) / config.action_space
-                data = [lllast_image,llast_image,last_image,image,aux]
-                data = np.asarray(data)
-                gan_runner.push_data(np.expand_dims(data,0))
-
-            lllast_image = copy.deepcopy(llast_image)
-            llast_image = copy.deepcopy(last_image)
-            last_image = copy.deepcopy(image)
-
-            
-            state = rbg2gray(image)
-
-            # gan_runner.push_data(state_rgb)
-
-            if render:
-                env.render()
-
-            # collect the experience
-            rollout.add(last_state, action, reward, value_, terminal, last_features)
-            length += 1
-            rewards += reward
-
-            last_state = state
-            last_features = features
-
-            if info:
-                summary = tf.Summary()
-                for k, v in info.items():
-                    summary.value.add(tag=k, simple_value=float(v))
-                if config.agent_acting:
-                    summary_writer.add_summary(summary, policy.global_step.eval())
-                    summary_writer.flush()
-            
-            if terminal:
-                terminal_end = True
-                last_features = policy.get_initial_features()
-                print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
-                length = 0
-                rewards = 0
                 '''reset image recorder'''
                 lllast_image = None
                 llast_image = None
-                last_image = None
-                image = None
+                '''if reset, the returned state is a inital state,
+                it is useable'''
+                last_image = copy.deepcopy(image)
+
+            length += 1
+            rewards += reward
+            
+            if terminal:
+                terminal_end = True
+                print("Episode finished. Sum of rewards: %d. Length: %d" % (rewards, length))
+                length = 0
+                rewards = 0
                 break
-
-        if not terminal_end:
-            if config.agent_acting:
-                rollout.r = policy.value(last_state, *last_features)
-            else:
-                rollout.r = 0.0
-
-        # once we have enough experience, yield it, and have the ThreadRunner place it on a queue
-        yield rollout
 
 class A3C(object):
     def __init__(self, env, task, visualise):
@@ -409,34 +388,34 @@ class A3C(object):
         server.
         """
 
-        sess.run(self.sync)  # copy weights from shared to local
-        rollout = self.pull_batch_from_queue()
-        batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
+        # sess.run(self.sync)  # copy weights from shared to local
+        # rollout = self.pull_batch_from_queue()
+        # batch = process_rollout(rollout, gamma=0.99, lambda_=1.0)
 
-        should_compute_summary = self.task == 0 and self.local_steps % 11 == 0
+        # should_compute_summary = self.task == 0 and self.local_steps % 11 == 0
 
-        if should_compute_summary:
-            fetches = [self.summary_op, self.global_step]
-        else:
-            fetches = [self.global_step]
+        # if should_compute_summary:
+        #     fetches = [self.summary_op, self.global_step]
+        # else:
+        #     fetches = [self.global_step]
 
-        fetches += [self.inc_step]
+        # fetches += [self.inc_step]
 
-        if config.agent_learning:
-            fetches += [self.train_op]
+        # if config.agent_learning:
+        #     fetches += [self.train_op]
 
-        feed_dict = {
-            self.local_network.x: batch.si,
-            self.ac: batch.a,
-            self.adv: batch.adv,
-            self.r: batch.r,
-            self.local_network.state_in[0]: batch.features[0],
-            self.local_network.state_in[1]: batch.features[1],
-        }
+        # feed_dict = {
+        #     self.local_network.x: batch.si,
+        #     self.ac: batch.a,
+        #     self.adv: batch.adv,
+        #     self.r: batch.r,
+        #     self.local_network.state_in[0]: batch.features[0],
+        #     self.local_network.state_in[1]: batch.features[1],
+        # }
 
-        fetched = sess.run(fetches, feed_dict=feed_dict)
+        # fetched = sess.run(fetches, feed_dict=feed_dict)
 
-        if should_compute_summary:
-            self.summary_writer.add_summary(tf.Summary.FromString(fetched[0]), fetched[1])
-            self.summary_writer.flush()
-        self.local_steps += 1
+        # if should_compute_summary:
+        #     self.summary_writer.add_summary(tf.Summary.FromString(fetched[0]), fetched[1])
+        #     self.summary_writer.flush()
+        # self.local_steps += 1
