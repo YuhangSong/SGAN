@@ -27,8 +27,9 @@ vis = visdom.Visdom()
 
 torch.manual_seed(1)
 
-LOGDIR = '../../result/add_r_ro_gp_3/'
+LOGDIR = '../../result/add_r_ro_gp_9/'
 MODE = 'wgan-gp'  # wgan or wgan-gp
+USE_R = True
 DATASET = '2grid'  # 8gaussians, 25gaussians, swissroll, 2gaussians, 2grid
 if DATASET is '2grid':
     GRID_SIZE = 8
@@ -149,15 +150,11 @@ def generate_image():
     """
     plt.clf()
 
-    data_fix_state = inf_train_gen(fix_state=True,fix_state_to=[5,0],batch_size=(N_POINTS**2))
+    '''get data'''
+    data_fix_state = inf_train_gen(fix_state=True,fix_state_to=[5,4],batch_size=(N_POINTS**2))
     state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
     state = state_prediction_gt.narrow(1,0,1)
     prediction_gt = state_prediction_gt.narrow(1,1,1)
-
-    '''true_dist'''
-    true_dist = prediction_gt.narrow(0,0,BATCH_SIZE).squeeze(1).cpu().numpy()
-    plt.scatter(true_dist[:, 0], true_dist[:, 1], c='orange', marker='+', alpha=0.5)
-
 
     '''disc_map'''
     points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
@@ -174,20 +171,34 @@ def generate_image():
     disc_map = disc_map.reshape((len(x), len(y))).transpose()
     plt.contour(x, y, disc_map)
 
-    '''samples'''
-    noise = torch.randn((BATCH_SIZE), 2).cuda()
-    stater_prediction = netG(
-                                noise_v = autograd.Variable(noise, volatile=True),
-                                state_v = autograd.Variable(state.narrow(0,0,BATCH_SIZE), volatile=True)
-                            ).data
-    stater = stater_prediction.narrow(1,0,1)
-    prediction = stater_prediction.narrow(1,1,1)
+    '''narrow to normal batch size'''
+    state_prediction_gt = state_prediction_gt.narrow(0,0,BATCH_SIZE)
+    state = state.narrow(0,0,BATCH_SIZE)
+    prediction_gt = prediction_gt.narrow(0,0,BATCH_SIZE)
 
-    samples = prediction.squeeze(1).cpu().numpy()
+    '''prediction_gt_samples'''
+    samples = prediction_gt.squeeze(1).cpu().numpy()
+    plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
+
+
+    '''prediction_gt_r_samples'''
+    noise = torch.randn((BATCH_SIZE), 2).cuda()
+    samples =   netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(prediction_gt, volatile=True)
+                ).data.narrow(1,0,1).squeeze(1).cpu().numpy()
+    plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
+
+    '''prediction_samples'''
+    noise = torch.randn((BATCH_SIZE), 2).cuda()
+    samples =   netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(state, volatile=True)
+                ).data.narrow(1,1,1).squeeze(1).cpu().numpy()
     plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
 
-    plt.savefig(LOGDIR + DATASET + '/' + 'frame' + str(frame_index[0]) + '.jpg')
 
+    plt.savefig(LOGDIR + DATASET + '/' + 'frame' + str(frame_index[0]) + '.jpg')
     plt_to_vis(plt.gcf(),'vis','fram_'+str(frame_index[0]))
 
     frame_index[0] += 1
@@ -279,6 +290,8 @@ if use_cuda:
 optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
 optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
 
+mse_loss_model = torch.nn.MSELoss(size_average=True)
+
 one = torch.FloatTensor([1])
 mone = one * -1
 if use_cuda:
@@ -311,6 +324,14 @@ for iteration in xrange(ITERS):
         state_prediction_gt = torch.Tensor(data.next()).cuda()
         state = state_prediction_gt.narrow(1,0,1)
         prediction_gt = state_prediction_gt.narrow(1,1,1)
+
+        if USE_R:
+            noise = torch.randn(BATCH_SIZE, 2).cuda()
+            prediction_gt = netG(
+                                noise_v = autograd.Variable(noise, volatile=True),
+                                state_v = autograd.Variable(prediction_gt, volatile=True)
+                            ).data.narrow(1,0,1)
+            state_prediction_gt = torch.cat([state,prediction_gt],1)
 
         netD.zero_grad()
 
@@ -349,6 +370,14 @@ for iteration in xrange(ITERS):
         optimizerD.step()
 
     ############################
+    if USE_R:
+        if Wasserstein_D.cpu().data.numpy()[0] > 0.0:
+            update_type = 'g'
+        else:
+            update_type = 'r'
+    else:
+        update_type = 'g'
+    ############################
     # (2) Update G network
     ###########################
     for p in netD.parameters():
@@ -365,23 +394,31 @@ for iteration in xrange(ITERS):
                             noise_v = autograd.Variable(noise),
                             state_v = autograd.Variable(state)
                         )
+    stater_v = stater_prediction_v.narrow(1,0,1)
     prediction_v = stater_prediction_v.narrow(1,1,1)
 
-    G = netD(
-            state_v = autograd.Variable(state),
-            prediction_v = prediction_v
-        )
-    G = G.mean()
-    G.backward(mone)
-    G_cost = -G
+    if update_type is 'g':
+        G = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = prediction_v
+            ).mean()
+        G_cost = -G
+        lib.plot.plot(LOGDIR + DATASET + '/' + 'G_cost', G_cost.cpu().data.numpy())
+        G.backward(mone)
+    elif update_type is 'r':
+        R = mse_loss_model(stater_v, autograd.Variable(state))
+        R_cost = R
+        lib.plot.plot(LOGDIR + DATASET + '/' + 'R_cost', R_cost.cpu().data.numpy())
+        R.backward()
+    
     optimizerG.step()
 
     # Write logs and save samples
     lib.plot.plot(LOGDIR + DATASET + '/' + 'disc cost', D_cost.cpu().data.numpy())
     lib.plot.plot(LOGDIR + DATASET + '/' + 'wasserstein distance', Wasserstein_D.cpu().data.numpy())
-    lib.plot.plot(LOGDIR + DATASET + '/' + 'gen cost', G_cost.cpu().data.numpy())
+    
 
-    if iteration % 100 == 1:
+    if iteration % 100 == 99:
         lib.plot.flush()
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
