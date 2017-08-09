@@ -31,9 +31,16 @@ torch.manual_seed(4213)
 GPU = range(2)
 
 EXP = 'baseline_53'
+
+# DATASET = '2grid' # 2grid
+# GAME_MDOE = 'full' # same-start, full
+# DOMAIN = 'image' # scalar, image
+# GAN_MODE = 'wgan' # wgan, wgan-gp
+# R_MODE = 'use-r' # use-r, none-r, test-r
+
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'image' # scalar, image
+DOMAIN = 'scalar' # scalar, image
 GAN_MODE = 'wgan' # wgan, wgan-gp
 R_MODE = 'none-r' # use-r, none-r, test-r
 
