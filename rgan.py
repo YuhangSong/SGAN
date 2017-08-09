@@ -32,7 +32,7 @@ GPU = range(2)
 
 USE_R = True
 TEST_R = False
-EXP = 'try_image_20'
+EXP = 'try_image_22'
 DATASET = '2grid' # 2grid
 DOMAIN = 'image' # scalar, image
 MODE = 'wgan-gp'  # wgan or wgan-gp
@@ -544,14 +544,21 @@ try:
 except Exception, e:
     print('Previous checkpoint for netC unfounded')
 
-for iteration in xrange(ITERS):
+iteration = -1
+while True:
+    iteration += 1
     ############################
     # (1) Update D network
     ###########################
     for p in netD.parameters():  # reset requires_grad
         p.requires_grad = True  # they are set to False below in netG update
 
-    for iter_d in xrange(CRITIC_ITERS):
+    if iteration < 25:
+        Critic_iters = 100
+    else:
+        Critic_iters = CRITIC_ITERS
+
+    for iter_d in xrange(Critic_iters):
 
         state_prediction_gt = torch.Tensor(data.next()).cuda()
         state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
@@ -638,11 +645,13 @@ for iteration in xrange(ITERS):
             ).mean()
         G_cost = -G
         lib.plot.plot(LOGDIR+'G_cost', G_cost.cpu().data.numpy())
+        lib.plot.plot(LOGDIR+'G_R', np.asarray([1.0]))
         G.backward(mone)
     elif update_type is 'r':
         R = mse_loss_model(stater_v, autograd.Variable(state))
         R_cost = R
         lib.plot.plot(LOGDIR+'R_cost', R_cost.cpu().data.numpy())
+        lib.plot.plot(LOGDIR+'G_R', np.asarray([-1.0]))
         R.backward()
     
     optimizerG.step()
