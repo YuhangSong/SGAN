@@ -22,30 +22,49 @@ import torch.optim as optim
 import subprocess
 from PIL import Image
 
+import torchvision.utils as vutils
 import visdom
 vis = visdom.Visdom()
 
 torch.manual_seed(1)
 
-LOGDIR = '../../result/add_r_ro_gp_9/'
-MODE = 'wgan-gp'  # wgan or wgan-gp
+GPU = range(2)
+
 USE_R = True
-DATASET = '2grid'  # 8gaussians, 25gaussians, swissroll, 2gaussians, 2grid
+TEST_R = False
+EXP = 'try_image_20'
+DATASET = '2grid' # 2grid
+DOMAIN = 'image' # scalar, image
+MODE = 'wgan-gp'  # wgan or wgan-gp
+
+DSP = EXP+'/'+DATASET+'/'+DOMAIN+'/'+MODE+'/'
+BASIC = '../../result/'
+LOGDIR = BASIC+DSP
+
+STATE_DEPTH = 1
+if DOMAIN is 'scalar':
+    DIM = 512
+    NOISE_SIZE = 2
+    LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
+    BATCH_SIZE = 256
+elif DOMAIN is 'image':
+    DIM = 64
+    IMAGE_SIZE = 32
+    FEATURE = 1
+    NOISE_SIZE = 4
+    LAMBDA = 10
+    BATCH_SIZE = 64
+
 if DATASET is '2grid':
     GRID_SIZE = 8
-DIM = 512  # Model dimensionality
-FIXED_GENERATOR = False  # whether to hold the generator fixed at real data plus
-# Gaussian noise, as in the plots in the paper
-LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
+
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
-BATCH_SIZE = 256  # Batch size
-ITERS = 100000  # how many generator iterations to train for
+ITERS = 1000000000  # how many generator iterations to train for
 use_cuda = True
 N_POINTS = 128
 
 def prepare_dir():
     subprocess.call(["mkdir", "-p", LOGDIR])
-    subprocess.call(["mkdir", "-p", LOGDIR+DATASET+'/'])
 prepare_dir()
 
 # ==================Definition Start======================
@@ -73,30 +92,138 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        main = nn.Sequential(
-            nn.Linear(2+2, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, 2+2),
-        )
-        self.main = main
+        if DOMAIN is 'scalar':
+            conv_layer = nn.Sequential(
+                nn.Linear(2, DIM),
+                nn.ReLU(True),
+                nn.Linear(DIM, DIM),
+                nn.ReLU(True),
+            )
+            self.conv_layer = conv_layer
+            cat_layer = nn.Sequential(
+                nn.Linear(DIM+NOISE_SIZE, DIM),
+            )
+            self.cat_layer = cat_layer
+            deconv_layer = nn.Sequential(
+                nn.Linear(DIM, DIM),
+                nn.ReLU(True),
+                nn.Linear(DIM, 2*(STATE_DEPTH+1)),
+            )
+            self.deconv_layer = deconv_layer
+        elif DOMAIN is 'image':
+            conv_layer = nn.Sequential(
+                # FEATURE*1*32*32
+                nn.Conv3d(
+                    in_channels=FEATURE,
+                    out_channels=64,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 64*1*16*16
+                nn.Conv3d(
+                    in_channels=64,
+                    out_channels=128,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 128*1*8*8
+                nn.Conv3d(
+                    in_channels=128,
+                    out_channels=256,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 256*1*4*4
+            )
+            self.conv_layer = nn.DataParallel(conv_layer,GPU)
+            squeeze_layer = nn.Sequential(
+                nn.Linear(256*1*4*4, DIM),
+                nn.ReLU(True),
+            )
+            self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
+            cat_layer = nn.Sequential(
+                nn.Linear(DIM+NOISE_SIZE, DIM),
+            )
+            self.cat_layer = nn.DataParallel(cat_layer,GPU)
+            unsqueeze_layer = nn.Sequential(
+                nn.Linear(DIM, 256*1*4*4),
+                nn.ReLU(True),
+            )
+            self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
+            deconv_layer = nn.Sequential(
+                # 256*1*4*4
+                nn.ConvTranspose3d(
+                    in_channels=256,
+                    out_channels=128,
+                    kernel_size=(2,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 128*2*8*8
+                nn.ConvTranspose3d(
+                    in_channels=128,
+                    out_channels=64,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 64*2*16*16
+                nn.ConvTranspose3d(
+                    in_channels=64,
+                    out_channels=FEATURE,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # FEATURE*2*32*32
+                nn.Sigmoid()
+            )
+            self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
 
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        state_v = state_v.squeeze(1)
-        x = torch.cat([state_v,noise_v],1)
+        if DOMAIN is 'scalar':
+            state_v = state_v.squeeze(1)
+        elif DOMAIN is 'image':
+            # N*D*F*H*W to N*F*D*H*W
+            state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
-        x = self.main(x)
+        x = self.conv_layer(state_v)
+        if DOMAIN is 'image':
+            temp = x.size()
+            x = x.view(x.size()[0], -1)
+            x = self.squeeze_layer(x)
+        x = self.cat_layer(torch.cat([x,noise_v],1))
+        if DOMAIN is 'image':
+            x = self.unsqueeze_layer(x)
+            x = x.view(temp)
+        x = self.deconv_layer(x)
 
         '''decompose'''
-        stater_v = x.narrow(1,0,2).unsqueeze(1)
-        prediction_v = x.narrow(1,2,2).unsqueeze(1)
-        x = torch.cat([stater_v,prediction_v],1)
+        if DOMAIN is 'scalar':
+            stater_v = x.narrow(1,0,2).unsqueeze(1)
+            prediction_v = x.narrow(1,2,2).unsqueeze(1)
+            x = torch.cat([stater_v,prediction_v],1)
+        else:
+            # N*F*D*H*W to N*D*F*H*W
+            x = x.permute(0,2,1,3,4)
 
         return x
 
@@ -106,26 +233,87 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        main = nn.Sequential(
-            nn.Linear(2+2, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, DIM),
-            nn.ReLU(True),
-            nn.Linear(DIM, 1),
-        )
-        self.main = main
+        if DOMAIN is 'scalar':
+            conv_layer = nn.Sequential(
+                nn.Linear(2+2, DIM),
+                nn.ReLU(True),
+                nn.Linear(DIM, DIM),
+                nn.ReLU(True),
+            )
+            self.conv_layer = conv_layer
+            cat_layer = nn.Sequential(
+                nn.Linear(DIM, DIM),
+                nn.ReLU(True),
+            )
+            self.cat_layer = cat_layer
+            final_layer = nn.Sequential(
+                nn.Linear(DIM, 1),
+            )
+            self.final_layer = final_layer
+
+        elif DOMAIN is 'image':
+            conv_layer =    nn.Sequential(
+                # FEATURE*2*32*32
+                nn.Conv3d(
+                    in_channels=FEATURE,
+                    out_channels=64,
+                    kernel_size=(2,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 64*1*16*16
+                nn.Conv3d(
+                    in_channels=64,
+                    out_channels=128,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 128*1*8*8
+                nn.Conv3d(
+                    in_channels=128,
+                    out_channels=256,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.ReLU(True),
+                # 256*1*4*4
+            )
+            self.conv_layer = conv_layer
+            cat_layer = nn.Sequential(
+                nn.Linear(256*1*4*4, DIM),
+                nn.ReLU(True),
+            )
+            self.cat_layer = cat_layer
+            final_layer = nn.Sequential(
+                nn.Linear(DIM, 1),
+            )
+            self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        state_v = state_v.squeeze(1)
-        prediction_v = prediction_v.squeeze(1)
-        x = torch.cat([state_v,prediction_v],1)
+        if DOMAIN is 'scalar':
+            state_v = state_v.squeeze(1)
+            prediction_v = prediction_v.squeeze(1)
+            x = torch.cat([state_v,prediction_v],1)
+        elif DOMAIN is 'image':
+            x = torch.cat([state_v,prediction_v],1)
+            # N*D*F*H*W to N*F*D*H*W
+            x = x.permute(0,2,1,3,4)
 
         '''forward'''
-        x = self.main(x)
+        x = self.conv_layer(x)
+        if DOMAIN is 'image':
+            x = x.view(x.size()[0], -1)
+        x = self.cat_layer(x)
+        x = self.final_layer(x)
         x = x.view(-1)
 
         return x
@@ -140,6 +328,10 @@ def weights_init(m):
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
+    elif classname.find('Conv3d') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('ConvTranspose3d') != -1:
+        m.weight.data.normal_(0.0, 0.02)
 
 frame_index = [0]
 
@@ -151,55 +343,79 @@ def generate_image():
     plt.clf()
 
     '''get data'''
-    data_fix_state = inf_train_gen(fix_state=True,fix_state_to=[5,4],batch_size=(N_POINTS**2))
+    if DOMAIN is 'scalar':
+        bs = (N_POINTS**2)
+    elif DOMAIN is 'image':
+        bs = BATCH_SIZE
+    data_fix_state = inf_train_gen(fix_state=True,fix_state_to=[5,4],batch_size=bs)
     state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
     state = state_prediction_gt.narrow(1,0,1)
     prediction_gt = state_prediction_gt.narrow(1,1,1)
 
     '''disc_map'''
-    points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
-    points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
-    points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
-    points = points.reshape((-1, 2))
-    points = np.expand_dims(points,1)
+    if DOMAIN is 'scalar':
+        points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
+        points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
+        points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
+        points = points.reshape((-1, 2))
+        points = np.expand_dims(points,1)
 
-    disc_map =  netD(
-                    state_v = autograd.Variable(state, volatile=True),
-                    prediction_v = autograd.Variable(torch.Tensor(points).cuda(), volatile=True)
-                ).cpu().data.numpy()
-    x = y = np.linspace(0, GRID_SIZE, N_POINTS)
-    disc_map = disc_map.reshape((len(x), len(y))).transpose()
-    plt.contour(x, y, disc_map)
+        disc_map =  netD(
+                        state_v = autograd.Variable(state, volatile=True),
+                        prediction_v = autograd.Variable(torch.Tensor(points).cuda(), volatile=True)
+                    ).cpu().data.numpy()
+        x = y = np.linspace(0, GRID_SIZE, N_POINTS)
+        disc_map = disc_map.reshape((len(x), len(y))).transpose()
+        plt.contour(x, y, disc_map)
 
-    '''narrow to normal batch size'''
-    state_prediction_gt = state_prediction_gt.narrow(0,0,BATCH_SIZE)
-    state = state.narrow(0,0,BATCH_SIZE)
-    prediction_gt = prediction_gt.narrow(0,0,BATCH_SIZE)
+        '''narrow to normal batch size'''
+        state_prediction_gt = state_prediction_gt.narrow(0,0,BATCH_SIZE)
+        state = state.narrow(0,0,BATCH_SIZE)
+        prediction_gt = prediction_gt.narrow(0,0,BATCH_SIZE)
 
-    '''prediction_gt_samples'''
-    samples = prediction_gt.squeeze(1).cpu().numpy()
-    plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
+    frame = str(frame_index[0])
+    def log_img(x,name,frame):
+        x=x.squeeze(1)
+        vutils.save_image(x, LOGDIR+name+'_'+frame+'.png')
+        vis.images( x.cpu().numpy(),
+                    win=DSP+name,
+                    opts=dict(caption=DSP+name+'_'+frame))
 
+    '''r'''
+    samples = prediction_gt
+    if DOMAIN is 'scalar':
+        samples = prediction_gt.squeeze(1).cpu().numpy()
+        plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
+    elif DOMAIN is 'image':
+        log_img(samples,'r',frame)
 
-    '''prediction_gt_r_samples'''
-    noise = torch.randn((BATCH_SIZE), 2).cuda()
+    '''e'''
+    noise = torch.randn((BATCH_SIZE), NOISE_SIZE).cuda()
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,0,1).squeeze(1).cpu().numpy()
-    plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
+                ).data.narrow(1,STATE_DEPTH-1,1)
+    if DOMAIN is 'scalar':
+        samples = samples.squeeze(1).cpu().numpy()
+        plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
+    elif DOMAIN is 'image':
+        log_img(samples,'e',frame)
 
-    '''prediction_samples'''
-    noise = torch.randn((BATCH_SIZE), 2).cuda()
+    '''g'''
+    noise = torch.randn((BATCH_SIZE), NOISE_SIZE).cuda()
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
-                ).data.narrow(1,1,1).squeeze(1).cpu().numpy()
-    plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
+                ).data.narrow(1,STATE_DEPTH,1)
+    if DOMAIN is 'scalar':
+        samples = samples.squeeze(1).cpu().numpy()
+        plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
+    elif DOMAIN is 'image':
+        log_img(samples,'g',frame)
 
-
-    plt.savefig(LOGDIR + DATASET + '/' + 'frame' + str(frame_index[0]) + '.jpg')
-    plt_to_vis(plt.gcf(),'vis','fram_'+str(frame_index[0]))
+    if DOMAIN is 'scalar':
+        plt.savefig(LOGDIR+'/'+'frame'+str(frame_index[0])+'.jpg')
+        plt_to_vis(plt.gcf(),DSP+'vis',DSP+'fram_'+str(frame_index[0]))
 
     frame_index[0] += 1
 
@@ -238,8 +454,21 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
                 next_x = np.clip(next_x,0,GRID_SIZE)
                 next_y = np.clip(next_y,0,GRID_SIZE)
 
-                data = np.array([[cur_x,cur_y],
-                                 [next_x,next_y]])
+                if DOMAIN is 'scalar':
+                    data = np.array([[cur_x,cur_y],
+                                     [next_x,next_y]])
+                elif DOMAIN is 'image':
+                    def to_ob(x,y):
+                        ob = np.zeros((IMAGE_SIZE,IMAGE_SIZE))
+                        ob[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)] = 1.0
+                        ob = np.expand_dims(ob,0)
+                        ob = np.expand_dims(ob,0)
+                        return ob
+                    data =  np.concatenate(
+                                (to_ob(cur_x,cur_y),to_ob(next_x,next_y)),
+                                axis=0
+                            )
+
                 dataset.append(data)
             dataset = np.array(dataset, dtype='float32')
             yield dataset
@@ -247,15 +476,18 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
 
 def calc_gradient_penalty(netD, state, prediction_gt, prediction):
 
-    prediction_gt = prediction_gt.squeeze(1)
-    prediction = prediction.squeeze(1)
+    prediction_gt = prediction_gt.contiguous()
+    prediction = prediction.contiguous()
+    temp = prediction_gt.size()
+    prediction_gt = prediction_gt.view(prediction_gt.size()[0],-1)
+    prediction = prediction.view(prediction.size()[0],-1)
 
     alpha = torch.rand(BATCH_SIZE, 1).cuda()
     alpha = alpha.expand(prediction_gt.size())
 
     interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
 
-    interpolates = autograd.Variable(interpolates, requires_grad=True).unsqueeze(1)
+    interpolates = autograd.Variable(interpolates, requires_grad=True).view(temp)
 
     disc_interpolates = netD(
                             state_v = autograd.Variable(state),
@@ -322,15 +554,15 @@ for iteration in xrange(ITERS):
     for iter_d in xrange(CRITIC_ITERS):
 
         state_prediction_gt = torch.Tensor(data.next()).cuda()
-        state = state_prediction_gt.narrow(1,0,1)
-        prediction_gt = state_prediction_gt.narrow(1,1,1)
+        state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
+        prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
 
         if USE_R:
-            noise = torch.randn(BATCH_SIZE, 2).cuda()
+            noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
             prediction_gt = netG(
                                 noise_v = autograd.Variable(noise, volatile=True),
                                 state_v = autograd.Variable(prediction_gt, volatile=True)
-                            ).data.narrow(1,0,1)
+                            ).data.narrow(1,STATE_DEPTH-1,1)
             state_prediction_gt = torch.cat([state,prediction_gt],1)
 
         netD.zero_grad()
@@ -343,12 +575,12 @@ for iteration in xrange(ITERS):
         D_real.backward(mone)
 
         '''train with fake'''
-        noise = torch.randn(BATCH_SIZE, 2).cuda()
+        noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
         stater_prediction =  netG(
                                 noise_v = autograd.Variable(noise, volatile=True),
                                 state_v = autograd.Variable(state, volatile=True)
                             ).data
-        prediction = stater_prediction.narrow(1,1,1)
+        prediction = stater_prediction.narrow(1,STATE_DEPTH,1)
 
         D_fake =    netD(
                         state_v = autograd.Variable(state),
@@ -377,6 +609,8 @@ for iteration in xrange(ITERS):
             update_type = 'r'
     else:
         update_type = 'g'
+    if TEST_R:
+        update_type = 'r'
     ############################
     # (2) Update G network
     ###########################
@@ -384,18 +618,18 @@ for iteration in xrange(ITERS):
         p.requires_grad = False  # to avoid computation
 
     state_prediction_gt = torch.Tensor(data.next()).cuda()
-    state = state_prediction_gt.narrow(1,0,1)
-    prediction_gt = state_prediction_gt.narrow(1,1,1)
+    state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
+    prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
 
     netG.zero_grad()
 
-    noise = torch.randn(BATCH_SIZE, 2).cuda()
+    noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
     stater_prediction_v = netG(
                             noise_v = autograd.Variable(noise),
                             state_v = autograd.Variable(state)
                         )
-    stater_v = stater_prediction_v.narrow(1,0,1)
-    prediction_v = stater_prediction_v.narrow(1,1,1)
+    stater_v = stater_prediction_v.narrow(1,0,STATE_DEPTH)
+    prediction_v = stater_prediction_v.narrow(1,STATE_DEPTH,1)
 
     if update_type is 'g':
         G = netD(
@@ -403,27 +637,27 @@ for iteration in xrange(ITERS):
                 prediction_v = prediction_v
             ).mean()
         G_cost = -G
-        lib.plot.plot(LOGDIR + DATASET + '/' + 'G_cost', G_cost.cpu().data.numpy())
+        lib.plot.plot(LOGDIR+'G_cost', G_cost.cpu().data.numpy())
         G.backward(mone)
     elif update_type is 'r':
         R = mse_loss_model(stater_v, autograd.Variable(state))
         R_cost = R
-        lib.plot.plot(LOGDIR + DATASET + '/' + 'R_cost', R_cost.cpu().data.numpy())
+        lib.plot.plot(LOGDIR+'R_cost', R_cost.cpu().data.numpy())
         R.backward()
     
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.plot(LOGDIR + DATASET + '/' + 'disc cost', D_cost.cpu().data.numpy())
-    lib.plot.plot(LOGDIR + DATASET + '/' + 'wasserstein distance', Wasserstein_D.cpu().data.numpy())
-    
+    lib.plot.plot(LOGDIR+'D_cost', D_cost.cpu().data.numpy())
+    lib.plot.plot(LOGDIR+'W_dis', Wasserstein_D.cpu().data.numpy())
+    lib.plot.flush(BASIC)
+    lib.plot.tick()
 
-    if iteration % 100 == 99:
-        lib.plot.flush()
+    if iteration % 100 == 4:
+    
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image()
-
-    lib.plot.tick()
+    
 
     print('[iteration:'+str(iteration)+']')

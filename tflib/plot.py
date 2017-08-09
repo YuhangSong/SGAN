@@ -22,7 +22,7 @@ def tick():
 def plot(name, value):
 	_since_last_flush[name][_iter[0]] = value
 
-def flush():
+def flush(BASIC):
 	prints = []
 
 	for name, vals in _since_last_flush.items():
@@ -32,18 +32,20 @@ def flush():
 		x_vals = np.sort(_since_beginning[name].keys())
 		y_vals = [_since_beginning[name][x] for x in x_vals]
 
+		dsp = name.replace(BASIC, '')
+
 		plt.clf()
 		plt.plot(x_vals, y_vals)
 		plt.xlabel('iteration')
-		plt.ylabel(name)
+		plt.ylabel(dsp)
 		plt.savefig(name.replace(' ', '_')+'.jpg')
 
-		vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
-					Y=torch.from_numpy(np.asarray(y_vals)),
-                    win=name,
-                    opts=dict(title=name))
+		if len(x_vals) > 1:
+			vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
+						Y=torch.from_numpy(np.asarray(y_vals)),
+	                    win=dsp,
+	                    opts=dict(title=dsp))
 
-	# print "iter {}\t{}".format(_iter[0], "\t".join(prints))
 	_since_last_flush.clear()
 
 	with open('log.pkl', 'wb') as f:
