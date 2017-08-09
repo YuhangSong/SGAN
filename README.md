@@ -5,7 +5,15 @@
 ~/anaconda3/bin/conda create -n gmbrl_3 python=2 -y && source ~/.bashrc && source activate gmbrl_3 && wget http://download.pytorch.org/whl/cu80/torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torch-0.1.12.post2-cp27-none-linux_x86_64.whl && pip install torchvision && pip install tensorflow && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
 ```
 
+# Quik setup enviroment grl_2
+```
+sudo apt-get install -y tmux htop cmake golang libjpeg-dev && ~/anaconda3/bin/conda create -n grl_2 python=2 -y && source ~/.bashrc && source activate grl_2 && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && git clone https://github.com/pytorch/pytorch.git && cd pytorch && python setup.py install && pip install torchvision && pip install tensorflow && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && pip install sklearn
+```
+
 # vis server
+```
+wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
+```
 ```
 source activate gmbrl_3 && python -m visdom.server
 ```
