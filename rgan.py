@@ -684,9 +684,9 @@ while True:
         optimizerD.step()
 
     if GAN_MODE is 'wgan-gp':
-        lib.plot.plot(LOGDIR+'GP_cost', gradient_penalty.cpu().data.numpy())
-    lib.plot.plot(LOGDIR+'D_cost', D_cost.cpu().data.numpy())
-    lib.plot.plot(LOGDIR+'W_dis', Wasserstein_D.cpu().data.numpy())
+        lib.plot.plot('GP_cost', gradient_penalty.cpu().data.numpy())
+    lib.plot.plot('D_cost', D_cost.cpu().data.numpy())
+    lib.plot.plot('W_dis', Wasserstein_D.cpu().data.numpy())
     
 
     ############################
@@ -725,20 +725,20 @@ while True:
                 prediction_v = prediction_v
             ).mean()
         G_cost = -G
-        lib.plot.plot(LOGDIR+'G_cost', G_cost.cpu().data.numpy())
-        lib.plot.plot(LOGDIR+'G_R', np.asarray([1.0]))
+        lib.plot.plot('G_cost', G_cost.cpu().data.numpy())
+        lib.plot.plot('G_R', np.asarray([1.0]))
         G.backward(mone)
     elif update_type is 'r':
         R = mse_loss_model(stater_v, autograd.Variable(state))
         R_cost = R
-        lib.plot.plot(LOGDIR+'R_cost', R_cost.cpu().data.numpy())
-        lib.plot.plot(LOGDIR+'G_R', np.asarray([-1.0]))
+        lib.plot.plot('R_cost', R_cost.cpu().data.numpy())
+        lib.plot.plot('G_R', np.asarray([-1.0]))
         R.backward()
     
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.flush(BASIC)
+    lib.plot.flush(LOGDIR,DSP)
     lib.plot.tick()
 
     if iteration % 100 == 4:
