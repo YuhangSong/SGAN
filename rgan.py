@@ -26,13 +26,13 @@ import torchvision.utils as vutils
 import visdom
 vis = visdom.Visdom()
 
-torch.manual_seed(1)
+torch.manual_seed(4213)
 
 GPU = range(2)
 
 USE_R = True
 TEST_R = False
-EXP = 'try_image_22'
+EXP = 'image_r_32'
 DATASET = '2grid' # 2grid
 DOMAIN = 'image' # scalar, image
 MODE = 'wgan-gp'  # wgan or wgan-gp
@@ -51,9 +51,9 @@ elif DOMAIN is 'image':
     DIM = 64
     IMAGE_SIZE = 32
     FEATURE = 1
-    NOISE_SIZE = 4
+    NOISE_SIZE = DIM
     LAMBDA = 10
-    BATCH_SIZE = 64
+    BATCH_SIZE = 256
 
 if DATASET is '2grid':
     GRID_SIZE = 8
@@ -191,7 +191,7 @@ class Generator(nn.Module):
                 ),
                 nn.ReLU(True),
                 # FEATURE*2*32*32
-                nn.Sigmoid()
+                # nn.Sigmoid()
             )
             self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
 
@@ -323,15 +323,15 @@ class Discriminator(nn.Module):
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, 0.02)
+        m.weight.data.normal_(0.0, 0.05)
         m.bias.data.fill_(0)
     elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(1.0, 0.02)
+        m.weight.data.normal_(1.0, 0.05)
         m.bias.data.fill_(0)
     elif classname.find('Conv3d') != -1:
-        m.weight.data.normal_(0.0, 0.02)
+        m.weight.data.normal_(0.0, 0.05)
     elif classname.find('ConvTranspose3d') != -1:
-        m.weight.data.normal_(0.0, 0.02)
+        m.weight.data.normal_(0.0, 0.05)
 
 frame_index = [0]
 
@@ -553,7 +553,7 @@ while True:
     for p in netD.parameters():  # reset requires_grad
         p.requires_grad = True  # they are set to False below in netG update
 
-    if iteration < 25:
+    if iteration < 4:
         Critic_iters = 100
     else:
         Critic_iters = CRITIC_ITERS
