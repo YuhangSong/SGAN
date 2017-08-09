@@ -30,9 +30,9 @@ torch.manual_seed(4213)
 
 GPU = range(2)
 
-USE_R = True
+USE_R = False
 TEST_R = False
-EXP = 'image_r_32'
+EXP = 'image_baseline_44'
 DATASET = '2grid' # 2grid
 DOMAIN = 'image' # scalar, image
 MODE = 'wgan-gp'  # wgan or wgan-gp
@@ -48,12 +48,12 @@ if DOMAIN is 'scalar':
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
     BATCH_SIZE = 256
 elif DOMAIN is 'image':
-    DIM = 64
+    DIM = 128
     IMAGE_SIZE = 32
     FEATURE = 1
-    NOISE_SIZE = DIM
+    NOISE_SIZE = DIM/2
     LAMBDA = 10
-    BATCH_SIZE = 256
+    BATCH_SIZE = 512
 
 if DATASET is '2grid':
     GRID_SIZE = 8
@@ -191,7 +191,7 @@ class Generator(nn.Module):
                 ),
                 nn.ReLU(True),
                 # FEATURE*2*32*32
-                # nn.Sigmoid()
+                nn.Sigmoid()
             )
             self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
 
@@ -322,16 +322,22 @@ class Discriminator(nn.Module):
 # custom weights initialization called on netG and netD
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, 0.05)
-        m.bias.data.fill_(0)
-    elif classname.find('BatchNorm') != -1:
-        m.weight.data.normal_(1.0, 0.05)
-        m.bias.data.fill_(0)
-    elif classname.find('Conv3d') != -1:
-        m.weight.data.normal_(0.0, 0.05)
-    elif classname.find('ConvTranspose3d') != -1:
-        m.weight.data.normal_(0.0, 0.05)
+    print('class name:'+str(classname))
+    sigma = 0.2
+    # if classname.find('Linear') != -1:
+    #     print('find Linear')
+    #     m.weight.data.normal_(0.0, sigma)
+    #     m.bias.data.fill_(0)
+    # elif classname.find('BatchNorm') != -1:
+    #     print('find BatchNorm')
+    #     m.weight.data.normal_(1.0, sigma)
+    #     m.bias.data.fill_(0)
+    # elif classname.find('Conv3d') != -1:
+    #     print('find Conv3d')
+    #     m.weight.data.normal_(0.0, sigma)
+    # elif classname.find('ConvTranspose3d') != -1:
+    #     print('find ConvTranspose3d')
+    #     m.weight.data.normal_(0.0, sigma)
 
 frame_index = [0]
 
@@ -554,7 +560,7 @@ while True:
         p.requires_grad = True  # they are set to False below in netG update
 
     if iteration < 4:
-        Critic_iters = 100
+        Critic_iters = CRITIC_ITERS
     else:
         Critic_iters = CRITIC_ITERS
 
@@ -580,6 +586,7 @@ while True:
                         prediction_v = autograd.Variable(prediction_gt)
                     ).mean()
         D_real.backward(mone)
+        # print(D_real)
 
         '''train with fake'''
         noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
@@ -594,6 +601,7 @@ while True:
                         prediction_v = autograd.Variable(prediction)
                     ).mean()
         D_fake.backward(one)
+        # print(D_fake)
 
         '''train with gradient penalty'''
         gradient_penalty =  calc_gradient_penalty(
@@ -603,10 +611,15 @@ while True:
                                 prediction = prediction
                             )
         gradient_penalty.backward()
+        # print(gradient_penalty)
 
         D_cost = D_fake - D_real + gradient_penalty
         Wasserstein_D = D_real - D_fake
         optimizerD.step()
+
+    lib.plot.plot(LOGDIR+'D_cost', D_cost.cpu().data.numpy())
+    lib.plot.plot(LOGDIR+'W_dis', Wasserstein_D.cpu().data.numpy())
+    lib.plot.plot(LOGDIR+'GP_cost', gradient_penalty.cpu().data.numpy())
 
     ############################
     if USE_R:
@@ -657,8 +670,6 @@ while True:
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.plot(LOGDIR+'D_cost', D_cost.cpu().data.numpy())
-    lib.plot.plot(LOGDIR+'W_dis', Wasserstein_D.cpu().data.numpy())
     lib.plot.flush(BASIC)
     lib.plot.tick()
 

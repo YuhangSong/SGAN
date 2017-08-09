@@ -22,7 +22,7 @@ def tick():
 def plot(name, value):
 	_since_last_flush[name][_iter[0]] = value
 
-def flush(BASIC):
+def flush(BASIC='../../result/'):
 	prints = []
 
 	for name, vals in _since_last_flush.items():
