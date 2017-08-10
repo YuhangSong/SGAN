@@ -30,32 +30,39 @@ torch.manual_seed(4213)
 
 GPU = range(2)
 
-EXP = 'baseline_53'
+EXP = 'baseline_81'
+
 DATASET = '2grid' # 2grid
-GAME_MDOE = 'full' # same-start, full
+GAME_MDOE = 'same-start' # same-start, full
 DOMAIN = 'image' # scalar, image
-GAN_MODE = 'wgan' # wgan, wgan-gp
+GAN_MODE = 'wgan-gp' # wgan, wgan-gp
 R_MODE = 'none-r' # use-r, none-r, test-r
+
+# DATASET = '2grid' # 2grid
+# GAME_MDOE = 'full' # same-start, full
+# DOMAIN = 'scalar' # scalar, image
+# GAN_MODE = 'wgan' # wgan, wgan-gp
+# R_MODE = 'none-r' # use-r, none-r, test-r
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
 STATE_DEPTH = 1
-if DOMAIN is 'scalar':
+if DOMAIN=='scalar':
     DIM = 512
     NOISE_SIZE = 2
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
     BATCH_SIZE = 256
-elif DOMAIN is 'image':
-    DIM = 128
+elif DOMAIN=='image':
+    DIM = 64
     IMAGE_SIZE = 32
     FEATURE = 1
-    NOISE_SIZE = DIM/2
+    NOISE_SIZE = 128
     LAMBDA = 10
-    BATCH_SIZE = 512
+    BATCH_SIZE = 50
 
-if DATASET is '2grid':
+if DATASET=='2grid':
     GRID_SIZE = 8
 
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
@@ -92,7 +99,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        if DOMAIN is 'scalar':
+        if DOMAIN=='scalar':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2, DIM),
@@ -114,7 +121,7 @@ class Generator(nn.Module):
             )
             self.deconv_layer = deconv_layer
 
-        elif DOMAIN is 'image':
+        elif DOMAIN=='image':
 
             conv_layer = nn.Sequential(
 
@@ -126,10 +133,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
                 nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
 
                 # 64*1*16*16
 
@@ -139,10 +146,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
                 nn.BatchNorm3d(128),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
 
                 # 128*1*8*8
 
@@ -152,10 +159,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
                 nn.BatchNorm3d(256),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
 
                 # 256*1*4*4
             )
@@ -163,19 +170,19 @@ class Generator(nn.Module):
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(256*1*4*4, DIM),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
             )
             self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
 
             cat_layer = nn.Sequential(
                 nn.Linear(DIM+NOISE_SIZE, DIM),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
             )
             self.cat_layer = nn.DataParallel(cat_layer,GPU)
 
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(DIM, 256*1*4*4),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
             )
             self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
 
@@ -189,10 +196,10 @@ class Generator(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
                 nn.BatchNorm3d(128),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
 
                 # 128*2*8*8
 
@@ -202,10 +209,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
                 nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
 
                 # 64*2*16*16
 
@@ -215,9 +222,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
-                nn.Tanh(),
+                # nn.Tanh(),
+                nn.Sigmoid()
 
                 # FEATURE*2*32*32
 
@@ -228,26 +236,26 @@ class Generator(nn.Module):
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if DOMAIN is 'scalar':
+        if DOMAIN=='scalar':
             state_v = state_v.squeeze(1)
-        elif DOMAIN is 'image':
+        elif DOMAIN=='image':
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(state_v)
-        if DOMAIN is 'image':
+        if DOMAIN=='image':
             temp = x.size()
             x = x.view(x.size()[0], -1)
             x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
-        if DOMAIN is 'image':
+        if DOMAIN=='image':
             x = self.unsqueeze_layer(x)
             x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if DOMAIN is 'scalar':
+        if DOMAIN=='scalar':
             stater_v = x.narrow(1,0,2).unsqueeze(1)
             prediction_v = x.narrow(1,2,2).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
@@ -263,7 +271,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        if DOMAIN is 'scalar':
+        if DOMAIN=='scalar':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2+2, DIM),
@@ -282,7 +290,7 @@ class Discriminator(nn.Module):
             )
 
 
-        elif DOMAIN is 'image':
+        elif DOMAIN=='image':
 
             conv_layer =    nn.Sequential(
 
@@ -294,9 +302,10 @@ class Discriminator(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.InstanceNorm3d(64),
+                nn.ReLU(True),
 
                 # 64*1*16*16
 
@@ -306,9 +315,10 @@ class Discriminator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.InstanceNorm3d(128),
+                nn.ReLU(True),
 
                 # 128*1*8*8
 
@@ -318,23 +328,24 @@ class Discriminator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=True
                 ),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.InstanceNorm3d(256),
+                nn.ReLU(True),
 
                 # 256*1*4*4
             )
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(256*1*4*4, DIM),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.ReLU(True),
             )
 
             final_layer = nn.Sequential(
                 nn.Linear(DIM, 1),
             )
 
-        if GAN_MODE is 'wgan-gp':
+        if GAN_MODE=='wgan-gp':
             self.conv_layer = conv_layer
             self.squeeze_layer = squeeze_layer
             self.final_layer = final_layer
@@ -346,18 +357,18 @@ class Discriminator(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if DOMAIN is 'scalar':
+        if DOMAIN=='scalar':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
-        elif DOMAIN is 'image':
+        elif DOMAIN=='image':
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(x)
-        if DOMAIN is 'image':
+        if DOMAIN=='image':
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.final_layer(x)
@@ -394,9 +405,9 @@ def generate_image():
     plt.clf()
 
     '''get data'''
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         bs = (N_POINTS**2)
-    elif DOMAIN is 'image':
+    elif DOMAIN=='image':
         bs = BATCH_SIZE
     data_fix_state = inf_train_gen(fix_state=True,batch_size=bs)
     state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
@@ -404,7 +415,7 @@ def generate_image():
     prediction_gt = state_prediction_gt.narrow(1,1,1)
 
     '''disc_map'''
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
         points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
         points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
@@ -434,10 +445,10 @@ def generate_image():
 
     '''r'''
     samples = prediction_gt
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         samples = prediction_gt.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
-    elif DOMAIN is 'image':
+    elif DOMAIN=='image':
         log_img(samples,'r',frame)
 
     '''e'''
@@ -446,10 +457,10 @@ def generate_image():
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(prediction_gt, volatile=True)
                 ).data.narrow(1,STATE_DEPTH-1,1)
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
-    elif DOMAIN is 'image':
+    elif DOMAIN=='image':
         log_img(samples,'e',frame)
 
     '''g'''
@@ -458,13 +469,13 @@ def generate_image():
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
                 ).data.narrow(1,STATE_DEPTH,1)
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
-    elif DOMAIN is 'image':
+    elif DOMAIN=='image':
         log_img(samples,'g',frame)
 
-    if DOMAIN is 'scalar':
+    if DOMAIN=='scalar':
         plt.savefig(LOGDIR+'/'+'frame'+str(frame_index[0])+'.jpg')
         plt_to_vis(plt.gcf(),DSP+'vis',DSP+'fram_'+str(frame_index[0]))
 
@@ -474,7 +485,7 @@ def generate_image():
 # Dataset iterator
 def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
 
-    if DATASET == '2grid':
+    if DATASET=='2grid':
 
         scale = 2.
         centers = [
@@ -505,10 +516,10 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
                 next_x = np.clip(next_x,0,GRID_SIZE)
                 next_y = np.clip(next_y,0,GRID_SIZE)
 
-                if DOMAIN is 'scalar':
+                if DOMAIN=='scalar':
                     data = np.array([[cur_x,cur_y],
                                      [next_x,next_y]])
-                elif DOMAIN is 'image':
+                elif DOMAIN=='image':
                     def to_ob(x,y):
                         ob = np.zeros((IMAGE_SIZE,IMAGE_SIZE))
                         ob.fill(0.2)
@@ -528,18 +539,14 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
 
 def calc_gradient_penalty(netD, state, prediction_gt, prediction):
 
-    prediction_gt = prediction_gt.contiguous()
-    prediction = prediction.contiguous()
-    temp = prediction_gt.size()
-    prediction_gt = prediction_gt.view(prediction_gt.size()[0],-1)
-    prediction = prediction.view(prediction.size()[0],-1)
+    alpha = torch.rand(BATCH_SIZE).cuda()
+    alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
+    for i in range(alpha.size()[0]):
+        alpha_expand[i].fill_(alpha[i])
 
-    alpha = torch.rand(BATCH_SIZE, 1).cuda()
-    alpha = alpha.expand(prediction_gt.size())
+    interpolates = alpha_expand * prediction_gt + ((1 - alpha_expand) * prediction)
 
-    interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
-
-    interpolates = autograd.Variable(interpolates, requires_grad=True).view(temp)
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
 
     disc_interpolates = netD(
                             state_v = autograd.Variable(state),
@@ -582,9 +589,9 @@ if use_cuda:
     one = one.cuda()
     mone = mone.cuda()
 
-if GAME_MDOE is 'same-start':
+if GAME_MDOE=='same-start':
     data = inf_train_gen(fix_state=True)
-elif GAME_MDOE is 'full':
+elif GAME_MDOE=='full':
     data = inf_train_gen(fix_state=False)
 
 print('Trying load models....')
@@ -615,7 +622,7 @@ while True:
 
     for iter_d in xrange(Critic_iters):
 
-        if GAN_MODE is 'wgan':
+        if GAN_MODE=='wgan':
             for p in netD.parameters():
                 p.data.clamp_(-0.01, +0.01)
 
@@ -623,7 +630,7 @@ while True:
         state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
         prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
 
-        if R_MODE is 'use-r':
+        if R_MODE=='use-r':
             noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
             prediction_gt = netG(
                                 noise_v = autograd.Variable(noise, volatile=True),
@@ -657,7 +664,7 @@ while True:
         # print(D_fake)
 
         '''train with gradient penalty'''
-        if GAN_MODE is 'wgan-gp':
+        if GAN_MODE=='wgan-gp':
             gradient_penalty =  calc_gradient_penalty(
                                     netD = netD,
                                     state = state,
@@ -667,30 +674,30 @@ while True:
             gradient_penalty.backward()
 
 
-        if GAN_MODE is 'wgan-gp':
+        if GAN_MODE=='wgan-gp':
             D_cost = D_fake - D_real + gradient_penalty
-        elif GAN_MODE is 'wgan':
+        elif GAN_MODE=='wgan':
             D_cost = D_fake - D_real
 
         Wasserstein_D = D_real - D_fake
 
         optimizerD.step()
 
-    if GAN_MODE is 'wgan-gp':
-        lib.plot.plot(LOGDIR+'GP_cost', gradient_penalty.cpu().data.numpy())
-    lib.plot.plot(LOGDIR+'D_cost', D_cost.cpu().data.numpy())
-    lib.plot.plot(LOGDIR+'W_dis', Wasserstein_D.cpu().data.numpy())
+    if GAN_MODE=='wgan-gp':
+        lib.plot.plot('GP_cost', gradient_penalty.cpu().data.numpy())
+    lib.plot.plot('D_cost', D_cost.cpu().data.numpy())
+    lib.plot.plot('W_dis', Wasserstein_D.cpu().data.numpy())
     
 
     ############################
-    if R_MODE is 'use-r':
+    if R_MODE=='use-r':
         if Wasserstein_D.cpu().data.numpy()[0] > 0.0:
             update_type = 'g'
         else:
             update_type = 'r'
-    elif R_MODE is 'none-r':
+    elif R_MODE=='none-r':
         update_type = 'g'
-    elif R_MODE is 'test-r':
+    elif R_MODE=='test-r':
         update_type = 'r'
     ############################
     # (2) Update G network
@@ -712,26 +719,26 @@ while True:
     stater_v = stater_prediction_v.narrow(1,0,STATE_DEPTH)
     prediction_v = stater_prediction_v.narrow(1,STATE_DEPTH,1)
 
-    if update_type is 'g':
+    if update_type=='g':
         G = netD(
                 state_v = autograd.Variable(state),
                 prediction_v = prediction_v
             ).mean()
         G_cost = -G
-        lib.plot.plot(LOGDIR+'G_cost', G_cost.cpu().data.numpy())
-        lib.plot.plot(LOGDIR+'G_R', np.asarray([1.0]))
+        lib.plot.plot('G_cost', G_cost.cpu().data.numpy())
+        lib.plot.plot('G_R', np.asarray([1.0]))
         G.backward(mone)
-    elif update_type is 'r':
+    elif update_type=='r':
         R = mse_loss_model(stater_v, autograd.Variable(state))
         R_cost = R
-        lib.plot.plot(LOGDIR+'R_cost', R_cost.cpu().data.numpy())
-        lib.plot.plot(LOGDIR+'G_R', np.asarray([-1.0]))
+        lib.plot.plot('R_cost', R_cost.cpu().data.numpy())
+        lib.plot.plot('G_R', np.asarray([-1.0]))
         R.backward()
     
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.flush(BASIC)
+    lib.plot.flush(LOGDIR,DSP)
     lib.plot.tick()
 
     if iteration % 100 == 4:
