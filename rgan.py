@@ -34,15 +34,9 @@ EXP = 'baseline_86'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-decade' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 R_MODE = 'use-r' # use-r, none-r, test-r
-
-# DATASET = '2grid' # 2grid
-# GAME_MDOE = 'full' # same-start, full
-# DOMAIN = 'scalar' # scalar, image
-# GAN_MODE = 'wgan' # wgan, wgan-grad-panish
-# R_MODE = 'none-r' # use-r, none-r, test-r
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'
 BASIC = '../../result/'
@@ -63,12 +57,14 @@ elif DOMAIN=='image':
     BATCH_SIZE = 50
 
 if DATASET=='2grid':
-    GRID_SIZE = 8
+    GRID_SIZE = 5
 
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
 ITERS = 1000000000  # how many generator iterations to train for
 use_cuda = True
 N_POINTS = 128
+GRID_BACKGROUND = 0.2
+GRID_FOREGROUND = 0.8
 
 def prepare_dir():
     subprocess.call(["mkdir", "-p", LOGDIR])
@@ -537,8 +533,8 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
                 elif DOMAIN=='image':
                     def to_ob(x,y):
                         ob = np.zeros((IMAGE_SIZE,IMAGE_SIZE))
-                        ob.fill(0.2)
-                        ob[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)] = 0.8
+                        ob.fill(GRID_BACKGROUND)
+                        ob[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)] = GRID_FOREGROUND
                         ob = np.expand_dims(ob,0)
                         ob = np.expand_dims(ob,0)
                         return ob
@@ -691,8 +687,7 @@ while True:
             if DOMAIN=='scalar':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
             elif DOMAIN=='image':
-                print(no_ready)
-                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
+                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(GRID_BACKGROUND,GRID_FOREGROUND)
             D_uni = netD(
                 state_v = autograd.Variable(torch.cat([state,state],0)),
                 prediction_v = autograd.Variable(prediction_uni)
