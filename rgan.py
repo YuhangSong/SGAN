@@ -30,18 +30,18 @@ torch.manual_seed(4213)
 
 GPU = range(2)
 
-EXP = 'baseline_81'
+EXP = 'baseline_86'
 
 DATASET = '2grid' # 2grid
-GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'image' # scalar, image
-GAN_MODE = 'wgan-gp' # wgan, wgan-gp
-R_MODE = 'none-r' # use-r, none-r, test-r
+GAME_MDOE = 'full' # same-start, full
+DOMAIN = 'scalar' # scalar, image
+GAN_MODE = 'wgan-decade' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
+R_MODE = 'use-r' # use-r, none-r, test-r
 
 # DATASET = '2grid' # 2grid
 # GAME_MDOE = 'full' # same-start, full
 # DOMAIN = 'scalar' # scalar, image
-# GAN_MODE = 'wgan' # wgan, wgan-gp
+# GAN_MODE = 'wgan' # wgan, wgan-grad-panish
 # R_MODE = 'none-r' # use-r, none-r, test-r
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'
@@ -93,6 +93,19 @@ def plt_to_vis(fig,win,name):
     vis.image(  img,
                 win=win,
                 opts=dict(title=name))
+
+class D_out_layer(nn.Module):
+
+    def __init__(self):
+        super(D_out_layer, self).__init__()
+    def forward(self, x):
+        if GAN_MODE=='wgan-gravity':
+            for i in range(x.size()[0]):
+                if x[i].data.cpu().numpy()[0]>0.0:
+                    x[i] = torch.log(x[i]+1.0)
+                elif x[i].data.cpu().numpy()[0]<0.0:
+                    x[i] = -torch.log(-x[i]+1.0)
+        return x
 
 class Generator(nn.Module):
 
@@ -287,6 +300,7 @@ class Discriminator(nn.Module):
 
             final_layer = nn.Sequential(
                 nn.Linear(DIM, 1),
+                D_out_layer(),
             )
 
 
@@ -343,9 +357,10 @@ class Discriminator(nn.Module):
 
             final_layer = nn.Sequential(
                 nn.Linear(DIM, 1),
+                D_out_layer(),
             )
 
-        if GAN_MODE=='wgan-gp':
+        if GAN_MODE=='wgan-grad-panish':
             self.conv_layer = conv_layer
             self.squeeze_layer = squeeze_layer
             self.final_layer = final_layer
@@ -384,14 +399,14 @@ def weights_init(m):
     print('class name:'+str(classname))
     sigma = 0.02
     if classname.find('Linear') != -1:
-        print('find Linear')
+        print('\tfind Linear')
         m.weight.data.normal_(0.0, sigma)
         m.bias.data.fill_(0.0)
     elif classname.find('Conv3d') != -1:
-        print('find Conv3d')
+        print('\tfind Conv3d')
         m.weight.data.normal_(0.0, sigma)
     elif classname.find('ConvTranspose3d') != -1:
-        print('find ConvTranspose3d')
+        print('\tfind ConvTranspose3d')
         m.weight.data.normal_(0.0, sigma)
     print('----------------------------------')
 
@@ -606,90 +621,111 @@ try:
 except Exception, e:
     print('Previous checkpoint for netC unfounded')
 
+# lib.plot.restore(LOGDIR,DSP)
+
 iteration = -1
 while True:
     iteration += 1
+
     ############################
     # (1) Update D network
     ###########################
-    for p in netD.parameters():  # reset requires_grad
-        p.requires_grad = True  # they are set to False below in netG update
 
-    if iteration < 4:
-        Critic_iters = CRITIC_ITERS
-    else:
-        Critic_iters = CRITIC_ITERS
+    for p in netD.parameters():
+        p.requires_grad = True
 
-    for iter_d in xrange(Critic_iters):
+    for iter_d in xrange(CRITIC_ITERS):
 
         if GAN_MODE=='wgan':
             for p in netD.parameters():
                 p.data.clamp_(-0.01, +0.01)
 
+        '''get data set'''
         state_prediction_gt = torch.Tensor(data.next()).cuda()
         state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
         prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
 
+        '''get generated data'''
+        noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+        stater_prediction = netG(
+            noise_v = autograd.Variable(noise, volatile=True),
+            state_v = autograd.Variable(state, volatile=True)
+        ).data
+        prediction = stater_prediction.narrow(1,STATE_DEPTH,1)
+
         if R_MODE=='use-r':
             noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
             prediction_gt = netG(
-                                noise_v = autograd.Variable(noise, volatile=True),
-                                state_v = autograd.Variable(prediction_gt, volatile=True)
-                            ).data.narrow(1,STATE_DEPTH-1,1)
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(prediction_gt, volatile=True)
+            ).data.narrow(1,STATE_DEPTH-1,1)
             state_prediction_gt = torch.cat([state,prediction_gt],1)
 
         netD.zero_grad()
 
         '''train with real'''
-        D_real =    netD(
-                        state_v = autograd.Variable(state),
-                        prediction_v = autograd.Variable(prediction_gt)
-                    ).mean()
+        D_real = netD(
+            state_v = autograd.Variable(state),
+            prediction_v = autograd.Variable(prediction_gt)
+        ).mean()
         D_real.backward(mone)
-        # print(D_real)
 
         '''train with fake'''
-        noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
-        stater_prediction =  netG(
-                                noise_v = autograd.Variable(noise, volatile=True),
-                                state_v = autograd.Variable(state, volatile=True)
-                            ).data
-        prediction = stater_prediction.narrow(1,STATE_DEPTH,1)
-
-        D_fake =    netD(
-                        state_v = autograd.Variable(state),
-                        prediction_v = autograd.Variable(prediction)
-                    ).mean()
+        D_fake = netD(
+            state_v = autograd.Variable(state),
+            prediction_v = autograd.Variable(prediction)
+        ).mean()
         D_fake.backward(one)
-        # print(D_fake)
 
-        '''train with gradient penalty'''
-        if GAN_MODE=='wgan-gp':
-            gradient_penalty =  calc_gradient_penalty(
-                                    netD = netD,
-                                    state = state,
-                                    prediction_gt = prediction_gt,
-                                    prediction = prediction
-                                )
+        if GAN_MODE=='wgan-grad-panish':
+            '''train with gradient penalty'''
+            gradient_penalty = calc_gradient_penalty(
+                netD = netD,
+                state = state,
+                prediction_gt = prediction_gt,
+                prediction = prediction
+            )
             gradient_penalty.backward()
 
+        if GAN_MODE=='wgan-decade':
+            if DOMAIN=='scalar':
+                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
+            elif DOMAIN=='image':
+                print(no_ready)
+                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
+            D_uni = netD(
+                state_v = autograd.Variable(torch.cat([state,state],0)),
+                prediction_v = autograd.Variable(prediction_uni)
+            )
+            decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
+            decade_cost.backward()
 
-        if GAN_MODE=='wgan-gp':
+        if GAN_MODE=='wgan-grad-panish':
             D_cost = D_fake - D_real + gradient_penalty
-        elif GAN_MODE=='wgan':
+        if GAN_MODE=='wgan-decade':
+            D_cost = D_fake - D_real + decade_cost
+        else:
             D_cost = D_fake - D_real
 
         Wasserstein_D = D_real - D_fake
 
         optimizerD.step()
 
-    if GAN_MODE=='wgan-gp':
+    if GAN_MODE=='wgan-gravity':
+        for p in netD.parameters():
+            p.data = p.data * (1.0-0.0001)
+
+    if GAN_MODE=='wgan-grad-panish':
         lib.plot.plot('GP_cost', gradient_penalty.cpu().data.numpy())
+    if GAN_MODE=='wgan-decade':
+        lib.plot.plot('decade_cost', decade_cost.cpu().data.numpy())
     lib.plot.plot('D_cost', D_cost.cpu().data.numpy())
     lib.plot.plot('W_dis', Wasserstein_D.cpu().data.numpy())
-    
 
     ############################
+    # (2) Control R
+    ############################
+
     if R_MODE=='use-r':
         if Wasserstein_D.cpu().data.numpy()[0] > 0.0:
             update_type = 'g'
@@ -699,11 +735,10 @@ while True:
         update_type = 'g'
     elif R_MODE=='test-r':
         update_type = 'r'
+
     ############################
-    # (2) Update G network
+    # (3) Update G network or R
     ###########################
-    for p in netD.parameters():
-        p.requires_grad = False  # to avoid computation
 
     state_prediction_gt = torch.Tensor(data.next()).cuda()
     state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
@@ -720,6 +755,9 @@ while True:
     prediction_v = stater_prediction_v.narrow(1,STATE_DEPTH,1)
 
     if update_type=='g':
+        '''to avoid computation'''
+        for p in netD.parameters():
+            p.requires_grad = False
         G = netD(
                 state_v = autograd.Variable(state),
                 prediction_v = prediction_v
@@ -737,15 +775,16 @@ while True:
     
     optimizerG.step()
 
-    # Write logs and save samples
+    ############################
+    # (4) Log summary
+    ############################
+
     lib.plot.flush(LOGDIR,DSP)
     lib.plot.tick()
 
     if iteration % 100 == 4:
-    
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image()
     
-
     print('[iteration:'+str(iteration)+']')
