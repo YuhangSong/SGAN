@@ -35,7 +35,7 @@ EXP = 'baseline_97'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'image' # scalar, image
+DOMAIN = 'scalar' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 R_MODE = 'use-r' # use-r, none-r, test-r
 OPTIMIZER = 'Adam' # Adam, RMSprop
@@ -669,6 +669,7 @@ while True:
         ).mean()
         D_fake.backward(one)
 
+        GP_cost = [0.0]
         if GAN_MODE=='wgan-grad-panish':
             alpha = torch.rand(BATCH_SIZE).cuda()
             while len(alpha.size())!=len(prediction_gt.size()):
@@ -698,6 +699,7 @@ while True:
             gradient_penalty.backward()
             GP_cost = gradient_penalty.cpu().data.numpy()
 
+        DC_cost = [0.0]
         if GAN_MODE=='wgan-decade':
             if DOMAIN=='scalar':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
@@ -709,6 +711,7 @@ while True:
             )
             decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
             decade_cost.backward()
+            DC_cost = decade_cost.cpu().data.numpy()
 
         if GAN_MODE=='wgan-grad-panish':
             D_cost = D_fake - D_real + gradient_penalty
@@ -729,7 +732,7 @@ while True:
     if GAN_MODE=='wgan-grad-panish':
         lib.plot.plot('GP_cost', GP_cost)
     if GAN_MODE=='wgan-decade':
-        lib.plot.plot('decade_cost', decade_cost.cpu().data.numpy())
+        lib.plot.plot('DC_cost', DC_cost)
     lib.plot.plot('D_cost', D_cost)
     lib.plot.plot('W_dis', Wasserstein_D)
 
