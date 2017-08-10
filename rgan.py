@@ -28,27 +28,29 @@ vis = visdom.Visdom()
 
 torch.manual_seed(4213)
 
-GPU = range(2)
+GPU = range(torch.cuda.device_count())
+print('Using GPU:'+str(GPU))
 
-EXP = 'baseline_95'
+EXP = 'baseline_97'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
 DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-R_MODE = 'none-r' # use-r, none-r, test-r
+R_MODE = 'use-r' # use-r, none-r, test-r
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
-STATE_DEPTH = 1
 if DOMAIN=='scalar':
     DIM = 512
     NOISE_SIZE = 2
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
     BATCH_SIZE = 256
+    TARGET_W_DISTANCE = 0.0
+    STATE_DEPTH = 1
 elif DOMAIN=='image':
     DIM = 128
     IMAGE_SIZE = 32
@@ -56,19 +58,18 @@ elif DOMAIN=='image':
     NOISE_SIZE = 128
     LAMBDA = 10
     BATCH_SIZE = 64
+    TARGET_W_DISTANCE = 0.0
+    STATE_DEPTH = 1
 
 if DATASET=='2grid':
     GRID_SIZE = 5
 
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
-use_cuda = True
 N_POINTS = 128
 GRID_BACKGROUND = 0.1
 GRID_FOREGROUND = 0.9
 
-def prepare_dir():
-    subprocess.call(["mkdir", "-p", LOGDIR])
-prepare_dir()
+subprocess.call(["mkdir", "-p", LOGDIR])
 
 # ==================Definition Start======================
 
@@ -571,16 +572,12 @@ def calc_gradient_penalty(netD, state, interpolates):
 
 # ==================Definition End======================
 
-netG = Generator()
-netD = Discriminator()
+netG = Generator().cuda()
+netD = Discriminator().cuda()
 netD.apply(weights_init)
 netG.apply(weights_init)
 print netG
 print netD
-
-if use_cuda:
-    netD = netD.cuda()
-    netG = netG.cuda()
 
 if OPTIMIZER=='Adam':
     optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
@@ -591,11 +588,8 @@ elif OPTIMIZER=='RMSprop':
 
 mse_loss_model = torch.nn.MSELoss(size_average=True)
 
-one = torch.FloatTensor([1])
+one = torch.FloatTensor([1]).cuda()
 mone = one * -1
-if use_cuda:
-    one = one.cuda()
-    mone = mone.cuda()
 
 if GAME_MDOE=='same-start':
     data = inf_train_gen(fix_state=True)
@@ -677,9 +671,24 @@ while True:
 
         if GAN_MODE=='wgan-grad-panish':
             alpha = torch.rand(BATCH_SIZE).cuda()
-            for i in range(alpha.size()[0]):
-                alpha_expand[i].fill_(alpha[i])
-            interpolates = alpha_expand * prediction_gt + ((1 - alpha_expand) * prediction)
+            while len(alpha.size())!=len(prediction_gt.size()):
+                alpha = alpha.unsqueeze(1)
+            if DOMAIN=='scalar':
+                alpha = alpha.repeat(
+                    1,
+                    prediction_gt.size()[1],
+                    prediction_gt.size()[2]
+                )
+            elif DOMAIN=='image':
+                alpha = alpha.repeat(
+                    1,
+                    prediction_gt.size()[1],
+                    prediction_gt.size()[2],
+                    prediction_gt.size()[3],
+                    prediction_gt.size()[4]
+                )
+
+            interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
             '''train with gradient penalty'''
             gradient_penalty = calc_gradient_penalty(
                 netD = netD,
@@ -687,6 +696,7 @@ while True:
                 interpolates = interpolates
             )
             gradient_penalty.backward()
+            GP_cost = gradient_penalty.cpu().data.numpy()
 
         if GAN_MODE=='wgan-decade':
             if DOMAIN=='scalar':
@@ -706,8 +716,9 @@ while True:
             D_cost = D_fake - D_real + decade_cost
         else:
             D_cost = D_fake - D_real
+        D_cost = D_cost.data.cpu().numpy()
 
-        Wasserstein_D = D_real - D_fake
+        Wasserstein_D = (D_real - D_fake).data.cpu().numpy()
 
         optimizerD.step()
 
@@ -716,18 +727,18 @@ while True:
             p.data = p.data * (1.0-0.0001)
 
     if GAN_MODE=='wgan-grad-panish':
-        lib.plot.plot('GP_cost', gradient_penalty.cpu().data.numpy())
+        lib.plot.plot('GP_cost', GP_cost)
     if GAN_MODE=='wgan-decade':
         lib.plot.plot('decade_cost', decade_cost.cpu().data.numpy())
-    lib.plot.plot('D_cost', D_cost.cpu().data.numpy())
-    lib.plot.plot('W_dis', Wasserstein_D.cpu().data.numpy())
+    lib.plot.plot('D_cost', D_cost)
+    lib.plot.plot('W_dis', Wasserstein_D)
 
     ############################
     # (2) Control R
     ############################
 
     if R_MODE=='use-r':
-        if Wasserstein_D.cpu().data.numpy()[0] > 0.0:
+        if Wasserstein_D[0] > TARGET_W_DISTANCE:
             update_type = 'g'
         else:
             update_type = 'r'
@@ -754,6 +765,8 @@ while True:
     stater_v = stater_prediction_v.narrow(1,0,STATE_DEPTH)
     prediction_v = stater_prediction_v.narrow(1,STATE_DEPTH,1)
 
+    G_cost = [0.0]
+    R_cost = [0.0]
     if update_type=='g':
         '''to avoid computation'''
         for p in netD.parameters():
@@ -762,16 +775,19 @@ while True:
                 state_v = autograd.Variable(state),
                 prediction_v = prediction_v
             ).mean()
-        G_cost = -G
-        lib.plot.plot('G_cost', G_cost.cpu().data.numpy())
-        lib.plot.plot('G_R', np.asarray([1.0]))
         G.backward(mone)
+        G_cost = -G.data.cpu().numpy()
+        lib.plot.plot('G_cost', G_cost)
+        G_R = 'G'
+        lib.plot.plot('G_R', np.asarray([1.0]))
+
     elif update_type=='r':
         R = mse_loss_model(stater_v, autograd.Variable(state))
-        R_cost = R
-        lib.plot.plot('R_cost', R_cost.cpu().data.numpy())
-        lib.plot.plot('G_R', np.asarray([-1.0]))
         R.backward()
+        R_cost = R.data.cpu().numpy()
+        lib.plot.plot('R_cost', R_cost)
+        G_R = 'R'
+        lib.plot.plot('G_R', np.asarray([-1.0]))
     
     optimizerG.step()
 
@@ -787,4 +803,14 @@ while True:
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image()
     
-    print('[iteration:{}] D_cost:{:.2f}'.format(iteration,D_cost.data.cpu().numpy()[0]))
+    print('[{:<10}] Wasserstein_D:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f}'
+        .format(
+            iteration,
+            Wasserstein_D[0],
+            GP_cost[0],
+            D_cost[0],
+            G_R,
+            G_cost[0],
+            R_cost[0]
+        )
+    )
