@@ -32,17 +32,17 @@ GPU = range(2)
 
 EXP = 'baseline_53'
 
-# DATASET = '2grid' # 2grid
-# GAME_MDOE = 'full' # same-start, full
-# DOMAIN = 'image' # scalar, image
-# GAN_MODE = 'wgan' # wgan, wgan-gp
-# R_MODE = 'use-r' # use-r, none-r, test-r
-
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'scalar' # scalar, image
-GAN_MODE = 'wgan' # wgan, wgan-gp
+DOMAIN = 'image' # scalar, image
+GAN_MODE = 'wgan-gp' # wgan, wgan-gp
 R_MODE = 'none-r' # use-r, none-r, test-r
+
+# DATASET = '2grid' # 2grid
+# GAME_MDOE = 'full' # same-start, full
+# DOMAIN = 'scalar' # scalar, image
+# GAN_MODE = 'wgan' # wgan, wgan-gp
+# R_MODE = 'none-r' # use-r, none-r, test-r
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'
 BASIC = '../../result/'
@@ -535,18 +535,26 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
 
 def calc_gradient_penalty(netD, state, prediction_gt, prediction):
 
-    prediction_gt = prediction_gt.contiguous()
-    prediction = prediction.contiguous()
+    print(prediction_gt)
+    print(prediction)
+
     temp = prediction_gt.size()
-    prediction_gt = prediction_gt.view(prediction_gt.size()[0],-1)
-    prediction = prediction.view(prediction.size()[0],-1)
+
+    prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+    prediction = prediction.contiguous().view(prediction.size()[0],-1)
 
     alpha = torch.rand(BATCH_SIZE, 1).cuda()
     alpha = alpha.expand(prediction_gt.size())
 
     interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
 
-    interpolates = autograd.Variable(interpolates, requires_grad=True).view(temp)
+    interpolates = interpolates.contiguous().view(temp)
+
+    print(interpolates)
+
+    print(i)
+
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
 
     disc_interpolates = netD(
                             state_v = autograd.Variable(state),
