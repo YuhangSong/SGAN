@@ -30,15 +30,16 @@ torch.manual_seed(4213)
 
 GPU = range(2)
 
-EXP = 'baseline_86'
+EXP = 'baseline_95'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
 DOMAIN = 'image' # scalar, image
-GAN_MODE = 'wgan-decade' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-R_MODE = 'use-r' # use-r, none-r, test-r
+GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
+R_MODE = 'none-r' # use-r, none-r, test-r
+OPTIMIZER = 'Adam' # Adam, RMSprop
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'
+DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
@@ -49,22 +50,21 @@ if DOMAIN=='scalar':
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
     BATCH_SIZE = 256
 elif DOMAIN=='image':
-    DIM = 64
+    DIM = 128
     IMAGE_SIZE = 32
     FEATURE = 1
     NOISE_SIZE = 128
     LAMBDA = 10
-    BATCH_SIZE = 50
+    BATCH_SIZE = 64
 
 if DATASET=='2grid':
     GRID_SIZE = 5
 
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
-ITERS = 1000000000  # how many generator iterations to train for
 use_cuda = True
 N_POINTS = 128
-GRID_BACKGROUND = 0.2
-GRID_FOREGROUND = 0.8
+GRID_BACKGROUND = 0.1
+GRID_FOREGROUND = 0.9
 
 def prepare_dir():
     subprocess.call(["mkdir", "-p", LOGDIR])
@@ -112,9 +112,9 @@ class Generator(nn.Module):
 
             conv_layer = nn.Sequential(
                 nn.Linear(2, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(DIM, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             self.conv_layer = conv_layer
 
@@ -125,7 +125,7 @@ class Generator(nn.Module):
 
             deconv_layer = nn.Sequential(
                 nn.Linear(DIM, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(DIM, 2*(STATE_DEPTH+1)),
             )
             self.deconv_layer = deconv_layer
@@ -142,10 +142,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(64),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*1*16*16
 
@@ -155,10 +155,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(128),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*1*8*8
 
@@ -168,10 +168,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(256),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 256*1*4*4
             )
@@ -179,19 +179,19 @@ class Generator(nn.Module):
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(256*1*4*4, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
 
             cat_layer = nn.Sequential(
                 nn.Linear(DIM+NOISE_SIZE, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             self.cat_layer = nn.DataParallel(cat_layer,GPU)
 
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(DIM, 256*1*4*4),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
 
@@ -205,10 +205,10 @@ class Generator(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(128),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*2*8*8
 
@@ -218,10 +218,10 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(64),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*2*16*16
 
@@ -231,9 +231,8 @@ class Generator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
-                # nn.Tanh(),
                 nn.Sigmoid()
 
                 # FEATURE*2*32*32
@@ -284,14 +283,14 @@ class Discriminator(nn.Module):
 
             conv_layer = nn.Sequential(
                 nn.Linear(2+2, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.Linear(DIM, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(DIM, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
@@ -312,10 +311,10 @@ class Discriminator(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
-                nn.InstanceNorm3d(64),
-                nn.ReLU(True),
+                # nn.InstanceNorm3d(64),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*1*16*16
 
@@ -325,10 +324,10 @@ class Discriminator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
-                nn.InstanceNorm3d(128),
-                nn.ReLU(True),
+                # nn.InstanceNorm3d(128),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*1*8*8
 
@@ -338,17 +337,17 @@ class Discriminator(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
-                nn.InstanceNorm3d(256),
-                nn.ReLU(True),
+                # nn.InstanceNorm3d(256),
+                nn.LeakyReLU(0.2, inplace=True),
 
                 # 256*1*4*4
             )
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(256*1*4*4, DIM),
-                nn.ReLU(True),
+                nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
@@ -395,14 +394,14 @@ def weights_init(m):
     print('class name:'+str(classname))
     sigma = 0.02
     if classname.find('Linear') != -1:
-        print('\tfind Linear')
+        print('>>> find Linear')
         m.weight.data.normal_(0.0, sigma)
         m.bias.data.fill_(0.0)
     elif classname.find('Conv3d') != -1:
-        print('\tfind Conv3d')
+        print('>>> find Conv3d')
         m.weight.data.normal_(0.0, sigma)
     elif classname.find('ConvTranspose3d') != -1:
-        print('\tfind ConvTranspose3d')
+        print('>>> find ConvTranspose3d')
         m.weight.data.normal_(0.0, sigma)
     print('----------------------------------')
 
@@ -548,14 +547,7 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
             yield dataset
 
 
-def calc_gradient_penalty(netD, state, prediction_gt, prediction):
-
-    alpha = torch.rand(BATCH_SIZE).cuda()
-    alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
-    for i in range(alpha.size()[0]):
-        alpha_expand[i].fill_(alpha[i])
-
-    interpolates = alpha_expand * prediction_gt + ((1 - alpha_expand) * prediction)
+def calc_gradient_penalty(netD, state, interpolates):
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -571,7 +563,8 @@ def calc_gradient_penalty(netD, state, prediction_gt, prediction):
                     create_graph=True,
                     retain_graph=True,
                     only_inputs=True)[0]
-
+    gradients = gradients.contiguous()
+    gradients = gradients.view(gradients.size()[0],-1)
     gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
 
     return gradient_penalty
@@ -589,8 +582,12 @@ if use_cuda:
     netD = netD.cuda()
     netG = netG.cuda()
 
-optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
-optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
+if OPTIMIZER=='Adam':
+    optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+    optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
+elif OPTIMIZER=='RMSprop':
+    optimizerD = optim.RMSprop(netD.parameters(), lr = 0.00005)
+    optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
 
 mse_loss_model = torch.nn.MSELoss(size_average=True)
 
@@ -618,6 +615,11 @@ except Exception, e:
     print('Previous checkpoint for netC unfounded')
 
 # lib.plot.restore(LOGDIR,DSP)
+
+state_prediction_gt = torch.Tensor(data.next()).cuda()
+state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
+prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
+alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
 iteration = -1
 while True:
@@ -674,12 +676,15 @@ while True:
         D_fake.backward(one)
 
         if GAN_MODE=='wgan-grad-panish':
+            alpha = torch.rand(BATCH_SIZE).cuda()
+            for i in range(alpha.size()[0]):
+                alpha_expand[i].fill_(alpha[i])
+            interpolates = alpha_expand * prediction_gt + ((1 - alpha_expand) * prediction)
             '''train with gradient penalty'''
             gradient_penalty = calc_gradient_penalty(
                 netD = netD,
                 state = state,
-                prediction_gt = prediction_gt,
-                prediction = prediction
+                interpolates = interpolates
             )
             gradient_penalty.backward()
 
@@ -782,4 +787,4 @@ while True:
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image()
     
-    print('[iteration:'+str(iteration)+']')
+    print('[iteration:{}] D_cost:{:.2f}'.format(iteration,D_cost.data.cpu().numpy()[0]))
