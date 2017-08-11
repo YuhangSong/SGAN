@@ -588,20 +588,21 @@ def generate_image():
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
                 ).data.narrow(1,STATE_DEPTH,1)
+    
     if FILTER_MODE=='use-c':
         F_out = netC(
                 state_v = autograd.Variable(state),
                 prediction_v = autograd.Variable(samples)
-            )
+            ).data
     elif FILTER_MODE=='use-d':
         F_out = netD(
                 state_v = autograd.Variable(state),
                 prediction_v = autograd.Variable(samples)
-            )
+            ).data
 
     if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
-        F_out = F_out.data.cpu().numpy()
+        F_out = F_out.cpu().numpy()
         F_out = (F_out - np.min(F_out)) / (np.max(F_out)-np.min(F_out))
         if FILTER_MODE=='use-c' or FILTER_MODE=='use-d':
             for ii in range(np.shape(samples)[0]):
