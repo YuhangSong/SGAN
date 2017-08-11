@@ -31,13 +31,13 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'baseline_97'
+EXP = '100'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-R_MODE = 'use-r' # use-r, none-r, test-r
+R_MODE = 'none-r' # use-r, none-r, test-r
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+OPTIMIZER+'/'
@@ -145,7 +145,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.BatchNorm3d(64),
+                nn.InstanceNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*1*16*16
@@ -158,7 +158,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.BatchNorm3d(128),
+                nn.InstanceNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*1*8*8
@@ -171,7 +171,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.BatchNorm3d(256),
+                nn.InstanceNorm3d(256),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 256*1*4*4
@@ -180,18 +180,21 @@ class Generator(nn.Module):
 
             squeeze_layer = nn.Sequential(
                 nn.Linear(256*1*4*4, DIM),
+                nn.InstanceNorm1d(DIM),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
 
             cat_layer = nn.Sequential(
                 nn.Linear(DIM+NOISE_SIZE, DIM),
+                nn.InstanceNorm1d(DIM),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.cat_layer = nn.DataParallel(cat_layer,GPU)
 
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(DIM, 256*1*4*4),
+                nn.InstanceNorm1d(256*1*4*4),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
@@ -208,7 +211,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.BatchNorm3d(128),
+                nn.InstanceNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*2*8*8
@@ -221,7 +224,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.BatchNorm3d(64),
+                nn.InstanceNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*2*16*16
@@ -314,7 +317,6 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*1*16*16
@@ -327,7 +329,6 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*1*8*8
@@ -340,7 +341,6 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(256),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 256*1*4*4
