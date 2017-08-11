@@ -38,10 +38,10 @@ GAME_MDOE = 'same-start' # same-start, full
 DOMAIN = 'scalar' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 R_MODE = 'none-r' # use-r, none-r, test-r
-C_MODE = 'use-c' # none-c, use-c
+FILTER_MODE = 'use-d' # none, use-c, use-d
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+C_MODE+'/'+OPTIMIZER+'/'
+DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+FILTER_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
@@ -277,7 +277,6 @@ class Generator(nn.Module):
 
         return x
 
-
 class Discriminator(nn.Module):
 
     def __init__(self):
@@ -429,7 +428,7 @@ class Corrector(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(64),
+                nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 64*1*16*16
@@ -442,7 +441,7 @@ class Corrector(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(128),
+                nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 128*1*8*8
@@ -455,7 +454,7 @@ class Corrector(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                # nn.InstanceNorm3d(256),
+                nn.BatchNorm3d(256),
                 nn.LeakyReLU(0.2, inplace=True),
 
                 # 256*1*4*4
@@ -468,17 +467,12 @@ class Corrector(nn.Module):
 
             final_layer = nn.Sequential(
                 nn.Linear(DIM, 1),
-                D_out_layer(),
+                nn.Sigmoid(),
             )
 
-        if GAN_MODE=='wgan-grad-panish':
-            self.conv_layer = conv_layer
-            self.squeeze_layer = squeeze_layer
-            self.final_layer = final_layer
-        else:
-            self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-            self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-            self.final_layer = torch.nn.DataParallel(final_layer,GPU)
+        self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
+        self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
+        self.final_layer = torch.nn.DataParallel(final_layer,GPU)
 
     def forward(self, state_v, prediction_v):
 
@@ -553,7 +547,7 @@ def generate_image():
                     ).cpu().data.numpy()
         x = y = np.linspace(0, GRID_SIZE, N_POINTS)
         disc_map = disc_map.reshape((len(x), len(y))).transpose()
-        # plt.contour(x, y, disc_map)
+        plt.contour(x, y, disc_map)
 
         '''narrow to normal batch size'''
         state_prediction_gt = state_prediction_gt.narrow(0,0,BATCH_SIZE)
@@ -594,33 +588,38 @@ def generate_image():
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
                 ).data.narrow(1,STATE_DEPTH,1)
-    if C_MODE=='use-c':
-        C_out = netC(
+    if FILTER_MODE=='use-c':
+        F_out = netC(
                 state_v = autograd.Variable(state),
                 prediction_v = autograd.Variable(samples)
-            ).data
+            )
+    elif FILTER_MODE=='use-d':
+        F_out = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = autograd.Variable(samples)
+            )
 
     if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
-        C_out = C_out.cpu().numpy()
-        if C_MODE=='use-c':
-            off_set = 0.0
+        F_out = F_out.data.cpu().numpy()
+        F_out = (F_out - np.min(F_out)) / (np.max(F_out)-np.min(F_out))
+        if FILTER_MODE=='use-c' or FILTER_MODE=='use-d':
             for ii in range(np.shape(samples)[0]):
-                plt.scatter(samples[ii, 0], samples[ii, 1], c='red', marker='s', alpha=C_out[ii]*(1.0-off_set)+off_set)
+                plt.scatter(samples[ii, 0], samples[ii, 1], c='red', marker='s', alpha=F_out[ii])
         plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
 
     elif DOMAIN=='image':
         log_img(samples,'g',frame)
-        while len(C_out.size())!=len(samples.size()):
-            C_out = C_out.unsqueeze(1)
-        C_out = C_out.repeat(
+        while len(F_out.size())!=len(samples.size()):
+            F_out = F_out.unsqueeze(1)
+        F_out = F_out.repeat(
             1,
             samples.size()[1],
             samples.size()[2],
             samples.size()[3],
             samples.size()[4]
         )
-        log_img(C_out,'g',frame)
+        log_img(F_out,'g-f',frame)
 
     if DOMAIN=='scalar':
         plt.savefig(LOGDIR+'/'+'frame'+str(frame_index[0])+'.jpg')
@@ -874,7 +873,7 @@ while True:
         optimizerD.step()
 
         C_cost = [0.0]
-        if C_MODE=='use-c':
+        if FILTER_MODE=='use-c':
             netC.zero_grad()
             C_out_v = netC(
                 state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -893,7 +892,7 @@ while True:
         lib.plot.plot('GP_cost', GP_cost)
     if GAN_MODE=='wgan-decade':
         lib.plot.plot('DC_cost', DC_cost)
-    if C_MODE=='use-c':
+    if FILTER_MODE=='use-c':
         lib.plot.plot('C_cost', C_cost)
     lib.plot.plot('D_cost', D_cost)
     lib.plot.plot('W_dis', Wasserstein_D)
@@ -963,7 +962,7 @@ while True:
     lib.plot.flush(LOGDIR,DSP)
     lib.plot.tick()
 
-    if iteration % LOG_INTER == (LOG_INTER-1):
+    if iteration % LOG_INTER == 2:
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
