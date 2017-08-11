@@ -31,7 +31,7 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'c_filter_2'
+EXP = 'd_filter_1'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
