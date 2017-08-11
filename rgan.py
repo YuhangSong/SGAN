@@ -35,7 +35,7 @@ EXP = 'baseline_97'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 R_MODE = 'use-r' # use-r, none-r, test-r
 OPTIMIZER = 'Adam' # Adam, RMSprop
