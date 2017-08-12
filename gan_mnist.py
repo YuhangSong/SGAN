@@ -20,6 +20,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+import subprocess
+subprocess.call(["mkdir", "-p", '../../result/temp/'])
+
 torch.manual_seed(1)
 use_cuda = torch.cuda.is_available()
 if use_cuda:
@@ -64,9 +67,10 @@ class Generator(nn.Module):
         output = output.view(-1, 4*DIM, 4, 4)
         #print output.size()
         output = self.block1(output)
-        #print output.size()
+        print output.size()
         output = output[:, :, :7, :7]
-        #print output.size()
+        print output.size()
+        print(i)
         output = self.block2(output)
         #print output.size()
         output = self.deconv_out(output)
@@ -116,7 +120,7 @@ def generate_image(frame, netG):
 
     lib.save_images.save_images(
         samples,
-        'tmp/mnist/samples_{}.png'.format(frame)
+        '../../result/temp/samples_{}.png'.format(frame)
     )
 
 # Dataset iterator
@@ -231,10 +235,10 @@ for iteration in xrange(ITERS):
     optimizerG.step()
 
     # Write logs and save samples
-    lib.plot.plot('tmp/mnist/time', time.time() - start_time)
-    lib.plot.plot('tmp/mnist/train disc cost', D_cost.cpu().data.numpy())
-    lib.plot.plot('tmp/mnist/train gen cost', G_cost.cpu().data.numpy())
-    lib.plot.plot('tmp/mnist/wasserstein distance', Wasserstein_D.cpu().data.numpy())
+    lib.plot.plot('time', time.time() - start_time)
+    lib.plot.plot('disc_cost', D_cost.cpu().data.numpy())
+    lib.plot.plot('gen_cost', G_cost.cpu().data.numpy())
+    lib.plot.plot('wasserstein_distance', Wasserstein_D.cpu().data.numpy())
 
     # Calculate dev loss and generate samples every 100 iters
     if iteration % 100 == 99:
@@ -248,12 +252,14 @@ for iteration in xrange(ITERS):
             D = netD(imgs_v)
             _dev_disc_cost = -D.mean().cpu().data.numpy()
             dev_disc_costs.append(_dev_disc_cost)
-        lib.plot.plot('tmp/mnist/dev disc cost', np.mean(dev_disc_costs))
+        lib.plot.plot('dev_disc_cost', np.mean(dev_disc_costs))
 
         generate_image(iteration, netG)
 
     # Write logs every 100 iters
     if (iteration < 5) or (iteration % 100 == 99):
-        lib.plot.flush()
+        lib.plot.flush('../../result/temp/','../../result/temp/')
 
     lib.plot.tick()
+
+    print('[iteration:'+str(iteration)+']')

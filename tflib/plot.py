@@ -22,7 +22,7 @@ def tick():
 def plot(name, value):
 	_since_last_flush[name][_iter[0]] = value
 
-def flush():
+def flush(LOGDIR,DSP):
 	prints = []
 
 	for name, vals in _since_last_flush.items():
@@ -35,16 +35,23 @@ def flush():
 		plt.clf()
 		plt.plot(x_vals, y_vals)
 		plt.xlabel('iteration')
-		plt.ylabel(name)
-		plt.savefig(name.replace(' ', '_')+'.jpg')
+		plt.ylabel(DSP+name)
+		plt.savefig(LOGDIR+name+'.jpg')
 
-		vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
-					Y=torch.from_numpy(np.asarray(y_vals)),
-                    win=name,
-                    opts=dict(title=name))
+		if len(x_vals) > 1:
+			vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
+						Y=torch.from_numpy(np.asarray(y_vals)),
+	                    win=DSP+name,
+	                    opts=dict(title=DSP+name))
 
-	# print "iter {}\t{}".format(_iter[0], "\t".join(prints))
 	_since_last_flush.clear()
 
-	with open('log.pkl', 'wb') as f:
+	with open(LOGDIR+'log.pkl', 'wb') as f:
 		pickle.dump(dict(_since_beginning), f, pickle.HIGHEST_PROTOCOL)
+
+def restore(LOGDIR,DSP):
+
+	print('Try load previous plot....')
+
+	with open(LOGDIR+'log.pkl', 'rb') as f:
+		_since_beginning = pickle.load(f)
