@@ -31,17 +31,17 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_1'
+EXP = 'd_filter_4'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-R_MODE = 'none-r' # use-r, none-r, test-r
-FILTER_MODE = 'use-d' # none, use-c, use-d
+RUINER_MODE = 'use-r' # none-r, use-r, test-r
+FILTER_MODE = 'filter-d' # none-f, filter-c, filter-d
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+R_MODE+'/'+FILTER_MODE+'/'+OPTIMIZER+'/'
+DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
@@ -60,7 +60,7 @@ elif DOMAIN=='image':
     NOISE_SIZE = 128
     LAMBDA = 10
     BATCH_SIZE = 64
-    TARGET_W_DISTANCE = 0.0
+    TARGET_W_DISTANCE = 1.0
     STATE_DEPTH = 1
     LOG_INTER = 100
 
@@ -72,9 +72,19 @@ N_POINTS = 128
 GRID_BACKGROUND = 0.1
 GRID_FOREGROUND = 0.9
 
+RESULT_SAMPLE_NUM = 128
+FILTER_RATE = 0.5
+
 subprocess.call(["mkdir", "-p", LOGDIR])
 
-# ==================Definition Start======================
+############################### Definition Start ###############################
+
+def log_img(x,name,iteration):
+    x = x.squeeze(1)
+    vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
+    vis.images( x.cpu().numpy(),
+                win=DSP+name,
+                opts=dict(caption=DSP+name+'_'+str(iteration)))
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -496,7 +506,6 @@ class Corrector(nn.Module):
 
         return x
 
-# custom weights initialization called on netG and netD
 def weights_init(m):
     classname = m.__class__.__name__
     print('----------------------------------')
@@ -514,21 +523,19 @@ def weights_init(m):
         m.weight.data.normal_(0.0, sigma)
     print('----------------------------------')
 
-frame_index = [0]
+def generate_image(iteration):
 
-def generate_image():
-    """
-    Generates and saves a plot of the true distribution, the generator, and the
-    critic.
-    """
     plt.clf()
 
     '''get data'''
     if DOMAIN=='scalar':
-        bs = (N_POINTS**2)
+        batch_size = (N_POINTS**2)
     elif DOMAIN=='image':
-        bs = BATCH_SIZE
-    data_fix_state = inf_train_gen(fix_state=True,batch_size=bs)
+        batch_size = RESULT_SAMPLE_NUM
+    data_fix_state = dataset_inter(
+        fix_state=True,
+        batch_size=batch_size
+    )
     state_prediction_gt = torch.Tensor(data_fix_state.next()).cuda()
     state = state_prediction_gt.narrow(1,0,1)
     prediction_gt = state_prediction_gt.narrow(1,1,1)
@@ -550,28 +557,20 @@ def generate_image():
         plt.contour(x, y, disc_map)
 
         '''narrow to normal batch size'''
-        state_prediction_gt = state_prediction_gt.narrow(0,0,BATCH_SIZE)
-        state = state.narrow(0,0,BATCH_SIZE)
-        prediction_gt = prediction_gt.narrow(0,0,BATCH_SIZE)
+        state_prediction_gt = state_prediction_gt.narrow(0,0,RESULT_SAMPLE_NUM)
+        state = state.narrow(0,0,RESULT_SAMPLE_NUM)
+        prediction_gt = prediction_gt.narrow(0,0,RESULT_SAMPLE_NUM)
 
-    frame = str(frame_index[0])
-    def log_img(x,name,frame):
-        x=x.squeeze(1)
-        vutils.save_image(x, LOGDIR+name+'_'+frame+'.png')
-        vis.images( x.cpu().numpy(),
-                    win=DSP+name,
-                    opts=dict(caption=DSP+name+'_'+frame))
-
-    '''r'''
+    '''prediction_gt'''
     samples = prediction_gt
     if DOMAIN=='scalar':
         samples = prediction_gt.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
     elif DOMAIN=='image':
-        log_img(samples,'r',frame)
+        log_img(samples,'prediction_gt',iteration)
 
-    '''e'''
-    noise = torch.randn((BATCH_SIZE), NOISE_SIZE).cuda()
+    '''prediction_gt_r'''
+    noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(prediction_gt, volatile=True)
@@ -580,57 +579,88 @@ def generate_image():
         samples = samples.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
     elif DOMAIN=='image':
-        log_img(samples,'e',frame)
+        log_img(samples,'prediction_gt_r',iteration)
 
-    '''g'''
-    noise = torch.randn((BATCH_SIZE), NOISE_SIZE).cuda()
+    '''prediction'''
+    noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
                 ).data.narrow(1,STATE_DEPTH,1)
     
-    if FILTER_MODE=='use-c':
+    if FILTER_MODE=='filter-c':
         F_out = netC(
                 state_v = autograd.Variable(state),
                 prediction_v = autograd.Variable(samples)
             ).data
-    elif FILTER_MODE=='use-d':
+    elif FILTER_MODE=='filter-d':
         F_out = netD(
                 state_v = autograd.Variable(state),
                 prediction_v = autograd.Variable(samples)
             ).data
 
+    if FILTER_MODE!='none-f':
+        F_out = (F_out - torch.min(F_out)) / (torch.max(F_out)-torch.min(F_out))
+
     if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
-        F_out = F_out.cpu().numpy()
-        F_out = (F_out - np.min(F_out)) / (np.max(F_out)-np.min(F_out))
-        if FILTER_MODE=='use-c' or FILTER_MODE=='use-d':
+        plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
+        if FILTER_MODE!='none-f':
+            F_out = F_out.cpu().numpy()
             for ii in range(np.shape(samples)[0]):
                 plt.scatter(samples[ii, 0], samples[ii, 1], c='red', marker='s', alpha=F_out[ii])
-        plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
 
     elif DOMAIN=='image':
-        log_img(samples,'g',frame)
-        while len(F_out.size())!=len(samples.size()):
-            F_out = F_out.unsqueeze(1)
-        F_out = F_out.repeat(
-            1,
-            samples.size()[1],
-            samples.size()[2],
-            samples.size()[3],
-            samples.size()[4]
-        )
-        log_img(F_out,'g-f',frame)
+        log_img(samples,'prediction',iteration)
+        log_img(
+                samples.mean(0),
+                'prediction-mean',
+                iteration
+            )
+
+        if FILTER_MODE!='none-f':
+
+            F_out_numpy = F_out.cpu().numpy()
+
+            while len(F_out.size())!=len(samples.size()):
+                F_out = F_out.unsqueeze(1)
+            F_out = F_out.repeat(
+                1,
+                samples.size()[1],
+                samples.size()[2],
+                samples.size()[3],
+                samples.size()[4]
+            )
+            log_img(F_out,'prediction-f',iteration)
+
+            indexs = np.array(range(np.shape(F_out_numpy)[0]))
+            F_out_numpy_indexs = np.concatenate(
+                (np.expand_dims(
+                    F_out_numpy,
+                    axis=1),
+                np.expand_dims(
+                    indexs,
+                    axis=1)),
+                axis=1
+            )
+            F_out_numpy_indexs = F_out_numpy_indexs[F_out_numpy_indexs[:,0].argsort(kind='mergesort')]
+            filter_num = int(RESULT_SAMPLE_NUM*FILTER_RATE)
+            filtered_indexs = F_out_numpy_indexs[RESULT_SAMPLE_NUM-filter_num:RESULT_SAMPLE_NUM,1]
+            filtered_indexs = filtered_indexs.astype(int)
+            filtered_samples = torch.index_select(samples,0,torch.cuda.LongTensor(filtered_indexs))
+            log_img(filtered_samples,'prediction-filtered',iteration)
+
+            log_img(
+                filtered_samples.mean(0),
+                'prediction-filtered-mean',
+                iteration
+            )
 
     if DOMAIN=='scalar':
-        plt.savefig(LOGDIR+'/'+'frame'+str(frame_index[0])+'.jpg')
-        plt_to_vis(plt.gcf(),DSP+'vis',DSP+'fram_'+str(frame_index[0]))
+        plt.savefig(LOGDIR+'/'+'iteration'+str(iteration)+'.jpg')
+        plt_to_vis(plt.gcf(),DSP+'vis',DSP+'fram_'+str(iteration))
 
-    frame_index[0] += 1
-
-
-# Dataset iterator
-def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
+def dataset_inter(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
 
     if DATASET=='2grid':
 
@@ -683,7 +713,6 @@ def inf_train_gen(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
             dataset = np.array(dataset, dtype='float32')
             yield dataset
 
-
 def calc_gradient_penalty(netD, state, interpolates):
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
@@ -706,7 +735,7 @@ def calc_gradient_penalty(netD, state, interpolates):
 
     return gradient_penalty
 
-# ==================Definition End======================
+############################### Definition End ###############################
 
 netG = Generator().cuda()
 netD = Discriminator().cuda()
@@ -735,9 +764,9 @@ mone = one * -1
 ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((BATCH_SIZE)),np.zeros((BATCH_SIZE))),0))
 
 if GAME_MDOE=='same-start':
-    data = inf_train_gen(fix_state=True)
+    data = dataset_inter(fix_state=True)
 elif GAME_MDOE=='full':
-    data = inf_train_gen(fix_state=False)
+    data = dataset_inter(fix_state=False)
 
 print('Trying load models....')
 try:
@@ -793,7 +822,7 @@ while True:
         ).data
         prediction = stater_prediction.narrow(1,STATE_DEPTH,1)
 
-        if R_MODE=='use-r':
+        if RUINER_MODE=='use-r':
             noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
             prediction_gt = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
@@ -874,7 +903,7 @@ while True:
         optimizerD.step()
 
         C_cost = [0.0]
-        if FILTER_MODE=='use-c':
+        if FILTER_MODE=='filter-c':
             netC.zero_grad()
             C_out_v = netC(
                 state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -893,7 +922,7 @@ while True:
         lib.plot.plot('GP_cost', GP_cost)
     if GAN_MODE=='wgan-decade':
         lib.plot.plot('DC_cost', DC_cost)
-    if FILTER_MODE=='use-c':
+    if FILTER_MODE=='filter-c':
         lib.plot.plot('C_cost', C_cost)
     lib.plot.plot('D_cost', D_cost)
     lib.plot.plot('W_dis', Wasserstein_D)
@@ -902,14 +931,14 @@ while True:
     # (2) Control R
     ############################
 
-    if R_MODE=='use-r':
+    if RUINER_MODE=='use-r':
         if Wasserstein_D[0] > TARGET_W_DISTANCE:
             update_type = 'g'
         else:
             update_type = 'r'
-    elif R_MODE=='none-r':
+    elif RUINER_MODE=='none-r':
         update_type = 'g'
-    elif R_MODE=='test-r':
+    elif RUINER_MODE=='test-r':
         update_type = 'r'
 
     ############################
@@ -967,7 +996,7 @@ while True:
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
-        generate_image()
+        generate_image(iteration)
     
     print('[{:<10}] Wasserstein_D:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
         .format(
