@@ -31,21 +31,21 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_4'
+EXP = 'filter_ruiner_1'
 
-DATASET = '2grid' # 2grid
+DATASET = '2D-grid' # 2D-grid
 GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'image' # scalar, image
+DOMAIN = 'image' # coordinate, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 RUINER_MODE = 'use-r' # none-r, use-r, test-r
-FILTER_MODE = 'filter-d' # none-f, filter-c, filter-d
+FILTER_MODE = 'filter-c' # none-f, filter-c, filter-d
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
 DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
-if DOMAIN=='scalar':
+if DOMAIN=='coordinate':
     DIM = 512
     NOISE_SIZE = 2
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
@@ -64,7 +64,7 @@ elif DOMAIN=='image':
     STATE_DEPTH = 1
     LOG_INTER = 100
 
-if DATASET=='2grid':
+if DATASET=='2D-grid':
     GRID_SIZE = 5
 
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
@@ -122,7 +122,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2, DIM),
@@ -258,7 +258,7 @@ class Generator(nn.Module):
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
             state_v = state_v.squeeze(1)
         elif DOMAIN=='image':
             # N*D*F*H*W to N*F*D*H*W
@@ -277,7 +277,7 @@ class Generator(nn.Module):
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
             stater_v = x.narrow(1,0,2).unsqueeze(1)
             prediction_v = x.narrow(1,2,2).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
@@ -292,7 +292,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2+2, DIM),
@@ -380,7 +380,7 @@ class Discriminator(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
@@ -404,7 +404,7 @@ class Corrector(nn.Module):
     def __init__(self):
         super(Corrector, self).__init__()
 
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2+2, DIM),
@@ -487,7 +487,7 @@ class Corrector(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if DOMAIN=='coordinate':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
@@ -528,7 +528,7 @@ def generate_image(iteration):
     plt.clf()
 
     '''get data'''
-    if DOMAIN=='scalar':
+    if DOMAIN=='coordinate':
         batch_size = (N_POINTS**2)
     elif DOMAIN=='image':
         batch_size = RESULT_SAMPLE_NUM
@@ -541,7 +541,7 @@ def generate_image(iteration):
     prediction_gt = state_prediction_gt.narrow(1,1,1)
 
     '''disc_map'''
-    if DOMAIN=='scalar':
+    if DOMAIN=='coordinate':
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
         points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
         points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
@@ -563,23 +563,24 @@ def generate_image(iteration):
 
     '''prediction_gt'''
     samples = prediction_gt
-    if DOMAIN=='scalar':
+    if DOMAIN=='coordinate':
         samples = prediction_gt.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
     elif DOMAIN=='image':
         log_img(samples,'prediction_gt',iteration)
 
     '''prediction_gt_r'''
-    noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
-    samples =   netG(
-                    noise_v = autograd.Variable(noise, volatile=True),
-                    state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,STATE_DEPTH-1,1)
-    if DOMAIN=='scalar':
-        samples = samples.squeeze(1).cpu().numpy()
-        plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
-    elif DOMAIN=='image':
-        log_img(samples,'prediction_gt_r',iteration)
+    if RUINER_MODE!='none-r':
+        noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+        samples =   netG(
+                        noise_v = autograd.Variable(noise, volatile=True),
+                        state_v = autograd.Variable(prediction_gt, volatile=True)
+                    ).data.narrow(1,STATE_DEPTH-1,1)
+        if DOMAIN=='coordinate':
+            samples = samples.squeeze(1).cpu().numpy()
+            plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
+        elif DOMAIN=='image':
+            log_img(samples,'prediction_gt_r',iteration)
 
     '''prediction'''
     noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
@@ -602,7 +603,7 @@ def generate_image(iteration):
     if FILTER_MODE!='none-f':
         F_out = (F_out - torch.min(F_out)) / (torch.max(F_out)-torch.min(F_out))
 
-    if DOMAIN=='scalar':
+    if DOMAIN=='coordinate':
         samples = samples.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
         if FILTER_MODE!='none-f':
@@ -656,13 +657,13 @@ def generate_image(iteration):
                 iteration
             )
 
-    if DOMAIN=='scalar':
+    if DOMAIN=='coordinate':
         plt.savefig(LOGDIR+'/'+'iteration'+str(iteration)+'.jpg')
         plt_to_vis(plt.gcf(),DSP+'vis',DSP+'fram_'+str(iteration))
 
 def dataset_inter(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
 
-    if DATASET=='2grid':
+    if DATASET=='2D-grid':
 
         scale = 2.
         centers = [
@@ -693,7 +694,7 @@ def dataset_inter(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
                 next_x = np.clip(next_x,0,GRID_SIZE)
                 next_y = np.clip(next_y,0,GRID_SIZE)
 
-                if DOMAIN=='scalar':
+                if DOMAIN=='coordinate':
                     data = np.array([[cur_x,cur_y],
                                      [next_x,next_y]])
                 elif DOMAIN=='image':
@@ -851,7 +852,7 @@ while True:
             alpha = torch.rand(BATCH_SIZE).cuda()
             while len(alpha.size())!=len(prediction_gt.size()):
                 alpha = alpha.unsqueeze(1)
-            if DOMAIN=='scalar':
+            if DOMAIN=='coordinate':
                 alpha = alpha.repeat(
                     1,
                     prediction_gt.size()[1],
@@ -878,7 +879,7 @@ while True:
 
         DC_cost = [0.0]
         if GAN_MODE=='wgan-decade':
-            if DOMAIN=='scalar':
+            if DOMAIN=='coordinate':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
             elif DOMAIN=='image':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(GRID_BACKGROUND,GRID_FOREGROUND)
