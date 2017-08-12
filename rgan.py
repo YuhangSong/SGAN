@@ -35,7 +35,7 @@ EXP = 'd_filter_6'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 RUINER_MODE = 'use-r' # none-r, use-r, test-r
 FILTER_MODE = 'filter-d-c' # none-f, filter-c, filter-d, filter-d-c
