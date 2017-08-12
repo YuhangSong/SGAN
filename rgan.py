@@ -31,7 +31,7 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_7'
+EXP = 'd_filter_9'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
@@ -949,6 +949,7 @@ while True:
                     state_v = autograd.Variable(torch.cat([state,state],0)),
                     prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
                 )
+                C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
 
             elif CORRECTOR_MODE=='c-decade':
 
@@ -960,8 +961,8 @@ while True:
                     state_v = autograd.Variable(torch.cat([state,state],0)),
                     prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
                 )
+                C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
 
-            C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
             C_cost_v.backward()
             C_cost = C_cost_v.cpu().data.numpy()
             optimizerC.step()
@@ -969,6 +970,10 @@ while True:
     if GAN_MODE=='wgan-gravity':
         for p in netD.parameters():
             p.data = p.data * (1.0-0.0001)
+
+    if CORRECTOR_MODE=='c-decade':
+        for p in netC.parameters():
+            p.data = p.data * (1.0-0.01)
 
     if GAN_MODE=='wgan-grad-panish':
         lib.plot.plot('GP_cost', GP_cost)
