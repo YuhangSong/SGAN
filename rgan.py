@@ -31,17 +31,18 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_6'
+EXP = 'd_filter_7'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'scalar' # scalar, image
+DOMAIN = 'image' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 RUINER_MODE = 'use-r' # none-r, use-r, test-r
 FILTER_MODE = 'filter-d-c' # none-f, filter-c, filter-d, filter-d-c
+CORRECTOR_MODE = 'c-decade' # c-normal, c-decade
 OPTIMIZER = 'Adam' # Adam, RMSprop
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+OPTIMIZER+'/'
+DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+CORRECTOR_MODE+'/'+OPTIMIZER+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
@@ -60,7 +61,7 @@ elif DOMAIN=='image':
     NOISE_SIZE = 128
     LAMBDA = 10
     BATCH_SIZE = 64
-    TARGET_W_DISTANCE = 1.0
+    TARGET_W_DISTANCE = 0.2
     STATE_DEPTH = 1
     LOG_INTER = 100
 
@@ -602,7 +603,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,STATE_DEPTH-1,1)
+                ).data.narrow(1,0,1)
     if DOMAIN=='scalar':
         samples = samples.squeeze(1).cpu().numpy()
         plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
@@ -615,7 +616,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     samples =   netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
-                ).data.narrow(1,STATE_DEPTH,1)
+                ).data.narrow(1,1,1)
     
     if filter_net is not None:
         F_out = filter_net(
@@ -853,18 +854,17 @@ while True:
 
         '''get generated data'''
         noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
-        stater_prediction = netG(
+        prediction = netG(
             noise_v = autograd.Variable(noise, volatile=True),
             state_v = autograd.Variable(state, volatile=True)
-        ).data
-        prediction = stater_prediction.narrow(1,STATE_DEPTH,1)
+        ).data.narrow(1,1,1)
 
         if RUINER_MODE=='use-r':
             noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
             prediction_gt = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(prediction_gt, volatile=True)
-            ).data.narrow(1,STATE_DEPTH-1,1)
+            ).data.narrow(1,0,1)
             state_prediction_gt = torch.cat([state,prediction_gt],1)
 
         netD.zero_grad()
@@ -918,7 +918,7 @@ while True:
             if DOMAIN=='scalar':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
             elif DOMAIN=='image':
-                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(GRID_BACKGROUND,GRID_FOREGROUND)
+                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
             D_uni = netD(
                 state_v = autograd.Variable(torch.cat([state,state],0)),
                 prediction_v = autograd.Variable(prediction_uni)
@@ -942,10 +942,25 @@ while True:
         C_cost = [0.0]
         if FILTER_MODE=='filter-c' or FILTER_MODE=='filter-d-c':
             netC.zero_grad()
-            C_out_v = netC(
-                state_v = autograd.Variable(torch.cat([state,state],0)),
-                prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
-            )
+
+            if CORRECTOR_MODE=='c-normal':
+
+                C_out_v = netC(
+                    state_v = autograd.Variable(torch.cat([state,state],0)),
+                    prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
+                )
+
+            elif CORRECTOR_MODE=='c-decade':
+
+                if DOMAIN=='scalar':
+                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,GRID_SIZE)
+                elif DOMAIN=='image':
+                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
+                C_out_v = netC(
+                    state_v = autograd.Variable(torch.cat([state,state],0)),
+                    prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
+                )
+
             C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
             C_cost_v.backward()
             C_cost = C_cost_v.cpu().data.numpy()
@@ -999,7 +1014,7 @@ while True:
         prediction_v = netG(
             noise_v = autograd.Variable(noise),
             state_v = autograd.Variable(state)
-        ).narrow(1,STATE_DEPTH,1)
+        ).narrow(1,1,1)
 
         G = netD(
                 state_v = autograd.Variable(state),
@@ -1020,9 +1035,9 @@ while True:
             stater_v = netG(
                 noise_v = autograd.Variable(noise),
                 state_v = autograd.Variable(state)
-            ).narrow(1,0,STATE_DEPTH)
+            ).narrow(1,0,1)
 
-            R = mse_loss_model(stater_v, autograd.Variable(state))
+            R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,STATE_DEPTH-1,1)))
 
         elif GAME_MDOE=='same-start':
 
@@ -1030,7 +1045,7 @@ while True:
             prediction_gt_r_v = netG(
                 noise_v = autograd.Variable(noise),
                 state_v = autograd.Variable(prediction_gt)
-            ).narrow(1,STATE_DEPTH-1,1)
+            ).narrow(1,0,1)
 
             R = mse_loss_model(prediction_gt_r_v, autograd.Variable(prediction_gt))
 
@@ -1055,7 +1070,7 @@ while True:
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image(iteration)
     
-    print('[{:<10}] Wasserstein_D:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+    print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
         .format(
             iteration,
             Wasserstein_D[0],
