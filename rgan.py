@@ -32,11 +32,11 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_15'
+EXP = 'd_filter_16'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
-DOMAIN = 'image' # scalar, image
+DOMAIN = 'scalar' # scalar, image
 GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 RUINER_MODE = 'use-r' # none-r, use-r, test-r
 FILTER_MODE = 'filter-d-c' # none-f, filter-c, filter-d, filter-d-c
@@ -54,7 +54,7 @@ if DOMAIN=='scalar':
     BATCH_SIZE = 256
     TARGET_W_DISTANCE = 0.2
     STATE_DEPTH = 1
-    LOG_INTER = 10
+    LOG_INTER = 100
 elif DOMAIN=='image':
     DIM = 128
     IMAGE_SIZE = 32
@@ -65,6 +65,7 @@ elif DOMAIN=='image':
     TARGET_W_DISTANCE = 0.2
     STATE_DEPTH = 1
     LOG_INTER = 100
+    GRID_BOX_SIZE = IMAGE_SIZE / GRID_SIZE
 
 if DATASET=='2grid':
     GRID_SIZE = 5
@@ -75,7 +76,6 @@ GRID_BACKGROUND = 0.1
 GRID_FOREGROUND = 0.9
 GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25]
 FIX_STATE_TO=[GRID_SIZE/2,GRID_SIZE/2]
-GRID_BOX_SIZE = IMAGE_SIZE / GRID_SIZE
 
 RESULT_SAMPLE_NUM = 128
 FILTER_RATE = 0.5
@@ -622,8 +622,13 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
 
     '''prediction_gt'''
     if DOMAIN=='scalar':
-        prediction_gt = prediction_gt.squeeze(1).cpu().numpy()
-        plt.scatter(prediction_gt[:, 0], prediction_gt[:, 1], c='orange', marker='+', alpha=0.5)
+        plt.scatter(
+            prediction_gt.squeeze(1).cpu().numpy()[:, 0], 
+            prediction_gt.squeeze(1).cpu().numpy()[:, 1],
+            c='orange', 
+            marker='+', 
+            alpha=0.5
+        )
     elif DOMAIN=='image':
         if gen_basic:
             log_img(prediction_gt,'prediction_gt',iteration)
@@ -640,8 +645,13 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             noise_v = autograd.Variable(noise, volatile=True),
             state_v = autograd.Variable(prediction_gt, volatile=True)
         ).data.narrow(1,0,1)
-        prediction_gt_r = prediction_gt_r.squeeze(1).cpu().numpy()
-        plt.scatter(prediction_gt_r[:, 0], prediction_gt_r[:, 1], c='blue', marker='+', alpha=0.5)
+        plt.scatter(
+            prediction_gt_r.squeeze(1).cpu().numpy()[:, 0], 
+            prediction_gt_r.squeeze(1).cpu().numpy()[:, 1], 
+            c='blue', 
+            marker='+', 
+            alpha=0.5
+        )
     elif DOMAIN=='image':
         if gen_basic:
             noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
@@ -671,12 +681,23 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
         F_out = (F_out - torch.min(F_out)) / (torch.max(F_out)-torch.min(F_out))
 
     if DOMAIN=='scalar':
-        prediction = prediction.squeeze(1).cpu().numpy()
-        plt.scatter(prediction[:, 0], prediction[:, 1], c='green', marker='+', alpha=0.5)
+        plt.scatter(
+            prediction.squeeze(1).cpu().numpy()[:, 0], 
+            prediction.squeeze(1).cpu().numpy()[:, 1], 
+            c='green', 
+            marker='+', 
+            alpha=0.5
+        )
         if filter_net is not None:
             F_out = F_out.cpu().numpy()
-            for ii in range(np.shape(prediction)[0]):
-                plt.scatter(prediction[ii, 0], prediction[ii, 1], c='red', marker='s', alpha=F_out[ii])
+            for ii in range(prediction.size()[0]):
+                plt.scatter(
+                    prediction.squeeze(1).cpu().numpy()[ii, 0],
+                    prediction.squeeze(1).cpu().numpy()[ii, 1], 
+                    c='red', 
+                    marker='s', 
+                    alpha=F_out[ii]
+                )
 
     elif DOMAIN=='image':
 
