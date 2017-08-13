@@ -2,7 +2,7 @@
 
 # Quik setup enviroment: grl_1
 ```
-mkdir -p YOUR_NAME/project/ && cd YOUR_NAME/project/ && git clone https://github.com/YuhangSong2017/grl.git && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && ~/anaconda3/bin/conda create -n grl_1 python=2 -y && source ~/.bashrc && source activate grl_1 && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && git clone https://github.com/pytorch/pytorch.git && cd pytorch && python setup.py install && pip install torchvision && pip install tensorflow && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && pip install sklearn && pip install dill
+mkdir -p YOUR_NAME/project/ && cd YOUR_NAME/project/ && git clone https://github.com/YuhangSong/grl.git && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && ~/anaconda3/bin/conda create -n grl_1 python=2 -y && source ~/.bashrc && source activate grl_1 && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && git clone https://github.com/pytorch/pytorch.git && cd pytorch && python setup.py install && pip install torchvision && pip install tensorflow && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && pip install sklearn && pip install dill
 ```
 
 # Train
