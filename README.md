@@ -15,7 +15,7 @@ source ~/.bashrc && source activate grl_1 && python rgan.py
 #### We use visdom to visualize results remotely (optianal, we also store all results on disk, can be found in ../../result/)
 ##### Start disdom server
 ```
-source activate grl_1 && python -m visdom.server
+source ~/.bashrc && source activate grl_1 && python -m visdom.server
 ```
 ##### Start ngrok so that we can vist visdom page remotely
 ```
