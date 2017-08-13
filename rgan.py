@@ -32,7 +32,7 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_16'
+EXP = 'd_filter_18'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'full' # same-start, full
@@ -42,8 +42,9 @@ RUINER_MODE = 'use-r' # none-r, use-r, test-r
 FILTER_MODE = 'filter-d-c' # none-f, filter-c, filter-d, filter-d-c
 CORRECTOR_MODE = 'c-decade' # c-normal, c-decade
 OPTIMIZER = 'Adam' # Adam, RMSprop
+INIT_SIGMA = 0.00002
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+CORRECTOR_MODE+'/'+OPTIMIZER+'/'
+DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+CORRECTOR_MODE+'/'+OPTIMIZER+'/'+'INIT_SIGMA_'+str(INIT_SIGMA).replace('.','_')+'/'
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
@@ -511,6 +512,23 @@ class Corrector(nn.Module):
 
         return x
 
+def weights_init_g(m):
+    classname = m.__class__.__name__
+    print('----------------------------------')
+    print('class name:'+str(classname))
+    sigma = INIT_SIGMA
+    if classname.find('Linear') != -1:
+        print('>>> find Linear')
+        m.weight.data.normal_(0.0, sigma)
+        m.bias.data.fill_(0.0)
+    elif classname.find('Conv3d') != -1:
+        print('>>> find Conv3d')
+        m.weight.data.normal_(0.0, sigma)
+    elif classname.find('ConvTranspose3d') != -1:
+        print('>>> find ConvTranspose3d')
+        m.weight.data.normal_(0.0, sigma)
+    print('----------------------------------')
+
 def weights_init(m):
     classname = m.__class__.__name__
     print('----------------------------------')
@@ -678,7 +696,11 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             state_v = autograd.Variable(state, volatile=True),
             prediction_v = autograd.Variable(prediction, volatile=True)
         ).data
-        F_out = (F_out - torch.min(F_out)) / (torch.max(F_out)-torch.min(F_out))
+        normal_f = (torch.max(F_out)-torch.min(F_out))
+        if normal_f==0.0:
+            print('Invalid test, return.')
+            return
+        F_out = (F_out - torch.min(F_out)) / normal_f
 
     if DOMAIN=='scalar':
         plt.scatter(
@@ -879,7 +901,7 @@ netC = Corrector().cuda()
 
 netD.apply(weights_init)
 netC.apply(weights_init)
-netG.apply(weights_init)
+netG.apply(weights_init_g)
 print netG
 print netD
 print netC
