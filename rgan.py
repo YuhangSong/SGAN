@@ -69,7 +69,7 @@ elif DOMAIN=='image':
     NOISE_SIZE = 128
     LAMBDA = 10
     BATCH_SIZE = 64
-    TARGET_W_DISTANCE = 0.2
+    TARGET_W_DISTANCE = 0.0
     STATE_DEPTH = 1
     LOG_INTER = 100
     GRID_BOX_SIZE = IMAGE_SIZE / GRID_SIZE
@@ -77,7 +77,7 @@ elif DOMAIN=='image':
 CRITIC_ITERS = 5  # How many critic iterations per generator iteration
 N_POINTS = 128
 
-RESULT_SAMPLE_NUM = 128
+RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
 
 subprocess.call(["mkdir", "-p", LOGDIR])
