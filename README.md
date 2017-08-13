@@ -1,4 +1,4 @@
-# universe-starter-agent
+# GRL
 
 # Quik setup enviroment: grl_1
 ```
@@ -6,17 +6,17 @@ mkdir YOUR_NAME/project/ && cd YOUR_NAME/project/ && git clone https://github.co
 ```
 
 # Train
-## We auto restore the checkpoint of the model, as well as restore the every plot from last run. If you want to start a new run, you should change the EXP in rgan.py
+### We auto restore the checkpoint of the model, as well as restore the every plot from last run. If you want to start a new run, you should change the EXP in rgan.py
 ```
 source ~/.bashrc && source activate grl_1 && python rgan.py
 ```
 
-# we use visdom to visualize results (optianal, we also store all results on disk)
-## start disdom server
+## we use visdom to visualize results (optianal, we also store all results on disk)
+### start disdom server
 ```
 source activate grl_1 && python -m visdom.server
 ```
-## start ngrok so that we can vist visdom page remotely
+### start ngrok so that we can vist visdom page remotely
 ```
 wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
 ```
