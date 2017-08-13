@@ -9,6 +9,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
 import sklearn.datasets
 
 import tflib as lib
@@ -31,7 +32,7 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_9'
+EXP = 'd_filter_15'
 
 DATASET = '2grid' # 2grid
 GAME_MDOE = 'same-start' # same-start, full
@@ -51,7 +52,7 @@ if DOMAIN=='scalar':
     NOISE_SIZE = 2
     LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
     BATCH_SIZE = 256
-    TARGET_W_DISTANCE = 0.0
+    TARGET_W_DISTANCE = 0.2
     STATE_DEPTH = 1
     LOG_INTER = 10
 elif DOMAIN=='image':
@@ -72,6 +73,9 @@ CRITIC_ITERS = 5  # How many critic iterations per generator iteration
 N_POINTS = 128
 GRID_BACKGROUND = 0.1
 GRID_FOREGROUND = 0.9
+GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25]
+FIX_STATE_TO=[GRID_SIZE/2,GRID_SIZE/2]
+GRID_BOX_SIZE = IMAGE_SIZE / GRID_SIZE
 
 RESULT_SAMPLE_NUM = 128
 FILTER_RATE = 0.5
@@ -531,7 +535,7 @@ def generate_image(iteration):
         batch_size = (N_POINTS**2)
     elif DOMAIN=='image':
         batch_size = RESULT_SAMPLE_NUM
-    data_fix_state = dataset_inter(
+    data_fix_state = dataset_iter(
         fix_state=True,
         batch_size=batch_size
     )
@@ -559,6 +563,31 @@ def generate_image(iteration):
             gen_basic=False,
             filter_net=netC
         )
+
+def get_transition_prob_distribution(image):
+    image = image.squeeze()
+    cur_x = FIX_STATE_TO[0]
+    cur_y = FIX_STATE_TO[1]
+    next_state_dic = []
+    for action in range(len(GRID_ACTION_DISTRIBUTION)):
+        x, y = grid_transition(cur_x, cur_y, action)
+        temp = image[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)].sum()
+        next_state_dic += [temp]
+    next_state_dic = np.asarray(next_state_dic)
+    next_state_dic = next_state_dic / np.sum(next_state_dic)
+    return next_state_dic
+
+def plot_kl(image,name):
+    dis = get_transition_prob_distribution(image)
+    kl = scipy.stats.entropy(
+        dis,
+        qk=GRID_ACTION_DISTRIBUTION,
+        base=None
+    )
+    logger.plot(
+        name,
+        kl
+    )
 
 def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
 
@@ -588,74 +617,91 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
         state_prediction_gt = state_prediction_gt.narrow(0,0,RESULT_SAMPLE_NUM)
         state = state.narrow(0,0,RESULT_SAMPLE_NUM)
         prediction_gt = prediction_gt.narrow(0,0,RESULT_SAMPLE_NUM)
+        
+    prediction_gt_mean = prediction_gt.mean(0)
 
     '''prediction_gt'''
-    samples = prediction_gt
     if DOMAIN=='scalar':
-        samples = prediction_gt.squeeze(1).cpu().numpy()
-        plt.scatter(samples[:, 0], samples[:, 1], c='orange', marker='+', alpha=0.5)
+        prediction_gt = prediction_gt.squeeze(1).cpu().numpy()
+        plt.scatter(prediction_gt[:, 0], prediction_gt[:, 1], c='orange', marker='+', alpha=0.5)
     elif DOMAIN=='image':
         if gen_basic:
-            log_img(samples,'prediction_gt',iteration)
+            log_img(prediction_gt,'prediction_gt',iteration)
+            prediction_gt_mean = prediction_gt.mean(0)
+            log_img(prediction_gt_mean,'prediction_gt_mean',iteration)
+            plot_kl(image=prediction_gt_mean,
+                name='prediction_gt_mean_kl'
+            )
 
     '''prediction_gt_r'''
-    noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
-    samples =   netG(
-                    noise_v = autograd.Variable(noise, volatile=True),
-                    state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,0,1)
     if DOMAIN=='scalar':
-        samples = samples.squeeze(1).cpu().numpy()
-        plt.scatter(samples[:, 0], samples[:, 1], c='blue', marker='+', alpha=0.5)
+        noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+        prediction_gt_r = netG(
+            noise_v = autograd.Variable(noise, volatile=True),
+            state_v = autograd.Variable(prediction_gt, volatile=True)
+        ).data.narrow(1,0,1)
+        prediction_gt_r = prediction_gt_r.squeeze(1).cpu().numpy()
+        plt.scatter(prediction_gt_r[:, 0], prediction_gt_r[:, 1], c='blue', marker='+', alpha=0.5)
     elif DOMAIN=='image':
         if gen_basic:
-            log_img(samples,'prediction_gt_r',iteration)
+            noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+            prediction_gt_r = netG(
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(prediction_gt, volatile=True)
+            ).data.narrow(1,0,1)
+            log_img(prediction_gt_r,'prediction_gt_r',iteration)
+            prediction_gt_r_mean = prediction_gt_r.mean(0)
+            log_img(prediction_gt_r_mean,'prediction_gt_r_mean',iteration)
+            plot_kl(image=prediction_gt_r_mean,
+                name='prediction_gt_r_mean_kl'
+            )
 
     '''prediction'''
     noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
-    samples =   netG(
-                    noise_v = autograd.Variable(noise, volatile=True),
-                    state_v = autograd.Variable(state, volatile=True)
-                ).data.narrow(1,1,1)
+    prediction = netG(
+        noise_v = autograd.Variable(noise, volatile=True),
+        state_v = autograd.Variable(state, volatile=True)
+    ).data.narrow(1,1,1)
     
     if filter_net is not None:
         F_out = filter_net(
-                state_v = autograd.Variable(state, volatile=True),
-                prediction_v = autograd.Variable(samples, volatile=True)
-            ).data
+            state_v = autograd.Variable(state, volatile=True),
+            prediction_v = autograd.Variable(prediction, volatile=True)
+        ).data
         F_out = (F_out - torch.min(F_out)) / (torch.max(F_out)-torch.min(F_out))
 
     if DOMAIN=='scalar':
-        samples = samples.squeeze(1).cpu().numpy()
-        plt.scatter(samples[:, 0], samples[:, 1], c='green', marker='+', alpha=0.5)
+        prediction = prediction.squeeze(1).cpu().numpy()
+        plt.scatter(prediction[:, 0], prediction[:, 1], c='green', marker='+', alpha=0.5)
         if filter_net is not None:
             F_out = F_out.cpu().numpy()
-            for ii in range(np.shape(samples)[0]):
-                plt.scatter(samples[ii, 0], samples[ii, 1], c='red', marker='s', alpha=F_out[ii])
+            for ii in range(np.shape(prediction)[0]):
+                plt.scatter(prediction[ii, 0], prediction[ii, 1], c='red', marker='s', alpha=F_out[ii])
 
     elif DOMAIN=='image':
 
         if filter_net is None:
 
-            log_img(samples,'prediction',iteration)
+            log_img(prediction,'prediction',iteration)
+            prediction_mean = prediction.mean(0)
             log_img(
-                    samples.mean(0),
-                    'prediction-mean',
-                    iteration
-                )
+                prediction_mean,
+                'prediction-mean',
+                iteration
+            )
 
         else:
 
             F_out_numpy = F_out.cpu().numpy()
 
-            while len(F_out.size())!=len(samples.size()):
+            while len(F_out.size())!=len(prediction.size()):
                 F_out = F_out.unsqueeze(1)
             F_out = F_out.repeat(
                 1,
-                samples.size()[1],
-                samples.size()[2],
-                samples.size()[3],
-                samples.size()[4]
+                prediction.size()[1],
+                prediction.size()[2],
+                prediction.size()[3],
+                prediction.size()[4]
             )
             log_img(
                 x=F_out,
@@ -677,17 +723,21 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             filter_num = int(RESULT_SAMPLE_NUM*FILTER_RATE)
             filtered_indexs = F_out_numpy_indexs[RESULT_SAMPLE_NUM-filter_num:RESULT_SAMPLE_NUM,1]
             filtered_indexs = filtered_indexs.astype(int)
-            filtered_samples = torch.index_select(samples,0,torch.cuda.LongTensor(filtered_indexs))
+            filtered_prediction = torch.index_select(prediction,0,torch.cuda.LongTensor(filtered_indexs))
             log_img(
-                x=filtered_samples,
+                x=filtered_prediction,
                 name='prediction-filtered-by-'+str(filter_net.__class__.__name__),
                 iteration=iteration
             )
-
+            filtered_prediction_mean = filtered_prediction.mean(0)
             log_img(
-                x=filtered_samples.mean(0),
-                name='prediction-mean-filtered-by'+str(filter_net.__class__.__name__),
+                x=filtered_prediction_mean,
+                name='prediction-mean-filtered-by-'+str(filter_net.__class__.__name__),
                 iteration=iteration
+            )
+
+            plot_kl(image=filtered_prediction_mean,
+                name='prediction-kl-filtered-by-'+str(filter_net.__class__.__name__)
             )
 
     if DOMAIN=='scalar':
@@ -698,7 +748,22 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
         plt.savefig(LOGDIR+file_name+'_'+str(iteration)+'.jpg')
         plt_to_vis(plt.gcf(),DSP+file_name,DSP+file_name+'_'+str(iteration))
 
-def dataset_inter(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch_size=BATCH_SIZE):
+def grid_transition(cur_x,cur_y,action):
+    next_x = cur_x
+    next_y = cur_y
+    if action==0:
+        next_x = cur_x + 1
+    elif action==1:
+        next_y = cur_y + 1
+    elif action==2:
+        next_x = cur_x - 1
+    elif action==3:
+        next_y = cur_y - 1
+    next_x = np.clip(next_x,0,GRID_SIZE)
+    next_y = np.clip(next_y,0,GRID_SIZE)
+    return next_x,next_y
+
+def dataset_iter(fix_state=False, batch_size=BATCH_SIZE):
 
     if DATASET=='2grid':
 
@@ -712,24 +777,17 @@ def dataset_inter(fix_state=False, fix_state_to=[GRID_SIZE/2,GRID_SIZE/2], batch
             dataset = []
             for i in xrange(batch_size):
                 if not fix_state:
-                    cur_x = random.choice(range(GRID_SIZE))
-                    cur_y = random.choice(range(GRID_SIZE))
+                    cur_x = np.random.choice(range(GRID_SIZE))
+                    cur_y = np.random.choice(range(GRID_SIZE))
                 else:
-                    cur_x = fix_state_to[0]
-                    cur_y = fix_state_to[1]
-                action = random.choice(range(4))
-                next_x = cur_x
-                next_y = cur_y
-                if action==0:
-                    next_x = cur_x + 1
-                elif action==2:
-                    next_x = cur_x - 1
-                elif action==1:
-                    next_y = cur_y + 1
-                elif action==3:
-                    next_y = cur_y - 1
-                next_x = np.clip(next_x,0,GRID_SIZE)
-                next_y = np.clip(next_y,0,GRID_SIZE)
+                    cur_x = FIX_STATE_TO[0]
+                    cur_y = FIX_STATE_TO[1]
+                action = np.random.choice(
+                    range(len(GRID_ACTION_DISTRIBUTION)),
+                    p=GRID_ACTION_DISTRIBUTION
+                )
+                
+                next_x, next_y = grid_transition(cur_x,cur_y,action)
 
                 if DOMAIN=='scalar':
                     data = np.array([[cur_x,cur_y],
@@ -773,6 +831,25 @@ def calc_gradient_penalty(netD, state, interpolates):
 
     return gradient_penalty
 
+def restore_model():
+    print('Trying load models....')
+    try:
+        netD.load_state_dict(torch.load('{0}/netD.pth'.format(LOGDIR)))
+        print('Previous checkpoint for netD founded')
+    except Exception, e:
+        print('Previous checkpoint for netD unfounded')
+    try:
+        netC.load_state_dict(torch.load('{0}/netC.pth'.format(LOGDIR)))
+        print('Previous checkpoint for netC founded')
+    except Exception, e:
+        print('Previous checkpoint for netC unfounded')
+    try:
+        netG.load_state_dict(torch.load('{0}/netG.pth'.format(LOGDIR)))
+        print('Previous checkpoint for netG founded')
+    except Exception, e:
+        print('Previous checkpoint for netG unfounded')
+    print('')
+
 ############################### Definition End ###############################
 
 netG = Generator().cuda()
@@ -802,28 +879,12 @@ mone = one * -1
 ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((BATCH_SIZE)),np.zeros((BATCH_SIZE))),0))
 
 if GAME_MDOE=='same-start':
-    data = dataset_inter(fix_state=True)
+    data = dataset_iter(fix_state=True)
 elif GAME_MDOE=='full':
-    data = dataset_inter(fix_state=False)
+    data = dataset_iter(fix_state=False)
 
-print('Trying load models....')
-try:
-    netD.load_state_dict(torch.load('{0}/netD.pth'.format(LOGDIR)))
-    print('Previous checkpoint for netD founded')
-except Exception, e:
-    print('Previous checkpoint for netD unfounded')
-try:
-    netC.load_state_dict(torch.load('{0}/netC.pth'.format(LOGDIR)))
-    print('Previous checkpoint for netC founded')
-except Exception, e:
-    print('Previous checkpoint for netC unfounded')
-try:
-    netG.load_state_dict(torch.load('{0}/netG.pth'.format(LOGDIR)))
-    print('Previous checkpoint for netG founded')
-except Exception, e:
-    print('Previous checkpoint for netG unfounded')
-
-# lib.plot.restore(LOGDIR,DSP)
+restore_model()
+logger = lib.plot.logger(LOGDIR,DSP)
 
 state_prediction_gt = torch.Tensor(data.next()).cuda()
 state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
@@ -911,7 +972,7 @@ while True:
                 interpolates = interpolates
             )
             gradient_penalty.backward()
-            GP_cost = gradient_penalty.cpu().data.numpy()
+            GP_cost = gradient_penalty.data.cpu().numpy()
 
         DC_cost = [0.0]
         if GAN_MODE=='wgan-decade':
@@ -976,13 +1037,13 @@ while True:
             p.data = p.data * (1.0-0.01)
 
     if GAN_MODE=='wgan-grad-panish':
-        lib.plot.plot('GP_cost', GP_cost)
+        logger.plot('GP_cost', GP_cost)
     if GAN_MODE=='wgan-decade':
-        lib.plot.plot('DC_cost', DC_cost)
+        logger.plot('DC_cost', DC_cost)
     if FILTER_MODE=='filter-c' or FILTER_MODE=='filter-d-c':
-        lib.plot.plot('C_cost', C_cost)
-    lib.plot.plot('D_cost', D_cost)
-    lib.plot.plot('W_dis', Wasserstein_D)
+        logger.plot('C_cost', C_cost)
+    logger.plot('D_cost', D_cost)
+    logger.plot('W_dis', Wasserstein_D)
 
     ############################
     # (2) Control R
@@ -1028,9 +1089,9 @@ while True:
 
         G.backward(mone)
         G_cost = -G.data.cpu().numpy()
-        lib.plot.plot('G_cost', G_cost)
+        logger.plot('G_cost', G_cost)
         G_R = 'G'
-        lib.plot.plot('G_R', np.asarray([1.0]))
+        logger.plot('G_R', np.asarray([1.0]))
 
     elif update_type=='r':
 
@@ -1056,9 +1117,9 @@ while True:
 
         R.backward()
         R_cost = R.data.cpu().numpy()
-        lib.plot.plot('R_cost', R_cost)
+        logger.plot('R_cost', R_cost)
         G_R = 'R'
-        lib.plot.plot('G_R', np.asarray([-1.0]))
+        logger.plot('G_R', np.asarray([-1.0]))
     
     optimizerG.step()
 
@@ -1066,14 +1127,12 @@ while True:
     # (4) Log summary
     ############################
 
-    lib.plot.flush(LOGDIR,DSP)
-    lib.plot.tick()
-
     if iteration % LOG_INTER == 2:
         torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
         torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
         torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
         generate_image(iteration)
+        logger.flush()
     
     print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
         .format(
@@ -1087,3 +1146,5 @@ while True:
             C_cost[0]
         )
     )
+
+    logger.tick()

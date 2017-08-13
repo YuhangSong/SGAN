@@ -7,51 +7,68 @@ import matplotlib.pyplot as plt
 import collections
 import time
 import cPickle as pickle
+import dill
 
 import torch
 import visdom
 vis = visdom.Visdom()
 
-_since_beginning = collections.defaultdict(lambda: {})
-_since_last_flush = collections.defaultdict(lambda: {})
+class logger(object):
+	"""docstring for logger"""
+	def __init__(self,LOGDIR,DSP):
+		super(logger, self).__init__()
 
-_iter = [0]
-def tick():
-	_iter[0] += 1
+		self.LOGDIR = LOGDIR
+		self.DSP = DSP
 
-def plot(name, value):
-	_since_last_flush[name][_iter[0]] = value
+		self._iter = 0
 
-def flush(LOGDIR,DSP):
-	prints = []
+		self._since_beginning = collections.defaultdict(lambda: {})
+		self._since_last_flush = collections.defaultdict(lambda: {})
 
-	for name, vals in _since_last_flush.items():
-		prints.append("{}\t{}".format(name, np.mean(vals.values())))
-		_since_beginning[name].update(vals)
+		self.restore()
 
-		x_vals = np.sort(_since_beginning[name].keys())
-		y_vals = [_since_beginning[name][x] for x in x_vals]
+	def restore(self):
 
-		plt.clf()
-		plt.plot(x_vals, y_vals)
-		plt.xlabel('iteration')
-		plt.ylabel(DSP+name)
-		plt.savefig(LOGDIR+name+'.jpg')
+		print('Try load previous plot....')
+		try:
+			self._since_beginning = dill.load(open(self.LOGDIR+'log.pkl', "r"))
+			self._iter = dill.load(open(self.LOGDIR+'iteration.pkl', "r"))
+			print('Restore plot from iter: '+str(self._iter))
+		except Exception, e:
+			print('Previous plot unfounded')
+		print('')
 
-		if len(x_vals) > 1:
-			vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
-						Y=torch.from_numpy(np.asarray(y_vals)),
-	                    win=DSP+name,
-	                    opts=dict(title=DSP+name))
+	def tick(self):
+		self._iter += 1
 
-	_since_last_flush.clear()
+	def plot(self, name, value):
+		self._since_last_flush[name][self._iter] = value
 
-	with open(LOGDIR+'log.pkl', 'wb') as f:
-		pickle.dump(dict(_since_beginning), f, pickle.HIGHEST_PROTOCOL)
+	def flush(self):
 
-def restore(LOGDIR,DSP):
+		for name, vals in self._since_last_flush.items():
 
-	print('Try load previous plot....')
+			self._since_beginning[name].update(vals)
 
-	with open(LOGDIR+'log.pkl', 'rb') as f:
-		_since_beginning = pickle.load(f)
+			x_vals = np.sort(self._since_beginning[name].keys())
+			y_vals = [self._since_beginning[name][x] for x in x_vals]
+
+			plt.clf()
+			plt.plot(x_vals, y_vals)
+			plt.xlabel('iteration')
+			plt.ylabel(self.DSP+name)
+			plt.savefig(self.LOGDIR+name+'.jpg')
+
+			if len(x_vals) > 1:
+				vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
+							Y=torch.from_numpy(np.asarray(y_vals)),
+		                    win=self.DSP+name,
+		                    opts=dict(title=self.DSP+name))
+
+		self._since_last_flush.clear()
+
+		with open(self.LOGDIR+'log.pkl', 'wb') as f:
+			dill.dump(self._since_beginning, f)
+		with open(self.LOGDIR+'iteration.pkl', 'wb') as f:
+			dill.dump(self._iter, f)
