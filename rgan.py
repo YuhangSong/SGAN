@@ -1215,6 +1215,7 @@ while True:
     elif params['METHOD']=='deterministic-deep-net':
 
         print('implement '+params['METHOD']+' here!')
+        print('233')
 
         '''
         examples
