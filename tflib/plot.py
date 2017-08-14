@@ -43,6 +43,7 @@ class logger(object):
 		self._iter += 1
 
 	def plot(self, name, value):
+		value = np.asarray(value)
 		self._since_last_flush[name][self._iter] = value
 
 	def flush(self):

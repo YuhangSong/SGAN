@@ -41,6 +41,9 @@ add_parameters(EXP = 'd_filter_19')
 add_parameters(DATASET = '2grid') # 2grid
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, image
+
+add_parameters(METHOD = 'deterministic-deep-net') # grl, deterministic-deep-net, tabular
+
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
@@ -955,256 +958,302 @@ iteration = -1
 while True:
     iteration += 1
 
-    ############################
-    # (1) Update D network
-    ############################
+    if params['METHOD']=='grl':
 
-    for p in netD.parameters():
-        p.requires_grad = True
+        ############################
+        # (1) Update D network
+        ############################
 
-    for iter_d in xrange(params['CRITIC_ITERS']):
+        for p in netD.parameters():
+            p.requires_grad = True
 
-        if params['GAN_MODE']=='wgan':
+        for iter_d in xrange(params['CRITIC_ITERS']):
+
+            if params['GAN_MODE']=='wgan':
+                for p in netD.parameters():
+                    p.data.clamp_(-0.01, +0.01)
+
+            '''get data set'''
+            state_prediction_gt = torch.Tensor(data.next()).cuda()
+            state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+            prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+
+            '''get generated data'''
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            prediction = netG(
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(state, volatile=True)
+            ).data.narrow(1,1,1)
+
+            if params['RUINER_MODE']=='use-r':
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                prediction_gt = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(prediction_gt, volatile=True)
+                ).data.narrow(1,0,1)
+                state_prediction_gt = torch.cat([state,prediction_gt],1)
+
+            netD.zero_grad()
+
+            '''train with real'''
+            D_real = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = autograd.Variable(prediction_gt)
+            ).mean()
+            D_real.backward(mone)
+
+            '''train with fake'''
+            D_fake = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = autograd.Variable(prediction)
+            ).mean()
+            D_fake.backward(one)
+
+            GP_cost = [0.0]
+            if params['GAN_MODE']=='wgan-grad-panish':
+                alpha = torch.rand(params['BATCH_SIZE']).cuda()
+                while len(alpha.size())!=len(prediction_gt.size()):
+                    alpha = alpha.unsqueeze(1)
+                if params['DOMAIN']=='scalar':
+                    alpha = alpha.repeat(
+                        1,
+                        prediction_gt.size()[1],
+                        prediction_gt.size()[2]
+                    )
+                elif params['DOMAIN']=='image':
+                    alpha = alpha.repeat(
+                        1,
+                        prediction_gt.size()[1],
+                        prediction_gt.size()[2],
+                        prediction_gt.size()[3],
+                        prediction_gt.size()[4]
+                    )
+
+                interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
+                '''train with gradient penalty'''
+                gradient_penalty = calc_gradient_penalty(
+                    netD = netD,
+                    state = state,
+                    interpolates = interpolates
+                )
+                gradient_penalty.backward()
+                GP_cost = gradient_penalty.data.cpu().numpy()
+
+            DC_cost = [0.0]
+            if params['GAN_MODE']=='wgan-decade':
+                if params['DOMAIN']=='scalar':
+                    prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
+                elif params['DOMAIN']=='image':
+                    prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
+                D_uni = netD(
+                    state_v = autograd.Variable(torch.cat([state,state],0)),
+                    prediction_v = autograd.Variable(prediction_uni)
+                )
+                decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
+                decade_cost.backward()
+                DC_cost = decade_cost.cpu().data.numpy()
+
+            if params['GAN_MODE']=='wgan-grad-panish':
+                D_cost = D_fake - D_real + gradient_penalty
+            if params['GAN_MODE']=='wgan-decade':
+                D_cost = D_fake - D_real + decade_cost
+            else:
+                D_cost = D_fake - D_real
+            D_cost = D_cost.data.cpu().numpy()
+
+            Wasserstein_D = (D_real - D_fake).data.cpu().numpy()
+
+            optimizerD.step()
+
+            C_cost = [0.0]
+            if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
+                netC.zero_grad()
+
+                if params['CORRECTOR_MODE']=='c-normal':
+
+                    C_out_v = netC(
+                        state_v = autograd.Variable(torch.cat([state,state],0)),
+                        prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
+                    )
+                    C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
+
+                elif params['CORRECTOR_MODE']=='c-decade':
+
+                    if params['DOMAIN']=='scalar':
+                        prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
+                    elif params['DOMAIN']=='image':
+                        prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
+                    C_out_v = netC(
+                        state_v = autograd.Variable(torch.cat([state,state],0)),
+                        prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
+                    )
+                    C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
+
+                C_cost_v.backward()
+                C_cost = C_cost_v.cpu().data.numpy()
+                optimizerC.step()
+
+        if params['GAN_MODE']=='wgan-gravity':
             for p in netD.parameters():
-                p.data.clamp_(-0.01, +0.01)
+                p.data = p.data * (1.0-0.0001)
+
+        if params['CORRECTOR_MODE']=='c-decade':
+            for p in netC.parameters():
+                p.data = p.data * (1.0-0.01)
+
+        if params['GAN_MODE']=='wgan-grad-panish':
+            logger.plot('GP_cost', GP_cost)
+        if params['GAN_MODE']=='wgan-decade':
+            logger.plot('DC_cost', DC_cost)
+        if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
+            logger.plot('C_cost', C_cost)
+        logger.plot('D_cost', D_cost)
+        logger.plot('W_dis', Wasserstein_D)
+
+        ############################
+        # (2) Control R
+        ############################
+
+        if params['RUINER_MODE']=='use-r':
+            if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
+                update_type = 'g'
+            else:
+                update_type = 'r'
+        elif params['RUINER_MODE']=='none-r':
+            update_type = 'g'
+        elif params['RUINER_MODE']=='test-r':
+            update_type = 'r'
+
+        ############################
+        # (3) Update G network or R
+        ###########################
+
+        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+
+        netG.zero_grad()
+
+        G_cost = [0.0]
+        R_cost = [0.0]
+        if update_type=='g':
+
+            for p in netD.parameters():
+                p.requires_grad = False
+
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            prediction_v = netG(
+                noise_v = autograd.Variable(noise),
+                state_v = autograd.Variable(state)
+            ).narrow(1,1,1)
+
+            G = netD(
+                    state_v = autograd.Variable(state),
+                    prediction_v = prediction_v
+                ).mean()
+
+            G.backward(mone)
+            G_cost = -G.data.cpu().numpy()
+            logger.plot('G_cost', G_cost)
+            G_R = 'G'
+            logger.plot('G_R', np.asarray([1.0]))
+
+        elif update_type=='r':
+
+            if params['GAME_MDOE']=='full':
+
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                stater_v = netG(
+                    noise_v = autograd.Variable(noise),
+                    state_v = autograd.Variable(state)
+                ).narrow(1,0,1)
+
+                R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,params['STATE_DEPTH']-1,1)))
+
+            elif params['GAME_MDOE']=='same-start':
+
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                prediction_gt_r_v = netG(
+                    noise_v = autograd.Variable(noise),
+                    state_v = autograd.Variable(prediction_gt)
+                ).narrow(1,0,1)
+
+                R = mse_loss_model(prediction_gt_r_v, autograd.Variable(prediction_gt))
+
+            R.backward()
+            R_cost = R.data.cpu().numpy()
+            logger.plot('R_cost', R_cost)
+            G_R = 'R'
+            logger.plot('G_R', np.asarray([-1.0]))
+        
+        optimizerG.step()
+
+        ############################
+        # (4) Log summary
+        ############################
+
+        if iteration % LOG_INTER == 2:
+            torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
+            torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
+            torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
+            generate_image(iteration)
+            logger.flush()
+        
+        print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+            .format(
+                iteration,
+                Wasserstein_D[0],
+                GP_cost[0],
+                D_cost[0],
+                G_R,
+                G_cost[0],
+                R_cost[0],
+                C_cost[0]
+            )
+        )
+
+    elif params['METHOD']=='deterministic-deep-net':
+
+        print('implement '+params['METHOD']+' here!')
+
+        '''
+        examples
+        please do not modify anything in other
+        if params['METHOD']==xx: block
+        '''
+
+        '''
+        you can add paramter like: 
+        add_parameters(INIT_SIGMA = 0.00002)
+        and call it with: params['INIT_SIGMA']
+        '''
 
         '''get data set'''
         state_prediction_gt = torch.Tensor(data.next()).cuda()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
-        '''get generated data'''
-        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-        prediction = netG(
-            noise_v = autograd.Variable(noise, volatile=True),
-            state_v = autograd.Variable(state, volatile=True)
-        ).data.narrow(1,1,1)
+        '''
+        plot anything
+        this plot method will store plot on disk as well
+        as log it on visdom
+        '''
+        logger.plot('name_of_your_plot', [1.0])
 
-        if params['RUINER_MODE']=='use-r':
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            prediction_gt = netG(
-                noise_v = autograd.Variable(noise, volatile=True),
-                state_v = autograd.Variable(prediction_gt, volatile=True)
-            ).data.narrow(1,0,1)
-            state_prediction_gt = torch.cat([state,prediction_gt],1)
+        '''
+        log anything to disk
+        please use LOGDIR as your log dir, since it includes all the
+        settings you specified 
+        '''
 
-        netD.zero_grad()
+        '''
+        if you just want a string that indicates
+        your settings, use DSP
+        '''
 
-        '''train with real'''
-        D_real = netD(
-            state_v = autograd.Variable(state),
-            prediction_v = autograd.Variable(prediction_gt)
-        ).mean()
-        D_real.backward(mone)
-
-        '''train with fake'''
-        D_fake = netD(
-            state_v = autograd.Variable(state),
-            prediction_v = autograd.Variable(prediction)
-        ).mean()
-        D_fake.backward(one)
-
-        GP_cost = [0.0]
-        if params['GAN_MODE']=='wgan-grad-panish':
-            alpha = torch.rand(params['BATCH_SIZE']).cuda()
-            while len(alpha.size())!=len(prediction_gt.size()):
-                alpha = alpha.unsqueeze(1)
-            if params['DOMAIN']=='scalar':
-                alpha = alpha.repeat(
-                    1,
-                    prediction_gt.size()[1],
-                    prediction_gt.size()[2]
-                )
-            elif params['DOMAIN']=='image':
-                alpha = alpha.repeat(
-                    1,
-                    prediction_gt.size()[1],
-                    prediction_gt.size()[2],
-                    prediction_gt.size()[3],
-                    prediction_gt.size()[4]
-                )
-
-            interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
-            '''train with gradient penalty'''
-            gradient_penalty = calc_gradient_penalty(
-                netD = netD,
-                state = state,
-                interpolates = interpolates
-            )
-            gradient_penalty.backward()
-            GP_cost = gradient_penalty.data.cpu().numpy()
-
-        DC_cost = [0.0]
-        if params['GAN_MODE']=='wgan-decade':
-            if params['DOMAIN']=='scalar':
-                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
-            elif params['DOMAIN']=='image':
-                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
-            D_uni = netD(
-                state_v = autograd.Variable(torch.cat([state,state],0)),
-                prediction_v = autograd.Variable(prediction_uni)
-            )
-            decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
-            decade_cost.backward()
-            DC_cost = decade_cost.cpu().data.numpy()
-
-        if params['GAN_MODE']=='wgan-grad-panish':
-            D_cost = D_fake - D_real + gradient_penalty
-        if params['GAN_MODE']=='wgan-decade':
-            D_cost = D_fake - D_real + decade_cost
-        else:
-            D_cost = D_fake - D_real
-        D_cost = D_cost.data.cpu().numpy()
-
-        Wasserstein_D = (D_real - D_fake).data.cpu().numpy()
-
-        optimizerD.step()
-
-        C_cost = [0.0]
-        if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
-            netC.zero_grad()
-
-            if params['CORRECTOR_MODE']=='c-normal':
-
-                C_out_v = netC(
-                    state_v = autograd.Variable(torch.cat([state,state],0)),
-                    prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
-                )
-                C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
-
-            elif params['CORRECTOR_MODE']=='c-decade':
-
-                if params['DOMAIN']=='scalar':
-                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
-                elif params['DOMAIN']=='image':
-                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
-                C_out_v = netC(
-                    state_v = autograd.Variable(torch.cat([state,state],0)),
-                    prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
-                )
-                C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
-
-            C_cost_v.backward()
-            C_cost = C_cost_v.cpu().data.numpy()
-            optimizerC.step()
-
-    if params['GAN_MODE']=='wgan-gravity':
-        for p in netD.parameters():
-            p.data = p.data * (1.0-0.0001)
-
-    if params['CORRECTOR_MODE']=='c-decade':
-        for p in netC.parameters():
-            p.data = p.data * (1.0-0.01)
-
-    if params['GAN_MODE']=='wgan-grad-panish':
-        logger.plot('GP_cost', GP_cost)
-    if params['GAN_MODE']=='wgan-decade':
-        logger.plot('DC_cost', DC_cost)
-    if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
-        logger.plot('C_cost', C_cost)
-    logger.plot('D_cost', D_cost)
-    logger.plot('W_dis', Wasserstein_D)
-
-    ############################
-    # (2) Control R
-    ############################
-
-    if params['RUINER_MODE']=='use-r':
-        if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
-            update_type = 'g'
-        else:
-            update_type = 'r'
-    elif params['RUINER_MODE']=='none-r':
-        update_type = 'g'
-    elif params['RUINER_MODE']=='test-r':
-        update_type = 'r'
-
-    ############################
-    # (3) Update G network or R
-    ###########################
-
-    state_prediction_gt = torch.Tensor(data.next()).cuda()
-    state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-    prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
-
-    netG.zero_grad()
-
-    G_cost = [0.0]
-    R_cost = [0.0]
-    if update_type=='g':
-
-        for p in netD.parameters():
-            p.requires_grad = False
-
-        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-        prediction_v = netG(
-            noise_v = autograd.Variable(noise),
-            state_v = autograd.Variable(state)
-        ).narrow(1,1,1)
-
-        G = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = prediction_v
-            ).mean()
-
-        G.backward(mone)
-        G_cost = -G.data.cpu().numpy()
-        logger.plot('G_cost', G_cost)
-        G_R = 'G'
-        logger.plot('G_R', np.asarray([1.0]))
-
-    elif update_type=='r':
-
-        if params['GAME_MDOE']=='full':
-
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            stater_v = netG(
-                noise_v = autograd.Variable(noise),
-                state_v = autograd.Variable(state)
-            ).narrow(1,0,1)
-
-            R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,params['STATE_DEPTH']-1,1)))
-
-        elif params['GAME_MDOE']=='same-start':
-
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            prediction_gt_r_v = netG(
-                noise_v = autograd.Variable(noise),
-                state_v = autograd.Variable(prediction_gt)
-            ).narrow(1,0,1)
-
-            R = mse_loss_model(prediction_gt_r_v, autograd.Variable(prediction_gt))
-
-        R.backward()
-        R_cost = R.data.cpu().numpy()
-        logger.plot('R_cost', R_cost)
-        G_R = 'R'
-        logger.plot('G_R', np.asarray([-1.0]))
-    
-    optimizerG.step()
-
-    ############################
-    # (4) Log summary
-    ############################
+    elif params['METHOD']=='tabular':
+        print('implement '+params['METHOD']+' here!')
 
     if iteration % LOG_INTER == 2:
-        torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
-        torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
-        torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
-        generate_image(iteration)
         logger.flush()
-    
-    print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
-        .format(
-            iteration,
-            Wasserstein_D[0],
-            GP_cost[0],
-            D_cost[0],
-            G_R,
-            G_cost[0],
-            R_cost[0],
-            C_cost[0]
-        )
-    )
-
     logger.tick()
