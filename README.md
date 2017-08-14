@@ -12,7 +12,8 @@ source ~/.bashrc && source activate grl_1 && python rgan.py
 ```
 
 # Visualize result
-#### We use visdom to visualize results remotely (optianal, we also store all results on disk, can be found in ../../result/)
+#### We store all results on disk, can be found in ../../result/
+#### We also use visdom to visualize results remotely (optianal)
 ##### Start disdom server
 ```
 source ~/.bashrc && source activate grl_1 && python -m visdom.server
@@ -21,3 +22,4 @@ source ~/.bashrc && source activate grl_1 && python -m visdom.server
 ```
 wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
 ```
+##### Brows the address provided by above command, like: http://bbc9b540.ngrok.io/
