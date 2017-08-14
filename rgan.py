@@ -47,7 +47,7 @@ add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(INIT_SIGMA = 0.00002)
-add_parameters(FASTEN_D = 100)
+add_parameters(FASTEN_D = 10)
 
 if params['DATASET']=='2grid':
     add_parameters(GRID_SIZE = 5)
