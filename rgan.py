@@ -32,54 +32,71 @@ torch.manual_seed(4213)
 GPU = range(torch.cuda.device_count())
 print('Using GPU:'+str(GPU))
 
-EXP = 'd_filter_18'
+params = {}
 
-DATASET = '2grid' # 2grid
-GAME_MDOE = 'full' # same-start, full
-DOMAIN = 'image' # scalar, image
-GAN_MODE = 'wgan-grad-panish' # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-RUINER_MODE = 'use-r' # none-r, use-r, test-r
-FILTER_MODE = 'filter-d-c' # none-f, filter-c, filter-d, filter-d-c
-CORRECTOR_MODE = 'c-decade' # c-normal, c-decade
-OPTIMIZER = 'Adam' # Adam, RMSprop
-INIT_SIGMA = 0.00002
+def add_parameters(**kwargs):
+    params.update(kwargs)
 
-DSP = EXP+'/'+DATASET+'/'+GAME_MDOE+'/'+DOMAIN+'/'+GAN_MODE+'/'+RUINER_MODE+'/'+FILTER_MODE+'/'+CORRECTOR_MODE+'/'+OPTIMIZER+'/'+'INIT_SIGMA_'+str(INIT_SIGMA).replace('.','_')+'/'
-BASIC = '../../result/'
-LOGDIR = BASIC+DSP
+add_parameters(EXP = 'd_filter_18')
+add_parameters(DATASET = '2grid') # 2grid
+add_parameters(GAME_MDOE = 'full') # same-start, full
+add_parameters(DOMAIN = 'image') # scalar, image
+add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
+add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
+add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
+add_parameters(INIT_SIGMA = 0.00002)
+add_parameters(FASTEN_D = 10)
 
-if DATASET=='2grid':
-    GRID_SIZE = 5
-    GRID_BACKGROUND = 0.1
-    GRID_FOREGROUND = 0.9
-    GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25]
-    FIX_STATE_TO=[GRID_SIZE/2,GRID_SIZE/2]
+if params['DATASET']=='2grid':
+    add_parameters(GRID_SIZE = 5)
+    add_parameters(GRID_BACKGROUND = 0.1)
+    add_parameters(GRID_FOREGROUND = 0.9)
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
 
-if DOMAIN=='scalar':
-    DIM = 512
-    NOISE_SIZE = 2
-    LAMBDA = .1  # Smaller lambda seems to help for toy tasks specifically
-    BATCH_SIZE = 256
-    TARGET_W_DISTANCE = 0.2
-    STATE_DEPTH = 1
+if params['DOMAIN']=='scalar':
+    add_parameters(DIM = 512)
+    add_parameters(NOISE_SIZE = 2)
+    add_parameters(LAMBDA = 0.1) # Smaller lambda seems to help for toy tasks specifically
+    add_parameters(BATCH_SIZE = 256)
+    add_parameters(TARGET_W_DISTANCE = 0.2)
+    add_parameters(STATE_DEPTH = 1)
+
     LOG_INTER = 100
-elif DOMAIN=='image':
-    DIM = 128
-    IMAGE_SIZE = 32
-    FEATURE = 1
-    NOISE_SIZE = 128
-    LAMBDA = 10
-    BATCH_SIZE = 64
-    TARGET_W_DISTANCE = 0.0
-    STATE_DEPTH = 1
-    LOG_INTER = 100
-    GRID_BOX_SIZE = IMAGE_SIZE / GRID_SIZE
 
-CRITIC_ITERS = 5  # How many critic iterations per generator iteration
+elif params['DOMAIN']=='image':
+    add_parameters(DIM = 128)
+    add_parameters(NOISE_SIZE = 128)
+    add_parameters(LAMBDA = 10)
+    add_parameters(BATCH_SIZE = 64)
+    add_parameters(TARGET_W_DISTANCE = 0.01)
+    add_parameters(STATE_DEPTH = 1)
+    
+    add_parameters(FEATURE = 1)
+    add_parameters(IMAGE_SIZE = 32)
+
+    LOG_INTER = 100
+    
+    GRID_BOX_SIZE = params['IMAGE_SIZE'] / params['GRID_SIZE']
+
+
+add_parameters(CRITIC_ITERS = 5)  # How many critic iterations per generator iteration
 N_POINTS = 128
 
 RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
+
+print('####################################################################')
+DSP = ''
+for key,val in params.items():
+    print(key+' >> '+str(val))
+    DSP += key+'_'+str(val).replace('.','_').replace(',','_').replace(' ','_')+'/'
+print('####################################################################')
+
+BASIC = '../../result/'
+LOGDIR = BASIC+DSP
 
 subprocess.call(["mkdir", "-p", LOGDIR])
 
@@ -115,7 +132,7 @@ class D_out_layer(nn.Module):
     def __init__(self):
         super(D_out_layer, self).__init__()
     def forward(self, x):
-        if GAN_MODE=='wgan-gravity':
+        if params['GAN_MODE']=='wgan-gravity':
             for i in range(x.size()[0]):
                 if x[i].data.cpu().numpy()[0]>0.0:
                     x[i] = torch.log(x[i]+1.0)
@@ -128,36 +145,36 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
 
             conv_layer = nn.Sequential(
-                nn.Linear(2, DIM),
+                nn.Linear(2, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.conv_layer = conv_layer
 
             cat_layer = nn.Sequential(
-                nn.Linear(DIM+NOISE_SIZE, DIM),
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
             )
             self.cat_layer = cat_layer
 
             deconv_layer = nn.Sequential(
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(DIM, 2*(STATE_DEPTH+1)),
+                nn.Linear(params['DIM'], 2*(params['STATE_DEPTH']+1)),
             )
             self.deconv_layer = deconv_layer
 
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
 
             conv_layer = nn.Sequential(
 
-                # FEATURE*1*32*32
+                # params['FEATURE']*1*32*32
 
                 nn.Conv3d(
-                    in_channels=FEATURE,
+                    in_channels=params['FEATURE'],
                     out_channels=64,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
@@ -198,19 +215,19 @@ class Generator(nn.Module):
             self.conv_layer = nn.DataParallel(conv_layer,GPU)
 
             squeeze_layer = nn.Sequential(
-                nn.Linear(256*1*4*4, DIM),
+                nn.Linear(256*1*4*4, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
 
             cat_layer = nn.Sequential(
-                nn.Linear(DIM+NOISE_SIZE, DIM),
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.cat_layer = nn.DataParallel(cat_layer,GPU)
 
             unsqueeze_layer = nn.Sequential(
-                nn.Linear(DIM, 256*1*4*4),
+                nn.Linear(params['DIM'], 256*1*4*4),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
@@ -247,7 +264,7 @@ class Generator(nn.Module):
 
                 nn.ConvTranspose3d(
                     in_channels=64,
-                    out_channels=FEATURE,
+                    out_channels=params['FEATURE'],
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -255,7 +272,7 @@ class Generator(nn.Module):
                 ),
                 nn.Sigmoid()
 
-                # FEATURE*2*32*32
+                # params['FEATURE']*2*32*32
 
                 
             )
@@ -264,26 +281,26 @@ class Generator(nn.Module):
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
             state_v = state_v.squeeze(1)
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(state_v)
-        if DOMAIN=='image':
+        if params['DOMAIN']=='image':
             temp = x.size()
             x = x.view(x.size()[0], -1)
             x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
-        if DOMAIN=='image':
+        if params['DOMAIN']=='image':
             x = self.unsqueeze_layer(x)
             x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
             stater_v = x.narrow(1,0,2).unsqueeze(1)
             prediction_v = x.narrow(1,2,2).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
@@ -298,34 +315,34 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
 
             conv_layer = nn.Sequential(
-                nn.Linear(2+2, DIM),
+                nn.Linear(2+2, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             squeeze_layer = nn.Sequential(
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
-                nn.Linear(DIM, 1),
+                nn.Linear(params['DIM'], 1),
                 D_out_layer(),
             )
 
 
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
 
             conv_layer =    nn.Sequential(
 
-                # FEATURE*2*32*32
+                # params['FEATURE']*2*32*32
 
                 nn.Conv3d(
-                    in_channels=FEATURE,
+                    in_channels=params['FEATURE'],
                     out_channels=64,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
@@ -365,16 +382,16 @@ class Discriminator(nn.Module):
             )
 
             squeeze_layer = nn.Sequential(
-                nn.Linear(256*1*4*4, DIM),
+                nn.Linear(256*1*4*4, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
-                nn.Linear(DIM, 1),
+                nn.Linear(params['DIM'], 1),
                 D_out_layer(),
             )
 
-        if GAN_MODE=='wgan-grad-panish':
+        if params['GAN_MODE']=='wgan-grad-panish':
             self.conv_layer = conv_layer
             self.squeeze_layer = squeeze_layer
             self.final_layer = final_layer
@@ -386,18 +403,18 @@ class Discriminator(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(x)
-        if DOMAIN=='image':
+        if params['DOMAIN']=='image':
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.final_layer(x)
@@ -410,34 +427,34 @@ class Corrector(nn.Module):
     def __init__(self):
         super(Corrector, self).__init__()
 
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
 
             conv_layer = nn.Sequential(
-                nn.Linear(2+2, DIM),
+                nn.Linear(2+2, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             squeeze_layer = nn.Sequential(
-                nn.Linear(DIM, DIM),
+                nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
-                nn.Linear(DIM, 1),
+                nn.Linear(params['DIM'], 1),
                 nn.Sigmoid(),
             )
 
 
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
 
             conv_layer =    nn.Sequential(
 
-                # FEATURE*2*32*32
+                # params['FEATURE']*2*32*32
 
                 nn.Conv3d(
-                    in_channels=FEATURE,
+                    in_channels=params['FEATURE'],
                     out_channels=64,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
@@ -477,12 +494,12 @@ class Corrector(nn.Module):
             )
 
             squeeze_layer = nn.Sequential(
-                nn.Linear(256*1*4*4, DIM),
+                nn.Linear(256*1*4*4, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
 
             final_layer = nn.Sequential(
-                nn.Linear(DIM, 1),
+                nn.Linear(params['DIM'], 1),
                 nn.Sigmoid(),
             )
 
@@ -493,18 +510,18 @@ class Corrector(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if DOMAIN=='scalar':
+        if params['DOMAIN']=='scalar':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
-        elif DOMAIN=='image':
+        elif params['DOMAIN']=='image':
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(x)
-        if DOMAIN=='image':
+        if params['DOMAIN']=='image':
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.final_layer(x)
@@ -516,7 +533,7 @@ def weights_init_g(m):
     classname = m.__class__.__name__
     print('----------------------------------')
     print('class name:'+str(classname))
-    sigma = INIT_SIGMA
+    sigma = params['INIT_SIGMA']
     if classname.find('Linear') != -1:
         print('>>> find Linear')
         m.weight.data.normal_(0.0, sigma)
@@ -549,9 +566,9 @@ def weights_init(m):
 def generate_image(iteration):
 
     '''get data'''
-    if DOMAIN=='scalar':
+    if params['DOMAIN']=='scalar':
         batch_size = (N_POINTS**2)
-    elif DOMAIN=='image':
+    elif params['DOMAIN']=='image':
         batch_size = RESULT_SAMPLE_NUM
     data_fix_state = dataset_iter(
         fix_state=True,
@@ -566,7 +583,7 @@ def generate_image(iteration):
         filter_net=None
     )
 
-    if FILTER_MODE=='filter-d-c' or FILTER_MODE=='filter-d':
+    if params['FILTER_MODE']=='filter-d-c' or params['FILTER_MODE']=='filter-d':
         generate_image_with_filter(
             iteration=iteration,
             dataset=dataset,
@@ -574,7 +591,7 @@ def generate_image(iteration):
             filter_net=netD
         )
 
-    if FILTER_MODE=='filter-d-c' or FILTER_MODE=='filter-c':
+    if params['FILTER_MODE']=='filter-d-c' or params['FILTER_MODE']=='filter-c':
         generate_image_with_filter(
             iteration=iteration,
             dataset=dataset,
@@ -587,9 +604,9 @@ def get_transition_prob_distribution(image):
     cur_x = FIX_STATE_TO[0]
     cur_y = FIX_STATE_TO[1]
     next_state_dic = []
-    for action in range(len(GRID_ACTION_DISTRIBUTION)):
+    for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
         x, y = grid_transition(cur_x, cur_y, action)
-        temp = image[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)].sum()
+        temp = image[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].sum()
         next_state_dic += [temp]
     next_state_dic = np.asarray(next_state_dic)
     next_state_dic = next_state_dic / np.sum(next_state_dic)
@@ -599,7 +616,7 @@ def plot_kl(image,name):
     dis = get_transition_prob_distribution(image)
     kl = scipy.stats.entropy(
         dis,
-        qk=GRID_ACTION_DISTRIBUTION,
+        qk=params['GRID_ACTION_DISTRIBUTION'],
         base=None
     )
     logger.plot(
@@ -616,10 +633,10 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt = state_prediction_gt.narrow(1,1,1)
 
     '''disc_map'''
-    if DOMAIN=='scalar':
+    if params['DOMAIN']=='scalar':
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
-        points[:, :, 0] = np.linspace(0, GRID_SIZE, N_POINTS)[:, None]
-        points[:, :, 1] = np.linspace(0, GRID_SIZE, N_POINTS)[None, :]
+        points[:, :, 0] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[:, None]
+        points[:, :, 1] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[None, :]
         points = points.reshape((-1, 2))
         points = np.expand_dims(points,1)
 
@@ -627,7 +644,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                         state_v = autograd.Variable(state, volatile=True),
                         prediction_v = autograd.Variable(torch.Tensor(points).cuda(), volatile=True)
                     ).cpu().data.numpy()
-        x = y = np.linspace(0, GRID_SIZE, N_POINTS)
+        x = y = np.linspace(0, params['GRID_SIZE'], N_POINTS)
         disc_map = disc_map.reshape((len(x), len(y))).transpose()
         plt.contour(x, y, disc_map)
 
@@ -639,7 +656,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt_mean = prediction_gt.mean(0)
 
     '''prediction_gt'''
-    if DOMAIN=='scalar':
+    if params['DOMAIN']=='scalar':
         plt.scatter(
             prediction_gt.squeeze(1).cpu().numpy()[:, 0], 
             prediction_gt.squeeze(1).cpu().numpy()[:, 1],
@@ -647,7 +664,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             marker='+', 
             alpha=0.5
         )
-    elif DOMAIN=='image':
+    elif params['DOMAIN']=='image':
         if gen_basic:
             log_img(prediction_gt,'prediction_gt',iteration)
             prediction_gt_mean = prediction_gt.mean(0)
@@ -657,8 +674,8 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             )
 
     '''prediction_gt_r'''
-    if DOMAIN=='scalar':
-        noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+    if params['DOMAIN']=='scalar':
+        noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
         prediction_gt_r = netG(
             noise_v = autograd.Variable(noise, volatile=True),
             state_v = autograd.Variable(prediction_gt, volatile=True)
@@ -670,9 +687,9 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             marker='+', 
             alpha=0.5
         )
-    elif DOMAIN=='image':
+    elif params['DOMAIN']=='image':
         if gen_basic:
-            noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+            noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
             prediction_gt_r = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(prediction_gt, volatile=True)
@@ -685,7 +702,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             )
 
     '''prediction'''
-    noise = torch.randn((RESULT_SAMPLE_NUM), NOISE_SIZE).cuda()
+    noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
     prediction = netG(
         noise_v = autograd.Variable(noise, volatile=True),
         state_v = autograd.Variable(state, volatile=True)
@@ -702,7 +719,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             return
         F_out = (F_out - torch.min(F_out)) / normal_f
 
-    if DOMAIN=='scalar':
+    if params['DOMAIN']=='scalar':
         plt.scatter(
             prediction.squeeze(1).cpu().numpy()[:, 0], 
             prediction.squeeze(1).cpu().numpy()[:, 1], 
@@ -721,7 +738,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                     alpha=F_out[ii]
                 )
 
-    elif DOMAIN=='image':
+    elif params['DOMAIN']=='image':
 
         if filter_net is None:
 
@@ -783,7 +800,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                 name='prediction-kl-filtered-by-'+str(filter_net.__class__.__name__)
             )
 
-    if DOMAIN=='scalar':
+    if params['DOMAIN']=='scalar':
         if filter_net is None:
             file_name = ''
         else:
@@ -802,13 +819,13 @@ def grid_transition(cur_x,cur_y,action):
         next_x = cur_x - 1
     elif action==3:
         next_y = cur_y - 1
-    next_x = np.clip(next_x,0,GRID_SIZE)
-    next_y = np.clip(next_y,0,GRID_SIZE)
+    next_x = np.clip(next_x,0,params['GRID_SIZE'])
+    next_y = np.clip(next_y,0,params['GRID_SIZE'])
     return next_x,next_y
 
-def dataset_iter(fix_state=False, batch_size=BATCH_SIZE):
+def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
-    if DATASET=='2grid':
+    if params['DATASET']=='2grid':
 
         scale = 2.
         centers = [
@@ -820,26 +837,26 @@ def dataset_iter(fix_state=False, batch_size=BATCH_SIZE):
             dataset = []
             for i in xrange(batch_size):
                 if not fix_state:
-                    cur_x = np.random.choice(range(GRID_SIZE))
-                    cur_y = np.random.choice(range(GRID_SIZE))
+                    cur_x = np.random.choice(range(params['GRID_SIZE']))
+                    cur_y = np.random.choice(range(params['GRID_SIZE']))
                 else:
                     cur_x = FIX_STATE_TO[0]
                     cur_y = FIX_STATE_TO[1]
                 action = np.random.choice(
-                    range(len(GRID_ACTION_DISTRIBUTION)),
-                    p=GRID_ACTION_DISTRIBUTION
+                    range(len(params['GRID_ACTION_DISTRIBUTION'])),
+                    p=params['GRID_ACTION_DISTRIBUTION']
                 )
                 
                 next_x, next_y = grid_transition(cur_x,cur_y,action)
 
-                if DOMAIN=='scalar':
+                if params['DOMAIN']=='scalar':
                     data = np.array([[cur_x,cur_y],
                                      [next_x,next_y]])
-                elif DOMAIN=='image':
+                elif params['DOMAIN']=='image':
                     def to_ob(x,y):
-                        ob = np.zeros((IMAGE_SIZE,IMAGE_SIZE))
-                        ob.fill(GRID_BACKGROUND)
-                        ob[x*(IMAGE_SIZE/GRID_SIZE):(x+1)*(IMAGE_SIZE/GRID_SIZE),y*(IMAGE_SIZE/GRID_SIZE):(y+1)*(IMAGE_SIZE/GRID_SIZE)] = GRID_FOREGROUND
+                        ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+                        ob.fill(params['GRID_BACKGROUND'])
+                        ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])] = params['GRID_FOREGROUND']
                         ob = np.expand_dims(ob,0)
                         ob = np.expand_dims(ob,0)
                         return ob
@@ -870,7 +887,7 @@ def calc_gradient_penalty(netD, state, interpolates):
                     only_inputs=True)[0]
     gradients = gradients.contiguous()
     gradients = gradients.view(gradients.size()[0],-1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * params['LAMBDA']
 
     return gradient_penalty
 
@@ -906,11 +923,11 @@ print netG
 print netD
 print netC
 
-if OPTIMIZER=='Adam':
+if params['OPTIMIZER']=='Adam':
     optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
     optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.5, 0.9))
     optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
-elif OPTIMIZER=='RMSprop':
+elif params['OPTIMIZER']=='RMSprop':
     optimizerD = optim.RMSprop(netD.parameters(), lr = 0.00005)
     optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
     optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
@@ -919,19 +936,19 @@ mse_loss_model = torch.nn.MSELoss(size_average=True)
 
 one = torch.FloatTensor([1]).cuda()
 mone = one * -1
-ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((BATCH_SIZE)),np.zeros((BATCH_SIZE))),0))
+ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((params['BATCH_SIZE'])),np.zeros((params['BATCH_SIZE']))),0))
 
-if GAME_MDOE=='same-start':
+if params['GAME_MDOE']=='same-start':
     data = dataset_iter(fix_state=True)
-elif GAME_MDOE=='full':
+elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
 restore_model()
 logger = lib.plot.logger(LOGDIR,DSP)
 
 state_prediction_gt = torch.Tensor(data.next()).cuda()
-state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
-prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
+state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
 iteration = -1
@@ -945,26 +962,26 @@ while True:
     for p in netD.parameters():
         p.requires_grad = True
 
-    for iter_d in xrange(CRITIC_ITERS):
+    for iter_d in xrange(params['CRITIC_ITERS']):
 
-        if GAN_MODE=='wgan':
+        if params['GAN_MODE']=='wgan':
             for p in netD.parameters():
                 p.data.clamp_(-0.01, +0.01)
 
         '''get data set'''
         state_prediction_gt = torch.Tensor(data.next()).cuda()
-        state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
-        prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
         '''get generated data'''
-        noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
         prediction = netG(
             noise_v = autograd.Variable(noise, volatile=True),
             state_v = autograd.Variable(state, volatile=True)
         ).data.narrow(1,1,1)
 
-        if RUINER_MODE=='use-r':
-            noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+        if params['RUINER_MODE']=='use-r':
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
             prediction_gt = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(prediction_gt, volatile=True)
@@ -988,17 +1005,17 @@ while True:
         D_fake.backward(one)
 
         GP_cost = [0.0]
-        if GAN_MODE=='wgan-grad-panish':
-            alpha = torch.rand(BATCH_SIZE).cuda()
+        if params['GAN_MODE']=='wgan-grad-panish':
+            alpha = torch.rand(params['BATCH_SIZE']).cuda()
             while len(alpha.size())!=len(prediction_gt.size()):
                 alpha = alpha.unsqueeze(1)
-            if DOMAIN=='scalar':
+            if params['DOMAIN']=='scalar':
                 alpha = alpha.repeat(
                     1,
                     prediction_gt.size()[1],
                     prediction_gt.size()[2]
                 )
-            elif DOMAIN=='image':
+            elif params['DOMAIN']=='image':
                 alpha = alpha.repeat(
                     1,
                     prediction_gt.size()[1],
@@ -1018,10 +1035,10 @@ while True:
             GP_cost = gradient_penalty.data.cpu().numpy()
 
         DC_cost = [0.0]
-        if GAN_MODE=='wgan-decade':
-            if DOMAIN=='scalar':
-                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,GRID_SIZE)
-            elif DOMAIN=='image':
+        if params['GAN_MODE']=='wgan-decade':
+            if params['DOMAIN']=='scalar':
+                prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
+            elif params['DOMAIN']=='image':
                 prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
             D_uni = netD(
                 state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -1031,9 +1048,9 @@ while True:
             decade_cost.backward()
             DC_cost = decade_cost.cpu().data.numpy()
 
-        if GAN_MODE=='wgan-grad-panish':
+        if params['GAN_MODE']=='wgan-grad-panish':
             D_cost = D_fake - D_real + gradient_penalty
-        if GAN_MODE=='wgan-decade':
+        if params['GAN_MODE']=='wgan-decade':
             D_cost = D_fake - D_real + decade_cost
         else:
             D_cost = D_fake - D_real
@@ -1044,10 +1061,10 @@ while True:
         optimizerD.step()
 
         C_cost = [0.0]
-        if FILTER_MODE=='filter-c' or FILTER_MODE=='filter-d-c':
+        if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
             netC.zero_grad()
 
-            if CORRECTOR_MODE=='c-normal':
+            if params['CORRECTOR_MODE']=='c-normal':
 
                 C_out_v = netC(
                     state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -1055,11 +1072,11 @@ while True:
                 )
                 C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
 
-            elif CORRECTOR_MODE=='c-decade':
+            elif params['CORRECTOR_MODE']=='c-decade':
 
-                if DOMAIN=='scalar':
-                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,GRID_SIZE)
-                elif DOMAIN=='image':
+                if params['DOMAIN']=='scalar':
+                    prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
+                elif params['DOMAIN']=='image':
                     prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
                 C_out_v = netC(
                     state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -1071,19 +1088,19 @@ while True:
             C_cost = C_cost_v.cpu().data.numpy()
             optimizerC.step()
 
-    if GAN_MODE=='wgan-gravity':
+    if params['GAN_MODE']=='wgan-gravity':
         for p in netD.parameters():
             p.data = p.data * (1.0-0.0001)
 
-    if CORRECTOR_MODE=='c-decade':
+    if params['CORRECTOR_MODE']=='c-decade':
         for p in netC.parameters():
             p.data = p.data * (1.0-0.01)
 
-    if GAN_MODE=='wgan-grad-panish':
+    if params['GAN_MODE']=='wgan-grad-panish':
         logger.plot('GP_cost', GP_cost)
-    if GAN_MODE=='wgan-decade':
+    if params['GAN_MODE']=='wgan-decade':
         logger.plot('DC_cost', DC_cost)
-    if FILTER_MODE=='filter-c' or FILTER_MODE=='filter-d-c':
+    if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
         logger.plot('C_cost', C_cost)
     logger.plot('D_cost', D_cost)
     logger.plot('W_dis', Wasserstein_D)
@@ -1092,14 +1109,14 @@ while True:
     # (2) Control R
     ############################
 
-    if RUINER_MODE=='use-r':
-        if Wasserstein_D[0] > TARGET_W_DISTANCE:
+    if params['RUINER_MODE']=='use-r':
+        if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
             update_type = 'g'
         else:
             update_type = 'r'
-    elif RUINER_MODE=='none-r':
+    elif params['RUINER_MODE']=='none-r':
         update_type = 'g'
-    elif RUINER_MODE=='test-r':
+    elif params['RUINER_MODE']=='test-r':
         update_type = 'r'
 
     ############################
@@ -1107,8 +1124,8 @@ while True:
     ###########################
 
     state_prediction_gt = torch.Tensor(data.next()).cuda()
-    state = state_prediction_gt.narrow(1,0,STATE_DEPTH)
-    prediction_gt = state_prediction_gt.narrow(1,STATE_DEPTH,1)
+    state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+    prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
     netG.zero_grad()
 
@@ -1119,7 +1136,7 @@ while True:
         for p in netD.parameters():
             p.requires_grad = False
 
-        noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
         prediction_v = netG(
             noise_v = autograd.Variable(noise),
             state_v = autograd.Variable(state)
@@ -1138,19 +1155,19 @@ while True:
 
     elif update_type=='r':
 
-        if GAME_MDOE=='full':
+        if params['GAME_MDOE']=='full':
 
-            noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
             stater_v = netG(
                 noise_v = autograd.Variable(noise),
                 state_v = autograd.Variable(state)
             ).narrow(1,0,1)
 
-            R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,STATE_DEPTH-1,1)))
+            R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,params['STATE_DEPTH']-1,1)))
 
-        elif GAME_MDOE=='same-start':
+        elif params['GAME_MDOE']=='same-start':
 
-            noise = torch.randn(BATCH_SIZE, NOISE_SIZE).cuda()
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
             prediction_gt_r_v = netG(
                 noise_v = autograd.Variable(noise),
                 state_v = autograd.Variable(prediction_gt)
