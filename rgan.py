@@ -37,7 +37,7 @@ params = {}
 def add_parameters(**kwargs):
     params.update(kwargs)
 
-add_parameters(EXP = 'd_filter_18')
+add_parameters(EXP = 'd_filter_19')
 add_parameters(DATASET = '2grid') # 2grid
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, image
@@ -47,7 +47,7 @@ add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(INIT_SIGMA = 0.00002)
-add_parameters(FASTEN_D = 10)
+add_parameters(FASTEN_D = 100)
 
 if params['DATASET']=='2grid':
     add_parameters(GRID_SIZE = 5)
