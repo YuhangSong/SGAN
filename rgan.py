@@ -924,11 +924,11 @@ print netD
 print netC
 
 if params['OPTIMIZER']=='Adam':
-    optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+    optimizerD = optim.Adam(netD.parameters(), lr=(1e-4)*params['FASTEN_D'], betas=(0.5, 0.9))
     optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.5, 0.9))
     optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
 elif params['OPTIMIZER']=='RMSprop':
-    optimizerD = optim.RMSprop(netD.parameters(), lr = 0.00005)
+    optimizerD = optim.RMSprop(netD.parameters(), lr = (0.00005)*params['FASTEN_D'])
     optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
     optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
 
