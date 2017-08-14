@@ -71,7 +71,7 @@ elif params['DOMAIN']=='image':
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
     add_parameters(BATCH_SIZE = 64)
-    add_parameters(TARGET_W_DISTANCE = 0.01)
+    add_parameters(TARGET_W_DISTANCE = 0.1)
     add_parameters(STATE_DEPTH = 1)
     
     add_parameters(FEATURE = 1)
