@@ -67,6 +67,7 @@ class logger(object):
 
 			plt.clf()
 			plt.plot(x_vals, y_vals)
+			print(y_vals)
 			if np.shape(y_vals)[0] > 1:
 				y_vals_meaned = scipy.signal.convolve(
 					in1=y_vals,
