@@ -19,6 +19,7 @@ from PIL import Image
 import torchvision.utils as vutils
 import visdom
 vis = visdom.Visdom()
+import time
 
 torch.manual_seed(4213)
 
@@ -37,7 +38,7 @@ add_parameters(EXP = 'exp_2_1')
 add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
-add_parameters(METHOD = 'grl') # grl, deterministic-deep-net, tabular
+add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
@@ -58,7 +59,7 @@ add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
-    add_parameters(GRID_SIZE = 6)
+    add_parameters(GRID_SIZE = 20)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
     FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
 
@@ -66,13 +67,11 @@ elif params['DATASET']=='1Dgrid':
     add_parameters(GRID_SIZE = 6)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
     FIX_STATE_TO = [params['GRID_SIZE']/2,0]
-    GRID_MEAN_ALL_ACCEPT = (params['GRID_BACKGROUND']*(params['GRID_SIZE']-1)+params['GRID_FOREGROUND'])/params['GRID_SIZE']
 
 elif params['DATASET']=='2Dgrid':
     add_parameters(GRID_SIZE = 5)
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
-    GRID_MEAN_ALL_ACCEPT = (params['GRID_BACKGROUND']*((params['GRID_SIZE']*params['GRID_SIZE'])-1)+params['GRID_FOREGROUND'])/(params['GRID_SIZE']*params['GRID_SIZE'])
 
 if params['DOMAIN']=='scalar':
     add_parameters(DIM = 512)
@@ -1023,53 +1022,175 @@ def restore_model():
         print('Previous checkpoint for netG unfounded')
     print('')
 
+class TabulatCell(object):
+    """docstring for TabulatCell"""
+    def __init__(self, x):
+        super(TabulatCell, self).__init__()
+        self.x = x
+        self.count = 0.0
+    def push(self):
+        self.count += 1.0
+
+class Tabular(object):
+    """docstring for Tabular"""
+    def __init__(self, x):
+        super(Tabular, self).__init__()
+        self.x = x
+        self.x_next_dic = []
+    def push(self,x_next_push):
+        in_cell = False
+        for x_next in self.x_next_dic:
+            delta = np.mean(
+                np.abs((x_next_push-x_next.x)),
+                keepdims=False
+            )
+            if delta<params['GRID_ACCEPT']:
+                x_next.push()
+                in_cell = True
+                break
+        
+        if not in_cell:
+            self.x_next_dic += [TabulatCell(np.copy(x_next_push))]
+            # print('Create a cell.')
+            self.x_next_dic[-1].push()
+        
 ############################### Definition End ###############################
 
-netG = Generator().cuda()
-netD = Discriminator().cuda()
-netC = Corrector().cuda()
+if params['METHOD']=='tabular':
+    tabular_dic = []
 
-netD.apply(weights_init)
-netC.apply(weights_init)
-netG.apply(weights_init_g)
-print netG
-print netD
-print netC
+elif params['METHOD']=='grl':
 
-if params['OPTIMIZER']=='Adam':
-    optimizerD = optim.Adam(netD.parameters(), lr=(1e-4)*params['FASTEN_D'], betas=(0.5, 0.9))
-    optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.5, 0.9))
-    optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
-elif params['OPTIMIZER']=='RMSprop':
-    optimizerD = optim.RMSprop(netD.parameters(), lr = (0.00005)*params['FASTEN_D'])
-    optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
-    optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
+    netG = Generator().cuda()
+    netD = Discriminator().cuda()
+    netC = Corrector().cuda()
 
-mse_loss_model = torch.nn.MSELoss(size_average=True)
+    netD.apply(weights_init)
+    netC.apply(weights_init)
+    netG.apply(weights_init_g)
+    print netG
+    print netD
+    print netC
 
-one = torch.FloatTensor([1]).cuda()
-mone = one * -1
-ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((params['BATCH_SIZE'])),np.zeros((params['BATCH_SIZE']))),0))
+    if params['OPTIMIZER']=='Adam':
+        optimizerD = optim.Adam(netD.parameters(), lr=(1e-4)*params['FASTEN_D'], betas=(0.5, 0.9))
+        optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.5, 0.9))
+        optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
+    elif params['OPTIMIZER']=='RMSprop':
+        optimizerD = optim.RMSprop(netD.parameters(), lr = (0.00005)*params['FASTEN_D'])
+        optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
+        optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
+
+    mse_loss_model = torch.nn.MSELoss(size_average=True)
+
+    one = torch.FloatTensor([1]).cuda()
+    mone = one * -1
+    ones_zeros = torch.cuda.FloatTensor(np.concatenate((np.ones((params['BATCH_SIZE'])),np.zeros((params['BATCH_SIZE']))),0))
+
+    restore_model()
+
+    state_prediction_gt = torch.Tensor(dataset_iter(fix_state=False).next()).cuda()
+    state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+    prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+    alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
 if params['GAME_MDOE']=='same-start':
     data = dataset_iter(fix_state=True)
 elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
-restore_model()
 logger = lib.plot.logger(LOGDIR,DSP,params_str)
-
-state_prediction_gt = torch.Tensor(data.next()).cuda()
-state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
-alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
-
 iteration = logger.restore()
-first_flush = True
+
 while True:
     iteration += 1
 
-    if params['METHOD']=='grl':
+    if params['METHOD']=='tabular':
+
+        '''get data set'''
+        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH']).cpu().numpy()
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1).cpu().numpy()
+
+        for b in range(np.shape(state)[0]):
+            in_tabular = False
+            for tabular_i in tabular_dic:
+                delta = np.mean(
+                    np.abs(state[b] - tabular_i.x),
+                    keepdims=False
+                )
+                if delta<params['GRID_ACCEPT']:
+                    tabular_i.push(np.copy(prediction_gt[b]))
+                    in_tabular = True
+                    # print('Push in a tabular.')
+                    break
+            if not in_tabular:
+                tabular_dic += [Tabular(np.copy(state[b]))]
+                # print('Create a tabular.')
+                tabular_dic[-1].push(np.copy(prediction_gt[b]))
+
+        x, y = get_state(fix_state=True)
+        fix_state_ob = np.expand_dims(get_ob(x,y),0)
+        for tabular_i in tabular_dic:
+            delta = np.mean(
+                np.abs(fix_state_ob - tabular_i.x),
+                keepdims=False
+            )
+            if delta<params['GRID_ACCEPT']:
+                tabular_i
+                if params['GRID_DETECTION']=='threshold':
+                    cur_x, cur_y = get_state(fix_state=True)
+                    accept_num = 0.0
+                    next_state_dic = []
+                    for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
+                        next_x, next_y = transition(cur_x, cur_y, action)
+                        ob_next = get_ob(next_x,next_y)
+                        in_cell = False
+                        temp = 0.0
+                        for cell_i in tabular_i.x_next_dic:
+                            delta = np.mean(
+                                np.abs(ob_next-cell_i.x),
+                                keepdims=False
+                            )
+                            if delta<params['GRID_ACCEPT']:
+                                in_cell = True
+                                temp = cell_i.count
+                                break
+                        next_state_dic += [temp]
+                else:
+                    print(unsupport)
+                next_state_dic = np.asarray(next_state_dic)
+                sum_ = np.sum(next_state_dic)
+                if not (sum_==0):
+                    next_state_dic = next_state_dic / sum_
+
+                dis = next_state_dic
+                if not (np.sum(dis)==0.0):
+                    kl = scipy.stats.entropy(
+                        dis,
+                        qk=params['GRID_ACTION_DISTRIBUTION'],
+                        base=None
+                    )
+                    logger.plot(
+                        'tabular'+'-KL',
+                        np.asarray([kl])
+                    )
+                l1 = np.squeeze(np.mean(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
+                logger.plot(
+                    'tabular'+'-L1',
+                    np.asarray([l1])
+                )
+
+                break
+
+        print('[{:<10}]'
+            .format(
+                iteration
+            )
+        )
+
+
+    elif params['METHOD']=='grl':
 
         ############################
         # (1) Update D network
@@ -1322,53 +1443,8 @@ while True:
             )
         )
 
-    elif params['METHOD']=='deterministic-deep-net':
-
-        print('implement '+params['METHOD']+' here!')
-
-        '''
-        examples
-        please do not modify anything in other
-        if params['METHOD']==xx: block
-        '''
-
-        '''
-        you can add paramter like: 
-        add_parameters(G_INIT_SIGMA = 0.00002)
-        and call it with: params['G_INIT_SIGMA']
-        '''
-
-        '''get data set'''
-        state_prediction_gt = torch.Tensor(data.next()).cuda()
-        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
-
-        '''
-        plot anything
-        this plot method will store plot on disk as well
-        as log it on visdom
-        '''
-        logger.plot('name_of_your_plot', [1.0])
-
-        '''
-        log anything to disk
-        please use LOGDIR as your log dir, since it includes all the
-        settings you specified 
-        '''
-
-        '''
-        if you just want a string that indicates
-        your settings, use DSP
-        '''
-
-    elif params['METHOD']=='tabular':
-        print('implement '+params['METHOD']+' here!')
-
     if iteration % LOG_INTER == 5:
-        if first_flush is False:
-            logger.flush()
-        else:
-            first_flush = False
+        logger.flush()
 
     logger.tick()
 
