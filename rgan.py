@@ -34,7 +34,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 add_parameters(EXP = 'd_filter_24')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # grl, deterministic-deep-net, tabular
@@ -54,20 +54,25 @@ else:
     add_parameters(GP_TO = 1.0)
     add_parameters(G_INIT_SIGMA = 0.02)
 
-if params['DATASET']=='1Dgrid':
-    add_parameters(GRID_SIZE = 6)
-    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
-    FIX_STATE_TO = [params['GRID_SIZE']/2,0]
+add_parameters(GRID_BACKGROUND = 0.1)
+add_parameters(GRID_FOREGROUND = 0.9)
 
-elif params['DATASET']=='1Dflip':
+if params['DATASET']=='1Dflip':
     add_parameters(GRID_SIZE = 6)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
     FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
 
+elif params['DATASET']=='1Dgrid':
+    add_parameters(GRID_SIZE = 6)
+    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
+    FIX_STATE_TO = [params['GRID_SIZE']/2,0]
+    GRID_MEAN_ALL_ACCEPT = (params['GRID_BACKGROUND']*(params['GRID_SIZE']-1)+params['GRID_FOREGROUND'])/params['GRID_SIZE']
+
 elif params['DATASET']=='2Dgrid':
     add_parameters(GRID_SIZE = 5)
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
+    GRID_MEAN_ALL_ACCEPT = (params['GRID_BACKGROUND']*((params['GRID_SIZE']*params['GRID_SIZE'])-1)+params['GRID_FOREGROUND'])/(params['GRID_SIZE']*params['GRID_SIZE'])
 
 if params['DOMAIN']=='scalar':
     add_parameters(DIM = 512)
@@ -92,6 +97,9 @@ elif params['DOMAIN']=='image':
     
 
 add_parameters(CRITIC_ITERS = 5)  # How many critic iterations per generator iteration
+
+add_parameters(GRID_DETECTION = 'threshold') # average, threshold
+add_parameters(GRID_ACCEPT = 0.1) # average, threshold
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -147,9 +155,6 @@ else:
     add_parameters(IMAGE_SIZE = 32)
 
 GRID_BOX_SIZE = params['IMAGE_SIZE'] / params['GRID_SIZE']
-
-add_parameters(GRID_BACKGROUND = 0.1)
-add_parameters(GRID_FOREGROUND = 0.9)
 
 ############################### Definition Start ###############################
 
@@ -609,7 +614,7 @@ def generate_image(iteration):
             filter_net=netC
         )
 
-def get_transition_prob_distribution(image):
+def get_transition_prob_distribution(image, images):
 
     if params['DOMAIN']=='scalar':
         print(unsupport)
@@ -638,30 +643,43 @@ def get_transition_prob_distribution(image):
 
     elif params['DOMAIN']=='image':
         image = image.squeeze()
+        images = images.squeeze()
         cur_x = FIX_STATE_TO[0]
         cur_y = FIX_STATE_TO[1]
         next_state_dic = []
         for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
             x, y = transition_grid(cur_x, cur_y, action)
-            temp = image[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].sum()
-            next_state_dic += [temp]
+            if params['GRID_DETECTION']=='average':
+                temp = image[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].sum()
+                next_state_dic += [temp]
+            elif params['GRID_DETECTION']=='threshold':
+                temp = 0.0
+                for b in range(images.size()[0]):
+                    mean_ = images[b][x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].mean()
+                    mean_all_ = images[b].mean()
+                    if (mean_ > (params['GRID_FOREGROUND']-params['GRID_ACCEPT'])) and (mean_all_ < GRID_MEAN_ALL_ACCEPT):
+                        temp += 1.0
+                next_state_dic += [temp]
         next_state_dic = np.asarray(next_state_dic)
-        next_state_dic = next_state_dic / np.sum(next_state_dic)
+        sum_ = np.sum(next_state_dic)
+        if not (sum_==0):
+            next_state_dic = next_state_dic / sum_
 
     return next_state_dic
 
-def plot_convergence(image,name):
-    dis = get_transition_prob_distribution(image)
-    kl = scipy.stats.entropy(
-        dis,
-        qk=params['GRID_ACTION_DISTRIBUTION'],
-        base=None
-    )
+def plot_convergence(image,images,name):
+    dis = get_transition_prob_distribution(image, images)
+    if not (np.sum(dis)==0.0):
+        kl = scipy.stats.entropy(
+            dis,
+            qk=params['GRID_ACTION_DISTRIBUTION'],
+            base=None
+        )
+        logger.plot(
+            name+'-KL',
+            np.asarray([kl])
+        )
     l1 = np.squeeze(np.mean(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
-    logger.plot(
-        name+'-KL',
-        np.asarray([kl])
-    )
     logger.plot(
         name+'-L1',
         np.asarray([l1])
@@ -712,7 +730,9 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             log_img(prediction_gt,'prediction_gt',iteration)
             prediction_gt_mean = prediction_gt.mean(0,keepdim=True)
             log_img(prediction_gt_mean,'prediction_gt_mean',iteration)
-            plot_convergence(image=prediction_gt_mean,
+            plot_convergence(
+                image=prediction_gt_mean,
+                images=prediction_gt,
                 name='prediction_gt_mean'
             )
 
@@ -740,7 +760,9 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             log_img(prediction_gt_r,'prediction_gt_r',iteration)
             prediction_gt_r_mean = prediction_gt_r.mean(0,keepdim=True)
             log_img(prediction_gt_r_mean,'prediction_gt_r_mean',iteration)
-            plot_convergence(image=prediction_gt_r_mean,
+            plot_convergence(
+                image=prediction_gt_r_mean,
+                images=prediction_gt_r,
                 name='prediction_gt_r_mean'
             )
 
@@ -846,7 +868,9 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                 iteration=iteration
             )
 
-            plot_convergence(image=filtered_prediction_mean,
+            plot_convergence(
+                image=filtered_prediction_mean,
+                images=filtered_prediction,
                 name='prediction-filtered-by-'+str(filter_net.__class__.__name__)
             )
 
