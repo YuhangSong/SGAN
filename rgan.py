@@ -39,7 +39,7 @@ add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
@@ -69,7 +69,7 @@ elif params['DATASET']=='1Dgrid':
     FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
 elif params['DATASET']=='2Dgrid':
-    add_parameters(GRID_SIZE = 5)
+    add_parameters(GRID_SIZE = 10)
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
 
