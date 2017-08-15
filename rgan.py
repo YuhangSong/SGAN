@@ -681,22 +681,21 @@ def get_transition_prob_distribution(image):
     return next_state_dic
 
 def plot_convergence(image,name):
-    pass
-    # dis = get_transition_prob_distribution(image)
-    # kl = scipy.stats.entropy(
-    #     dis,
-    #     qk=params['GRID_ACTION_DISTRIBUTION'],
-    #     base=None
-    # )
-    # l1 = [1.0]
-    # logger.plot(
-    #     name+'-KL',
-    #     kl
-    # )
-    # logger.plot(
-    #     name+'-L1',
-    #     l1
-    # )
+    dis = get_transition_prob_distribution(image)
+    kl = scipy.stats.entropy(
+        dis,
+        qk=params['GRID_ACTION_DISTRIBUTION'],
+        base=None
+    )
+    l1 = [1.0]
+    logger.plot(
+        name+'-KL',
+        kl
+    )
+    logger.plot(
+        name+'-L1',
+        l1
+    )
 
 
 def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
