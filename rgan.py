@@ -40,7 +40,7 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
-add_parameters(EXP = 'd_filter_23')
+add_parameters(EXP = 'd_filter_22')
 add_parameters(DATASET = '2grid') # 1grid, 1flip, 2grid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, image
@@ -1087,7 +1087,7 @@ prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
 iteration = logger.restore()
-first_loop = True
+first_flush = True
 while True:
     iteration += 1
 
@@ -1386,8 +1386,12 @@ while True:
     elif params['METHOD']=='tabular':
         print('implement '+params['METHOD']+' here!')
 
-    if iteration % LOG_INTER == 5 and first_loop is False:
-        logger.flush()
+    if iteration % LOG_INTER == 5:
+        if first_flush is False:
+            logger.flush()
+        else:
+            first_flush = False
+
     logger.tick()
 
-    first_loop = False
+    
