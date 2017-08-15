@@ -30,8 +30,6 @@ class logger(object):
 		self._since_beginning = collections.defaultdict(lambda: {})
 		self._since_last_flush = collections.defaultdict(lambda: {})
 
-		self.restore()
-
 	def restore(self):
 
 		print('Try load previous plot....')
@@ -39,8 +37,10 @@ class logger(object):
 			self._since_beginning = dill.load(open(self.LOGDIR+'log.pkl', "r"))
 			self._iter = dill.load(open(self.LOGDIR+'iteration.pkl', "r"))
 			print('Restore plot from iter: '+str(self._iter))
+			return self._iter
 		except Exception, e:
 			print('Previous plot unfounded')
+			return 0
 		print('')
 
 	def tick(self):

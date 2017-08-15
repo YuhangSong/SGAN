@@ -1087,7 +1087,8 @@ state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
 prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
-iteration = -1
+iteration = logger.restore()
+
 while True:
     iteration += 1
 
