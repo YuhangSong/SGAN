@@ -33,12 +33,12 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
-add_parameters(EXP = 'd_filter_24')
+add_parameters(EXP = 'exp_2_1')
 add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # grl, deterministic-deep-net, tabular
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
@@ -84,7 +84,7 @@ if params['DOMAIN']=='scalar':
 elif params['DOMAIN']=='vector':
     add_parameters(DIM = 128)
     add_parameters(NOISE_SIZE = params['GRID_SIZE'])
-    add_parameters(LAMBDA = 10)
+    add_parameters(LAMBDA = 0.1)
     add_parameters(BATCH_SIZE = 256)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
@@ -154,7 +154,6 @@ else:
     add_parameters(FEATURE = 1)
     add_parameters(IMAGE_SIZE = 32)
 
-GRID_BOX_SIZE = params['IMAGE_SIZE'] / params['GRID_SIZE']
 
 ############################### Definition Start ###############################
 
@@ -614,70 +613,126 @@ def generate_image(iteration):
             filter_net=netC
         )
 
-def get_transition_prob_distribution(image, images):
+def transition(cur_x,cur_y,action):
 
-    if params['DOMAIN']=='scalar':
+    if params['DATASET']=='1Dflip':
+        next_x = np.copy(cur_x)
+        next_x[action] = 1.0 - next_x[action]
+        return next_x, 0.0
+
+    elif params['DATASET']=='1Dgrid':
+
+        next_x = cur_x
+        if action==0:
+            next_x = cur_x + 1
+        elif action==1:
+            next_x = cur_x - 1
+        next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
+        return next_x, 0.0
+
+    elif params['DATASET']=='2Dgrid':
+        next_x = cur_x
+        next_y = cur_y
+        if action==0:
+            next_x = cur_x + 1
+        elif action==1:
+            next_y = cur_y + 1
+        elif action==2:
+            next_x = cur_x - 1
+        elif action==3:
+            next_y = cur_y - 1
+        next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
+        next_y = np.clip(next_y,0,params['GRID_SIZE']-1)
+        return next_x,next_y    
+
+def get_ob(x,y):
+
+    if params['DATASET']=='1Dflip':
+        if params['DOMAIN']=='vector':
+            ob = x
+        else:
+            print(unsupport)
+    elif params['DATASET']=='1Dgrid':
+        if params['DOMAIN']=='vector':
+            ob = np.zeros((params['GRID_SIZE']))
+            ob.fill(params['GRID_BACKGROUND'])
+            ob[x] = params['GRID_FOREGROUND']
+        elif params['DOMAIN']=='image':
+            ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+            ob.fill(params['GRID_BACKGROUND'])
+            ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),:] = params['GRID_FOREGROUND']
+            ob = np.expand_dims(ob,0)
+        else:
+            print(unsupport)
+    elif params['DATASET']=='2Dgrid':
+        if params['DOMAIN']=='scalar':
+            ob = [x,y]
+        elif params['DOMAIN']=='image':
+            ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+            ob.fill(params['GRID_BACKGROUND'])
+            ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])] = params['GRID_FOREGROUND']
+            ob = np.expand_dims(ob,0)
+        else:
+            print(unsupport)
+    else:
         print(unsupport)
 
-    elif params['DOMAIN']=='vector':
+    ob = np.asarray(ob)
 
-        if params['DATASET']=='1Dgrid':
-            image = image.squeeze()
+    return ob
+
+def get_state(fix_state=False):
+
+    if params['DATASET']=='1Dgrid' or params['DATASET']=='2Dgrid':
+        if not fix_state:
+            cur_x = np.random.choice(range(params['GRID_SIZE']))
+            cur_y = np.random.choice(range(params['GRID_SIZE']))
+        else:
             cur_x = FIX_STATE_TO[0]
             cur_y = FIX_STATE_TO[1]
-            next_state_dic = []
-            for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
-                x, y = transition_grid(cur_x, cur_y, action)
-                temp = image[x]
-                next_state_dic += [temp]
 
-        elif params['DATASET']=='1Dflip':
-            if params['GRID_DETECTION']=='average':
-                print(unsupport)
-            elif params['GRID_DETECTION']=='threshold':
-                images = images.squeeze()
-                cur_x = FIX_STATE_TO
-                next_state_dic = []
-                for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
-                    x = torch.cuda.FloatTensor(transition_1Dflip(cur_x, action))
-                    temp = 0.0
-                    for b in range(images.size()[0]):
-                        if (images[b]-x).abs().mean() < params['GRID_ACCEPT']:
-                            temp += 1.0
-                    next_state_dic += [temp]
+    elif params['DATASET']=='1Dflip':
+        if not fix_state:
+            cur_x = []
+            for i in range(params['GRID_SIZE']):
+                cur_x += [np.random.choice([params['GRID_BACKGROUND'],params['GRID_FOREGROUND']])]
+        else:
+            cur_x = FIX_STATE_TO
+        cur_x = np.asarray(cur_x)
+        cur_y = 0.0
 
-        elif params['DATASET']=='2Dgrid':
-            print(unsupport)
+    return cur_x,cur_y
 
-    elif params['DOMAIN']=='image':
-        image = image.squeeze()
-        images = images.squeeze()
-        cur_x = FIX_STATE_TO[0]
-        cur_y = FIX_STATE_TO[1]
+def get_transition_prob_distribution(image, images):
+
+    if params['GRID_DETECTION']=='threshold':
+        cur_x, cur_y = get_state(fix_state=True)
+        accept_num = 0.0
         next_state_dic = []
         for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
-            x, y = transition_grid(cur_x, cur_y, action)
-            if params['GRID_DETECTION']=='average':
-                temp = image[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].sum()
-                next_state_dic += [temp]
-            elif params['GRID_DETECTION']=='threshold':
-                temp = 0.0
-                for b in range(images.size()[0]):
-                    mean_ = images[b][x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].mean()
-                    mean_all_ = images[b].mean()
-                    if (mean_ > (params['GRID_FOREGROUND']-params['GRID_ACCEPT'])) and (mean_all_ < GRID_MEAN_ALL_ACCEPT):
-                        temp += 1.0
-                next_state_dic += [temp]
+            next_x, next_y = transition(cur_x, cur_y, action)
+            ob_next = get_ob(next_x,next_y)
+            ob_next = torch.cuda.FloatTensor(ob_next)
+            temp = 0.0
+            for b in range(images.size()[0]):
+                if (images[b]-ob_next).abs().mean() < params['GRID_ACCEPT']:
+                    temp += 1.0
+                    accept_num += 1.0
+            next_state_dic += [temp]
+    else:
+        print(unsupport)
 
     next_state_dic = np.asarray(next_state_dic)
     sum_ = np.sum(next_state_dic)
     if not (sum_==0):
         next_state_dic = next_state_dic / sum_
 
-    return next_state_dic
+    accept_rate = accept_num / images.size()[0]
+
+    return next_state_dic, accept_rate
 
 def plot_convergence(image,images,name):
-    dis = get_transition_prob_distribution(image, images)
+    dis, accept_rate = get_transition_prob_distribution(image, images)
     if not (np.sum(dis)==0.0):
         kl = scipy.stats.entropy(
             dis,
@@ -692,6 +747,10 @@ def plot_convergence(image,images,name):
     logger.plot(
         name+'-L1',
         np.asarray([l1])
+    )
+    logger.plot(
+        name+'-AR',
+        np.asarray([accept_rate])
     )
 
 def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
@@ -894,141 +953,33 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             win=file_name,
             name=file_name+'_'+str(iteration))
 
-def transition_grid(cur_x,cur_y,action):
-
-    if params['DATASET']=='2Dgrid':
-        next_x = cur_x
-        next_y = cur_y
-        if action==0:
-            next_x = cur_x + 1
-        elif action==1:
-            next_y = cur_y + 1
-        elif action==2:
-            next_x = cur_x - 1
-        elif action==3:
-            next_y = cur_y - 1
-        next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
-        next_y = np.clip(next_y,0,params['GRID_SIZE']-1)
-        return next_x,next_y
-
-    if params['DATASET']=='1Dgrid':
-
-        next_x = cur_x
-        if action==0:
-            next_x = cur_x + 1
-        elif action==1:
-            next_x = cur_x - 1
-        next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
-        return next_x, 0 
-
-def transition_1Dflip(cur_x,action):
-    next_x = np.copy(cur_x)
-    next_x[action] = 1.0 - next_x[action]
-    return next_x
-
 def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
     while True:
         dataset = []
         for i in xrange(batch_size):
 
-            if params['DATASET']=='1Dgrid' or params['DATASET']=='2Dgrid':
-                if not fix_state:
-                    cur_x = np.random.choice(range(params['GRID_SIZE']))
-                    cur_y = np.random.choice(range(params['GRID_SIZE']))
-                else:
-                    cur_x = FIX_STATE_TO[0]
-                    cur_y = FIX_STATE_TO[1]
-
-            elif params['DATASET']=='1Dflip':
-                if not fix_state:
-                    cur_x = []
-                    for i in range(params['GRID_SIZE']):
-                        cur_x += [np.random.choice([params['GRID_BACKGROUND'],params['GRID_FOREGROUND']])]
-                else:
-                    cur_x = FIX_STATE_TO
-                cur_x = np.asarray(cur_x)
+            cur_x, cur_y = get_state(fix_state=fix_state)
 
             action = np.random.choice(
                 range(len(params['GRID_ACTION_DISTRIBUTION'])),
                 p=params['GRID_ACTION_DISTRIBUTION']
             )
             
-            if params['DATASET']=='1Dgrid' or params['DATASET']=='2Dgrid':
-                next_x, next_y = transition_grid(cur_x,cur_y,action)
-            elif params['DATASET']=='1Dflip':
-                next_x = transition_1Dflip(cur_x,action)
+            next_x, next_y = transition(cur_x, cur_y, action)
 
-            if params['DATASET']=='1Dgrid':
-                if params['DOMAIN']=='scalar':
-                    print(unsupport)
-
-                elif params['DOMAIN']=='vector':
-                    def to_ob(x):
-                        ob = np.zeros((params['GRID_SIZE']))
-                        ob.fill(params['GRID_BACKGROUND'])
-                        ob[x] = params['GRID_FOREGROUND']
-                        ob = np.expand_dims(ob,0)
-                        return ob
-                    ob=to_ob(cur_x)
-                    ob_next = to_ob(next_x)
-
-                elif params['DOMAIN']=='image':
-                    def to_ob(x,y):
-                        ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
-                        ob.fill(params['GRID_BACKGROUND'])
-                        ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),:] = params['GRID_FOREGROUND']
-                        ob = np.expand_dims(ob,0)
-                        ob = np.expand_dims(ob,0)
-                        return ob
-                    ob=to_ob(cur_x,cur_y)
-                    ob_next = to_ob(next_x,next_y)
-
-            if params['DATASET']=='1Dflip':
-
-                if params['DOMAIN']=='scalar':
-                    print(unsupport)
-
-                if params['DOMAIN']=='vector':
-                    def to_ob(x):
-                        ob = np.expand_dims(x,0)
-                        return ob
-                    ob=to_ob(cur_x)
-                    ob_next = to_ob(next_x)
-
-                if params['DOMAIN']=='image':
-                    print(unsupport)
-                
-            elif params['DATASET']=='2Dgrid':
-
-                if params['DOMAIN']=='scalar':
-                    def to_ob(x,y):
-                        ob = [[x,y]]
-                        return ob
-                    ob=to_ob(cur_x,cur_y)
-                    ob_next = to_ob(next_x,next_y)
-
-                elif params['DOMAIN']=='vector':
-                    print(unsupport)
-
-                elif params['DOMAIN']=='image':
-                    def to_ob(x,y):
-                        ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
-                        ob.fill(params['GRID_BACKGROUND'])
-                        ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])] = params['GRID_FOREGROUND']
-                        ob = np.expand_dims(ob,0)
-                        ob = np.expand_dims(ob,0)
-                        return ob
-                    ob=to_ob(cur_x,cur_y)
-                    ob_next = to_ob(next_x,next_y)
+            ob = get_ob(cur_x,cur_y)
+            ob_next = get_ob(next_x,next_y)
 
             data =  np.concatenate(
-                        (ob,ob_next),
+                        (np.expand_dims(ob,0),np.expand_dims(ob_next,0)),
                         axis=0
                     )
 
             dataset.append(data)
+
         dataset = np.array(dataset, dtype='float32')
+
         yield dataset
 
 def calc_gradient_penalty(netD, state, interpolates):
