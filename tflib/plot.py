@@ -8,10 +8,13 @@ import collections
 import time
 import cPickle as pickle
 import dill
+import scipy.signal
 
 import torch
 import visdom
 vis = visdom.Visdom()
+
+MEAN_NUM = 50
 
 class logger(object):
 	"""docstring for logger"""
@@ -55,17 +58,30 @@ class logger(object):
 			x_vals = np.sort(self._since_beginning[name].keys())
 			y_vals = [self._since_beginning[name][x] for x in x_vals]
 
+			y_vals_meaned = scipy.signal.convolve(
+				in1=y_vals,
+				in2=[[1.0/MEAN_NUM]]*MEAN_NUM,
+				mode='same',
+				method='auto'
+			)
+
 			plt.clf()
 			plt.plot(x_vals, y_vals)
+			plt.plot(x_vals, y_vals_meaned)
 			plt.xlabel('iteration')
-			plt.ylabel(self.DSP+name)
+			plt.ylabel(name)
 			plt.savefig(self.LOGDIR+name+'.jpg')
 
+			x_vals = torch.from_numpy(np.asarray(x_vals))
+			y_vals = torch.FloatTensor(np.asarray(y_vals))
+			y_vals_meaned = torch.FloatTensor(np.asarray(y_vals_meaned))
+			y_vals = torch.cat([y_vals,y_vals_meaned],1)
+
 			if len(x_vals) > 1:
-				vis.line(   X=torch.from_numpy(np.asarray(x_vals)),
-							Y=torch.from_numpy(np.asarray(y_vals)),
-		                    win=self.DSP+name,
-		                    opts=dict(title=self.DSP+name))
+				vis.line(   X=x_vals,
+							Y=y_vals,
+		                    win=name,
+		                    opts=dict(title=name))
 
 		self._since_last_flush.clear()
 
