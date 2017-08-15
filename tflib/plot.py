@@ -61,32 +61,32 @@ class logger(object):
 
 			self._since_beginning[name].update(vals)
 
-			x_vals = np.sort(self._since_beginning[name].keys())
-			y_vals = np.squeeze(np.asarray([self._since_beginning[name][x] for x in x_vals]))
+			x_vals = np.asarray(np.sort(self._since_beginning[name].keys()))
+			y_vals = np.asarray(np.squeeze(np.asarray([self._since_beginning[name][x] for x in x_vals])))
 
 
 			plt.clf()
 			plt.plot(x_vals, y_vals)
-			if np.shape(y_vals)[0] > 1:
-				y_vals_meaned = scipy.signal.convolve(
-					in1=y_vals,
-					in2=np.asarray([1.0/MEAN_NUM]*MEAN_NUM),
-					mode='same',
-					method='auto'
-				)
-				plt.plot(x_vals, y_vals_meaned)
+			if len(np.shape(y_vals)) < 1:
+				y_vals = np.asarray([y_vals])
+			y_vals_meaned = scipy.signal.convolve(
+				in1=y_vals,
+				in2=np.asarray([1.0/MEAN_NUM]*MEAN_NUM),
+				mode='same',
+				method='auto'
+			)
+			plt.plot(x_vals, y_vals_meaned)
 			plt.xlabel('iteration')
 			plt.ylabel(name)
 			plt.savefig(self.LOGDIR+name+'.jpg')
 
 			x_vals = torch.from_numpy(np.asarray(x_vals))
 
-			if np.shape(y_vals)[0] > 1:
-				y_vals = torch.cat(
-					[torch.FloatTensor(y_vals).unsqueeze(1),
-					torch.FloatTensor(y_vals_meaned).unsqueeze(1)],
-					1
-				)
+			y_vals = torch.cat(
+				[torch.FloatTensor(y_vals).unsqueeze(1),
+				torch.FloatTensor(y_vals_meaned).unsqueeze(1)],
+				1
+			)
 
 			if len(x_vals) > 1:
 				vis.line(   X=x_vals,
