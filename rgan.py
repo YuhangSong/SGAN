@@ -34,11 +34,11 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 add_parameters(EXP = 'd_filter_24')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # grl, deterministic-deep-net, tabular
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
@@ -630,13 +630,21 @@ def get_transition_prob_distribution(image, images):
                 x, y = transition_grid(cur_x, cur_y, action)
                 temp = image[x]
                 next_state_dic += [temp]
-            next_state_dic = np.asarray(next_state_dic)
-            next_state_dic = next_state_dic / np.sum(next_state_dic)
 
         elif params['DATASET']=='1Dflip':
-            print(torch.FloatTensor([[FIX_STATE_TO]]).size())
-            print(image.size())
-            print(pp)
+            if params['GRID_DETECTION']=='average':
+                print(unsupport)
+            elif params['GRID_DETECTION']=='threshold':
+                images = images.squeeze()
+                cur_x = FIX_STATE_TO
+                next_state_dic = []
+                for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
+                    x = torch.cuda.FloatTensor(transition_1Dflip(cur_x, action))
+                    temp = 0.0
+                    for b in range(images.size()[0]):
+                        if (images[b]-x).abs().mean() < params['GRID_ACCEPT']:
+                            temp += 1.0
+                    next_state_dic += [temp]
 
         elif params['DATASET']=='2Dgrid':
             print(unsupport)
@@ -660,10 +668,11 @@ def get_transition_prob_distribution(image, images):
                     if (mean_ > (params['GRID_FOREGROUND']-params['GRID_ACCEPT'])) and (mean_all_ < GRID_MEAN_ALL_ACCEPT):
                         temp += 1.0
                 next_state_dic += [temp]
-        next_state_dic = np.asarray(next_state_dic)
-        sum_ = np.sum(next_state_dic)
-        if not (sum_==0):
-            next_state_dic = next_state_dic / sum_
+
+    next_state_dic = np.asarray(next_state_dic)
+    sum_ = np.sum(next_state_dic)
+    if not (sum_==0):
+        next_state_dic = next_state_dic / sum_
 
     return next_state_dic
 
