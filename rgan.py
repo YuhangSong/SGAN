@@ -114,17 +114,22 @@ if params['DATASET']=='1grid' or params['DATASET']=='1flip' or (params['DATASET'
 elif (params['DATASET']=='2grid' and params['DOMAIN']=='image') or params['DATASET']=='marble':
     FORMAT = 'image'
 
-print('####################################################################')
 DSP = ''
+params_str = 'Settings'+'\n'
+params_str += '####################################################################'+'\n'
 for i in range(len(params_seq)):
-    print(params_seq[i]+' >> '+str(params[params_seq[i]]))
     DSP += params_seq[i]+'_'+str(params[params_seq[i]]).replace('.','_').replace(',','_').replace(' ','_')+'/'
-print('####################################################################')
+    params_str += params_seq[i]+' >> '+str(params[params_seq[i]])+'\n'
+params_str += '####################################################################'+'\n'
+print(params_str)
 
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 
 subprocess.call(["mkdir", "-p", LOGDIR])
+
+with open(LOGDIR+"Settins.txt","a") as f:
+    f.write(params_str)
 
 ############################### Definition Start ###############################
 
@@ -1075,7 +1080,7 @@ elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
 restore_model()
-logger = lib.plot.logger(LOGDIR,DSP)
+logger = lib.plot.logger(LOGDIR,DSP,params_str)
 
 state_prediction_gt = torch.Tensor(data.next()).cuda()
 state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
