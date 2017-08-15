@@ -40,7 +40,7 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
-add_parameters(EXP = 'd_filter_22')
+add_parameters(EXP = 'd_filter_23')
 add_parameters(DATASET = '2grid') # 1grid, 1flip, 2grid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, image
@@ -673,7 +673,7 @@ def get_transition_prob_distribution(image):
     cur_y = FIX_STATE_TO[1]
     next_state_dic = []
     for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
-        x, y = grid_transition(cur_x, cur_y, action)
+        x, y = transition_2grid(cur_x, cur_y, action)
         temp = image[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])].sum()
         next_state_dic += [temp]
     next_state_dic = np.asarray(next_state_dic)
@@ -687,14 +687,14 @@ def plot_convergence(image,name):
         qk=params['GRID_ACTION_DISTRIBUTION'],
         base=None
     )
-    l1 = [1.0]
+    l1 = np.squeeze(np.mean(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
     logger.plot(
         name+'-KL',
-        kl
+        np.asarray([kl])
     )
     logger.plot(
         name+'-L1',
-        l1
+        np.asarray([l1])
     )
 
 
@@ -1087,7 +1087,7 @@ prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
 
 iteration = logger.restore()
-
+first_loop = True
 while True:
     iteration += 1
 
@@ -1325,12 +1325,11 @@ while True:
         # (4) Log summary
         ############################
 
-        if iteration % LOG_INTER == 2:
+        if iteration % LOG_INTER == 5:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
             torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
             generate_image(iteration)
-            logger.flush()
         
         print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
             .format(
@@ -1387,6 +1386,8 @@ while True:
     elif params['METHOD']=='tabular':
         print('implement '+params['METHOD']+' here!')
 
-    if iteration % LOG_INTER == 2:
+    if iteration % LOG_INTER == 5 and first_loop is False:
         logger.flush()
     logger.tick()
+
+    first_loop = False
