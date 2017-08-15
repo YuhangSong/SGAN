@@ -1,14 +1,14 @@
 # GRL
 
-# Quik setup enviroment: grl_1
+# Quik setup enviroment: grl_2
 ```
-mkdir -p YOUR_NAME/project/ && cd YOUR_NAME/project/ && git clone https://github.com/YuhangSong/grl.git && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && conda create -n grl_1 python=2 -y && source ~/.bashrc && source activate grl_1 && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && git clone https://github.com/pytorch/pytorch.git && cd pytorch && python setup.py install && pip install torchvision && pip install tensorflow && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && pip install sklearn && pip install dill && git config --global push.default "current" && git config --global pull.default "current"
+mkdir -p YOUR_NAME/project/ && cd YOUR_NAME/project/ && git clone https://github.com/YuhangSong/grl.git && sudo apt-get install -y tmux htop cmake golang libjpeg-dev && conda create -n grl_2 python=2 -y && source ~/.bashrc && source activate grl_2 && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && git clone https://github.com/pytorch/pytorch.git && cd pytorch && python setup.py install && pip install torchvision && pip install tensorflow && pip install "gym[atari]" && pip install universe && pip install six && conda install -y numpy && conda install -y scipy && pip install opencv-python && pip install scipy && pip install visdom && pip install matplotlib && pip install visdom && pip install sklearn && pip install dill && git config --global push.default "current" && git config --global pull.default "current"
 ```
 
 # Train
 #### We auto restore the checkpoint of the model, as well as restore the every plot from last run. If you want to start a new run, you should change the EXP in rgan.py
 ```
-source ~/.bashrc && source activate grl_1 && python rgan.py
+source ~/.bashrc && source activate grl_2 && python rgan.py
 ```
 
 # Visualize result
@@ -16,7 +16,7 @@ source ~/.bashrc && source activate grl_1 && python rgan.py
 #### We also use visdom to visualize results remotely (optianal)
 ##### Start disdom server
 ```
-source ~/.bashrc && source activate grl_1 && python -m visdom.server
+source ~/.bashrc && source activate grl_2 && python -m visdom.server
 ```
 ##### Start ngrok so that we can vist visdom page remotely
 ```
