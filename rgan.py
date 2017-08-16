@@ -59,7 +59,7 @@ add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
-    add_parameters(GRID_SIZE = 6)
+    add_parameters(GRID_SIZE = 20)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
     FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
 
