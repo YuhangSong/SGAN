@@ -36,11 +36,11 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'exp_2_4')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -731,6 +731,8 @@ def get_transition_prob_distribution(image, images):
             ob_next = torch.cuda.FloatTensor(ob_next)
             temp = 0.0
             for b in range(images.size()[0]):
+                print(images[b].size())
+                print(ob_next.size())
                 if (images[b]-ob_next).abs().mean() < params['GRID_ACCEPT']:
                     temp += 1.0
                     accept_num += 1.0
