@@ -36,11 +36,11 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'exp_2_4')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -151,6 +151,8 @@ else:
     add_parameters(STATE_DEPTH = 1)
     add_parameters(FEATURE = 1)
     add_parameters(IMAGE_SIZE = 32)
+
+BOX_SIZE = params['IMAGE_SIZE']/params['GRID_SIZE']
 
 
 ############################### Definition Start ###############################
@@ -719,7 +721,7 @@ def get_state(fix_state=False):
 
     return cur_x,cur_y
 
-def get_transition_prob_distribution(image, images):
+def get_transition_prob_distribution(images):
 
     if params['GRID_DETECTION']=='threshold':
         cur_x, cur_y = get_state(fix_state=True)
@@ -731,9 +733,44 @@ def get_transition_prob_distribution(image, images):
             ob_next = torch.cuda.FloatTensor(ob_next)
             temp = 0.0
             for b in range(images.size()[0]):
-                # print(images[b].size())
-                # print(ob_next.size())
-                if (images[b]-ob_next).abs().mean() < params['GRID_ACCEPT']:
+                image = (images[b]).squeeze()
+                ob_next = ob_next.squeeze()
+                if params['DATASET']=='1Dflip' or params['DATASET']=='1Dgrid':
+                    if params['DOMAIN']=='vector':
+                        accept = True
+                        for ii in range(params['GRID_SIZE']):
+                            if np.abs(image[ii]-ob_next[ii]) < params['GRID_ACCEPT']:
+                                pass
+                            else:
+                                accept=False
+                                break
+                    elif params['DOMAIN']=='image':
+                        accept = True
+                        for ii in range(params['GRID_SIZE']):
+                            if (image[ii*BOX_SIZE:(ii+1)*BOX_SIZE,:]-ob_next[ii*BOX_SIZE:(ii+1)*BOX_SIZE,:]).abs().mean() < params['GRID_ACCEPT']:
+                                pass
+                            else:
+                                accept=False
+                                break
+                    else:
+                        print(unsupport)
+                if params['DATASET']=='2Dgrid':
+                    if params['DOMAIN']=='image':
+                        accept = True
+                        for ii_x in range(params['GRID_SIZE']):
+                            breaking = False
+                            for ii_y in range(params['GRID_SIZE']):
+                                if (image[ii_x*BOX_SIZE:(ii_x+1)*BOX_SIZE,ii_y*BOX_SIZE:(ii_y+1)*BOX_SIZE]-ob_next[ii_x*BOX_SIZE:(ii_x+1)*BOX_SIZE,ii_y*BOX_SIZE:(ii_y+1)*BOX_SIZE]).abs().mean() < params['GRID_ACCEPT']:
+                                    pass
+                                else:
+                                    accept=False
+                                    breaking=True
+                                    break
+                            if breaking:
+                                break
+                    else:
+                        print(unsupport)
+                if accept:
                     temp += 1.0
                     accept_num += 1.0
             next_state_dic += [temp]
@@ -750,7 +787,7 @@ def get_transition_prob_distribution(image, images):
     return next_state_dic, accept_rate
 
 def plot_convergence(image,images,name):
-    dis, accept_rate = get_transition_prob_distribution(image, images)
+    dis, accept_rate = get_transition_prob_distribution(images)
     if not (np.sum(dis)==0.0):
         kl = scipy.stats.entropy(
             dis,
