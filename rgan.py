@@ -38,9 +38,9 @@ def add_parameters(**kwargs):
 add_parameters(EXP = 'exp_2_4')
 add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -736,8 +736,6 @@ def get_transition_prob_distribution(images):
             ob_next = ob_next.squeeze()
             for b in range(images.size()[0]):
                 image = images[b]
-                # print(image.size())
-                # print(ob_next.size())
                 if params['DATASET']=='1Dflip' or params['DATASET']=='1Dgrid':
                     if params['DOMAIN']=='vector':
                         accept = True
