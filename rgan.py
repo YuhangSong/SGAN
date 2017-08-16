@@ -36,12 +36,12 @@ def add_parameters(**kwargs):
 
 
 '''main settings'''
-add_parameters(EXP = 'exp_2_5')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(EXP = 'exp_2_4')
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -112,7 +112,7 @@ elif params['DOMAIN']=='image':
     add_parameters(GRID_ACCEPT = 0.1)
 else:
     print(unsupport)
-add_parameters(MULTI_RUN = '2')
+# add_parameters(MULTI_RUN = '2')
 
 DSP = ''
 params_str = 'Settings'+'\n'
