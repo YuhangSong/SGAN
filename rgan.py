@@ -35,7 +35,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''main settings'''
-add_parameters(EXP = 'exp_2_2')
+add_parameters(EXP = 'exp_2_4')
 add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
