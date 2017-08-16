@@ -35,12 +35,12 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''main settings'''
-add_parameters(EXP = 'exp_2_2')
+add_parameters(EXP = 'exp_2_3')
 add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -54,10 +54,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 if params['RUINER_MODE']=='use-r':
     add_parameters(FASTEN_D = 10)
     add_parameters(GP_TO = 0.0)
-    if params['DOMAIN']=='vector':
-        add_parameters(G_INIT_SIGMA = 0.002)
-    else:
-        add_parameters(G_INIT_SIGMA = 0.00002)
+    add_parameters(G_INIT_SIGMA = 0.00002)
 
 else:
     add_parameters(FASTEN_D = 1)
@@ -92,7 +89,7 @@ if params['DOMAIN']=='scalar':
 elif params['DOMAIN']=='vector':
     add_parameters(DIM = 128)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 0.1)
+    add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
@@ -223,10 +220,20 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
+
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             cat_layer = nn.Sequential(
@@ -234,6 +241,7 @@ class Generator(nn.Module):
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
             if params['DOMAIN']=='scalar':
