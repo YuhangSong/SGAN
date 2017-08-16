@@ -34,6 +34,7 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
+
 '''main settings'''
 add_parameters(EXP = 'exp_2_5')
 add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
