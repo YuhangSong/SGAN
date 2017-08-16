@@ -788,7 +788,7 @@ def get_transition_prob_distribution(images):
 
     return next_state_dic, accept_rate
 
-def plot_convergence(image,images,name):
+def plot_convergence(images,name):
     dis, accept_rate = get_transition_prob_distribution(images)
     if not (np.sum(dis)==0.0):
         kl = scipy.stats.entropy(
@@ -856,7 +856,6 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             prediction_gt_mean = prediction_gt.mean(0,keepdim=True)
             log_img(prediction_gt_mean,'prediction_gt_mean',iteration)
             plot_convergence(
-                image=prediction_gt_mean,
                 images=prediction_gt,
                 name='prediction_gt_mean'
             )
@@ -886,7 +885,6 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             prediction_gt_r_mean = prediction_gt_r.mean(0,keepdim=True)
             log_img(prediction_gt_r_mean,'prediction_gt_r_mean',iteration)
             plot_convergence(
-                image=prediction_gt_r_mean,
                 images=prediction_gt_r,
                 name='prediction_gt_r_mean'
             )
@@ -940,7 +938,6 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                 iteration
             )
             plot_convergence(
-                image=prediction_mean,
                 images=prediction,
                 name='prediction-non-filtered'
             )
@@ -999,7 +996,6 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             )
 
             plot_convergence(
-                image=filtered_prediction_mean,
                 images=filtered_prediction,
                 name='prediction-filtered-by-'+str(filter_net.__class__.__name__)
             )
