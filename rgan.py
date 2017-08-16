@@ -36,7 +36,7 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'exp_2_4')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
@@ -732,9 +732,10 @@ def get_transition_prob_distribution(images):
             ob_next = get_ob(next_x,next_y)
             ob_next = torch.cuda.FloatTensor(ob_next)
             temp = 0.0
+            images = images.squeeze()
+            ob_next = ob_next.squeeze()
             for b in range(images.size()[0]):
-                image = (images[b]).squeeze()
-                ob_next = ob_next.squeeze()
+                image = images[b]
                 if params['DATASET']=='1Dflip' or params['DATASET']=='1Dgrid':
                     if params['DOMAIN']=='vector':
                         accept = True
