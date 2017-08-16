@@ -693,6 +693,7 @@ def get_ob(x,y):
         print(unsupport)
 
     ob = np.asarray(ob)
+    ob = np.expand_dims(ob,0)
 
     return ob
 
@@ -992,7 +993,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             ob_next = get_ob(next_x,next_y)
 
             data =  np.concatenate(
-                        (np.expand_dims(ob,0),np.expand_dims(ob_next,0)),
+                        (ob,ob_next),
                         axis=0
                     )
 
