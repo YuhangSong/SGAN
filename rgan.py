@@ -731,8 +731,6 @@ def get_transition_prob_distribution(image, images):
             ob_next = torch.cuda.FloatTensor(ob_next)
             temp = 0.0
             for b in range(images.size()[0]):
-                print(images[b].size())
-                print(ob_next.size())
                 if (images[b]-ob_next).abs().mean() < params['GRID_ACCEPT']:
                     temp += 1.0
                     accept_num += 1.0
