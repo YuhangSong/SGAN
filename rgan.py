@@ -34,18 +34,23 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
+'''main settings'''
 add_parameters(EXP = 'exp_2_2')
 add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(GRID_SIZE = 10)
 
+
+'''default setting'''
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 
+'''some special settings if use-r'''
 if params['RUINER_MODE']=='use-r':
     add_parameters(FASTEN_D = 10)
     add_parameters(GP_TO = 0.0)
@@ -63,19 +68,19 @@ add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
-    add_parameters(GRID_SIZE = 20)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
     FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
 
 elif params['DATASET']=='1Dgrid':
-    add_parameters(GRID_SIZE = 20)
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
     FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
 elif params['DATASET']=='2Dgrid':
-    add_parameters(GRID_SIZE = 10)
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
+
+else:
+    print(unsupport)
 
 if params['DOMAIN']=='scalar':
     add_parameters(DIM = 512)
@@ -86,8 +91,8 @@ if params['DOMAIN']=='scalar':
 
 elif params['DOMAIN']=='vector':
     add_parameters(DIM = 128)
-    add_parameters(NOISE_SIZE = params['GRID_SIZE'])
-    add_parameters(LAMBDA = 10)
+    add_parameters(NOISE_SIZE = 128)
+    add_parameters(LAMBDA = 0.1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
@@ -97,20 +102,21 @@ elif params['DOMAIN']=='image':
     add_parameters(LAMBDA = 10)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.1)
+
+else:
+    print(unsupport)
     
-
-add_parameters(CRITIC_ITERS = 5)  # How many critic iterations per generator iteration
-
-add_parameters(GRID_DETECTION = 'threshold') # average, threshold
-add_parameters(GRID_ACCEPT = 0.1) # average, threshold
+add_parameters(CRITIC_ITERS = 5)
+add_parameters(GRID_DETECTION = 'threshold')
+add_parameters(GRID_ACCEPT = 0.1)
 
 DSP = ''
 params_str = 'Settings'+'\n'
-params_str += '####################################################################'+'\n'
+params_str += '##################################'+'\n'
 for i in range(len(params_seq)):
     DSP += params_seq[i]+'_'+str(params[params_seq[i]]).replace('.','_').replace(',','_').replace(' ','_')+'/'
     params_str += params_seq[i]+' >> '+str(params[params_seq[i]])+'\n'
-params_str += '####################################################################'+'\n'
+params_str += '##################################'+'\n'
 print(params_str)
 
 ############################### Generated Settings ###############################
@@ -126,33 +132,25 @@ FILTER_RATE = 0.5
 LOG_INTER = 100
 
 if params['DOMAIN']=='scalar':
-
     if params['DATASET']=='2Dgrid':
-
         DESCRIBE_DIM = 2
 
     else:
-
         print(unsupport)
 
 elif params['DOMAIN']=='vector':
-
     if params['DATASET']=='1Dgrid' or params['DATASET']=='1Dflip':
-
         DESCRIBE_DIM = params['GRID_SIZE']
 
     else:
-
         print(unsupport)
 
 if params['DATASET']=='marble':
-
     add_parameters(STATE_DEPTH = 3)
     add_parameters(FEATURE = 3)
     add_parameters(IMAGE_SIZE = 128)
 
 else:
-
     add_parameters(STATE_DEPTH = 1)
     add_parameters(FEATURE = 1)
     add_parameters(IMAGE_SIZE = 32)
