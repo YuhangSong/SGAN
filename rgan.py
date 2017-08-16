@@ -36,12 +36,12 @@ def add_parameters(**kwargs):
 
 
 '''main settings'''
-add_parameters(EXP = 'exp_2_6')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(EXP = 'exp_2_5')
+add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -67,7 +67,7 @@ add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
+    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2+1)
 
 elif params['DATASET']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
@@ -88,9 +88,9 @@ if params['DOMAIN']=='scalar':
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['DOMAIN']=='vector':
-    add_parameters(DIM = 128)
-    add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 0.1)
+    add_parameters(DIM = 512)
+    add_parameters(NOISE_SIZE = params['GRID_SIZE'])
+    add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
@@ -106,7 +106,13 @@ else:
     
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
-add_parameters(GRID_ACCEPT = 0.1)
+if params['DOMAIN']=='vector':
+    add_parameters(GRID_ACCEPT = 0.3)
+elif params['DOMAIN']=='image':
+    add_parameters(GRID_ACCEPT = 0.1)
+else:
+    print(unsupport)
+add_parameters(MULTI_RUN = '2')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -223,14 +229,6 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-
-                nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
-
-                nn.Linear(params['DIM'], params['DIM']),
                 nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
             )
@@ -577,7 +575,10 @@ def weights_init_g(m):
     sigma = params['G_INIT_SIGMA']
     if classname.find('Linear') != -1:
         m.weight.data.normal_(0.0, sigma)
-        m.bias.data.fill_(0.0)
+        if params['DOMAIN']=='vector':
+            m.bias.data.normal_(0.0, sigma)
+        else:
+            m.bias.data.fill_(0.0)
     elif classname.find('Conv3d') != -1:
         m.weight.data.normal_(0.0, sigma)
     elif classname.find('ConvTranspose3d') != -1:
