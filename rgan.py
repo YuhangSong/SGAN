@@ -90,7 +90,7 @@ if params['DOMAIN']=='scalar':
 elif params['DOMAIN']=='vector':
     add_parameters(DIM = 128)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 1)
+    add_parameters(LAMBDA = 0.1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
