@@ -55,7 +55,7 @@ class logger(object):
 
 		vis.text(
 			self.params_str.replace('\n','<br>'),
-			win=params['EXP']+'-discribe'
+			win=self.params['EXP']+'-discribe'
 		)
 
 		for name, vals in self._since_last_flush.items():
@@ -92,8 +92,8 @@ class logger(object):
 			if len(x_vals) > 1:
 				vis.line(   X=x_vals,
 							Y=y_vals,
-		                    win=params['EXP']+'-'+name,
-		                    opts=dict(title=params['EXP']+'-'+name))
+		                    win=self.params['EXP']+'-'+name,
+		                    opts=dict(title=self.params['EXP']+'-'+name))
 
 		self._since_last_flush.clear()
 
