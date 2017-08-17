@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '00'
+CUDA = '10'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -37,13 +37,13 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 '''main settings'''
-add_parameters(EXP = 'exp_2_10')
-add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(EXP = 'exp_3_1')
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
-add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'test-r') # none-r, use-r, test-r
-add_parameters(GRID_SIZE = 20)
+add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(GRID_SIZE = 10)
 
 
 '''default setting'''
@@ -77,7 +77,7 @@ add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
+    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2+1)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
 
 elif params['DATASET']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
