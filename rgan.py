@@ -130,7 +130,7 @@ with open(LOGDIR+"Settins.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
-LOG_INTER = 100
+LOG_INTER = 500
 
 if params['DOMAIN']=='scalar':
     if params['DATASET']=='2Dgrid':
