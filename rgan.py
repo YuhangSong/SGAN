@@ -38,11 +38,11 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_2_10')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -117,8 +117,11 @@ else:
     
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
-add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(MULTI_RUN = '0')
+if params['DOMAIN']=='vector':
+    add_parameters(GRID_ACCEPT = 0.3)
+else:
+    add_parameters(GRID_ACCEPT = 0.1)
+add_parameters(MULTI_RUN = 'no_relu_1_no_bn_after_cat')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -235,22 +238,16 @@ class Generator(nn.Module):
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
                 nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
             )
             if params['DOMAIN']=='scalar':
                 deconv_layer = nn.Sequential(
@@ -1459,25 +1456,13 @@ while True:
 
         elif update_type=='r':
 
-            if params['GAME_MDOE']=='full':
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            prediction_gt_r_v = netG(
+                noise_v = autograd.Variable(noise),
+                state_v = autograd.Variable(prediction_gt)
+            ).narrow(1,(params['STATE_DEPTH']-1),1)
 
-                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-                stater_v = netG(
-                    noise_v = autograd.Variable(noise),
-                    state_v = autograd.Variable(state)
-                ).narrow(1,0,1)
-
-                R = mse_loss_model(stater_v, autograd.Variable(state.narrow(1,params['STATE_DEPTH']-1,1)))
-
-            elif params['GAME_MDOE']=='same-start':
-
-                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-                prediction_gt_r_v = netG(
-                    noise_v = autograd.Variable(noise),
-                    state_v = autograd.Variable(prediction_gt)
-                ).narrow(1,0,1)
-
-                R = mse_loss_model(prediction_gt_r_v, autograd.Variable(prediction_gt))
+            R = mse_loss_model(prediction_gt_r_v, autograd.Variable(prediction_gt))
 
             R.backward()
             R_cost = R.data.cpu().numpy()

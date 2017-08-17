@@ -54,7 +54,7 @@ class logger(object):
 	def flush(self):
 
 		vis.text(
-			self.params_str.replace('\n','<br>'),
+			(self.CUDA+self.params_str).replace('\n','<br>'),
 			win=str(self.CUDA)+'-discribe'
 		)
 
