@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = ['0',   '0']
+CUDA = ['0',   '1']
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1]
 if CUDA[1]!=None:
@@ -42,7 +42,7 @@ add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
