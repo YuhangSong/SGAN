@@ -162,7 +162,6 @@ else:
 
 BOX_SIZE = params['IMAGE_SIZE']/params['GRID_SIZE']
 
-
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -1160,7 +1159,7 @@ if params['GAME_MDOE']=='same-start':
 elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
-logger = lib.plot.logger(LOGDIR,DSP,params_str)
+logger = lib.plot.logger(LOGDIR,DSP,params_str,params)
 iteration = logger.restore()
 
 while True:
