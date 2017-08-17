@@ -25,7 +25,7 @@ class logger(object):
 		self.DSP = DSP
 		self.params_str = params_str
 		self.CUDA = CUDA
-		
+
 		self._iter = 0
 
 		self._since_beginning = collections.defaultdict(lambda: {})
@@ -55,7 +55,7 @@ class logger(object):
 
 		vis.text(
 			self.params_str.replace('\n','<br>'),
-			win=self.CUDA+'-discribe'
+			win=str(self.CUDA)+'-discribe'
 		)
 
 		for name, vals in self._since_last_flush.items():
@@ -92,8 +92,8 @@ class logger(object):
 			if len(x_vals) > 1:
 				vis.line(   X=x_vals,
 							Y=y_vals,
-		                    win=self.CUDA+'-'+name,
-		                    opts=dict(title=self.CUDA+'-'+name))
+		                    win=str(self.CUDA)+'-'+name,
+		                    opts=dict(title=str(self.CUDA)+'-'+name))
 
 		self._since_last_flush.clear()
 

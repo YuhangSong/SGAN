@@ -17,9 +17,10 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '1'
-os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
-if CUDA!=None:
+CUDA = ['0',   '0']
+#-------reuse--device
+os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1]
+if CUDA[1]!=None:
     import torch
     import torch.autograd as autograd
     import torch.nn as nn
@@ -37,11 +38,11 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_2_10')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -181,8 +182,8 @@ def log_img(x,name,iteration):
     x = x.squeeze(1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
-                win=CUDA+'-'+name,
-                opts=dict(caption=CUDA+'-'+name+'_'+str(iteration)))
+                win=str(CUDA)+'-'+name,
+                opts=dict(caption=str(CUDA)+'-'+name+'_'+str(iteration)))
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -199,8 +200,8 @@ def plt_to_vis(fig,win,name):
     img = img.astype(float)[:,:,0:3]
     img = torch.FloatTensor(img).permute(2,0,1)
     vis.image(  img,
-                win=CUDA+'-'+win,
-                opts=dict(title=CUDA+'-'+name))
+                win=str(CUDA)+'-'+win,
+                opts=dict(title=str(CUDA)+'-'+name))
 
 class D_out_layer(nn.Module):
 
