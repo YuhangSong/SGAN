@@ -17,10 +17,10 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = ['1',   '1']
+CUDA = '01'
 #-------reuse--device
-os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1]
-if CUDA[1]!=None:
+os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
+if CUDA[1:2]!=None:
     import torch
     import torch.autograd as autograd
     import torch.nn as nn
@@ -38,9 +38,9 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_2_10')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
@@ -58,11 +58,11 @@ if params['RUINER_MODE']=='use-r':
 
     if params['DOMAIN']=='vector':
         add_parameters(FASTEN_D = 1.0)
-        add_parameters(GP_TO = 0.0)
+        add_parameters(GP_TO = 1.0)
 
     elif params['DOMAIN']=='image':
-        add_parameters(FASTEN_D = 10.0)
-        add_parameters(GP_TO = 0.0)
+        add_parameters(FASTEN_D = 1.0)
+        add_parameters(GP_TO = 1.0)
 
     else:
         print(unsupport)
