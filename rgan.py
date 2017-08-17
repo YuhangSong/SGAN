@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '0'
+CUDA = '1'
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
 if CUDA!=None:
     import torch
