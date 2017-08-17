@@ -99,8 +99,8 @@ if params['DOMAIN']=='scalar':
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['DOMAIN']=='vector':
-    add_parameters(DIM = 512)
-    add_parameters(NOISE_SIZE = params['GRID_SIZE'])
+    add_parameters(DIM = 128)
+    add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.0)
