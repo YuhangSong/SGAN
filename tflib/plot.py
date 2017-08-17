@@ -18,14 +18,14 @@ MEAN_NUM = 50
 
 class logger(object):
 	"""docstring for logger"""
-	def __init__(self,LOGDIR,DSP,params_str, params):
+	def __init__(self,LOGDIR,DSP,params_str, CUDA):
 		super(logger, self).__init__()
 
 		self.LOGDIR = LOGDIR
 		self.DSP = DSP
 		self.params_str = params_str
-		self.params = params
-
+		self.CUDA = CUDA
+		
 		self._iter = 0
 
 		self._since_beginning = collections.defaultdict(lambda: {})
@@ -55,7 +55,7 @@ class logger(object):
 
 		vis.text(
 			self.params_str.replace('\n','<br>'),
-			win=self.params['EXP']+'-discribe'
+			win=self.CUDA+'-discribe'
 		)
 
 		for name, vals in self._since_last_flush.items():
@@ -92,8 +92,8 @@ class logger(object):
 			if len(x_vals) > 1:
 				vis.line(   X=x_vals,
 							Y=y_vals,
-		                    win=self.params['EXP']+'-'+name,
-		                    opts=dict(title=self.params['EXP']+'-'+name))
+		                    win=self.CUDA+'-'+name,
+		                    opts=dict(title=self.CUDA+'-'+name))
 
 		self._since_last_flush.clear()
 

@@ -9,11 +9,7 @@ import scipy
 import sklearn.datasets
 import tflib as lib
 import tflib.plot
-import torch
-import torch.autograd as autograd
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
+
 import subprocess
 from PIL import Image
 import torchvision.utils as vutils
@@ -21,27 +17,31 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-torch.manual_seed(4213)
-
-GPU = range(torch.cuda.device_count())
-print('Using GPU:'+str(GPU))
+CUDA = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = CUDA
+if CUDA!=None:
+    import torch
+    import torch.autograd as autograd
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torch.optim as optim
+    torch.manual_seed(4213)
+    GPU = range(torch.cuda.device_count())
+    print('Using GPU:'+str(GPU))
 
 params = {}
 params_seq = []
-
 def add_parameters(**kwargs):
     global params_seq
     params_seq += kwargs.keys()
     params.update(kwargs)
-
-
 '''main settings'''
-add_parameters(EXP = 'exp_2_song1')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(EXP = 'exp_2_10')
+add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
@@ -107,13 +107,8 @@ else:
     
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
-if params['DOMAIN']=='vector':
-    add_parameters(GRID_ACCEPT = 0.3)
-elif params['DOMAIN']=='image':
-    add_parameters(GRID_ACCEPT = 0.1)
-else:
-    print(unsupport)
-# add_parameters(MULTI_RUN = '2')
+add_parameters(GRID_ACCEPT = 0.1)
+add_parameters(MULTI_RUN = '0')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -186,8 +181,8 @@ def log_img(x,name,iteration):
     x = x.squeeze(1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
-                win=params['EXP']+'-'+name,
-                opts=dict(caption=params['EXP']+'-'+name+'_'+str(iteration)))
+                win=CUDA+'-'+name,
+                opts=dict(caption=CUDA+'-'+name+'_'+str(iteration)))
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -204,8 +199,8 @@ def plt_to_vis(fig,win,name):
     img = img.astype(float)[:,:,0:3]
     img = torch.FloatTensor(img).permute(2,0,1)
     vis.image(  img,
-                win=params['EXP']+'-'+win,
-                opts=dict(title=params['EXP']+'-'+name))
+                win=CUDA+'-'+win,
+                opts=dict(title=CUDA+'-'+name))
 
 class D_out_layer(nn.Module):
 
@@ -239,6 +234,8 @@ class Generator(nn.Module):
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
@@ -1159,7 +1156,7 @@ if params['GAME_MDOE']=='same-start':
 elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
-logger = lib.plot.logger(LOGDIR,DSP,params_str,params)
+logger = lib.plot.logger(LOGDIR,DSP,params_str,CUDA)
 iteration = logger.restore()
 
 while True:
