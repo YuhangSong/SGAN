@@ -798,7 +798,7 @@ def plot_convergence(images,name):
             name+'-KL',
             np.asarray([kl])
         )
-    l1 = np.squeeze(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION'])))
+    l1 = np.squeeze(np.sum(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
     logger.plot(
         name+'-L1',
         np.asarray([l1])
