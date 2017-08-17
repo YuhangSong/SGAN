@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = ['1',   '0']
+CUDA = ['0',   '1']
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1]
 if CUDA[1]!=None:
@@ -93,7 +93,7 @@ elif params['DOMAIN']=='vector':
     add_parameters(NOISE_SIZE = params['GRID_SIZE'])
     add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
-    add_parameters(TARGET_W_DISTANCE = 0.0)
+    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['DOMAIN']=='image':
     add_parameters(DIM = 128)
