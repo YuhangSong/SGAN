@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = ['0',   '1']
+CUDA = ['1',   '1']
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1]
 if CUDA[1]!=None:
@@ -56,11 +56,21 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 if params['RUINER_MODE']=='use-r':
     add_parameters(G_INIT_SIGMA = 0.00002)
 
+    if params['DOMAIN']=='vector':
+        add_parameters(FASTEN_D = 1.0)
+        add_parameters(GP_TO = 0.0)
+
+    elif params['DOMAIN']=='image':
+        add_parameters(FASTEN_D = 10.0)
+        add_parameters(GP_TO = 0.0)
+
+    else:
+        print(unsupport)
+
 else:
     add_parameters(G_INIT_SIGMA = 0.02)
-
-add_parameters(FASTEN_D = 1.0)
-add_parameters(GP_TO = 1.0)
+    add_parameters(FASTEN_D = 1.0)
+    add_parameters(GP_TO = 1.0)
 
 add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
@@ -93,7 +103,7 @@ elif params['DOMAIN']=='vector':
     add_parameters(NOISE_SIZE = params['GRID_SIZE'])
     add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
-    add_parameters(TARGET_W_DISTANCE = 0.1)
+    add_parameters(TARGET_W_DISTANCE = 0.0)
 
 elif params['DOMAIN']=='image':
     add_parameters(DIM = 128)
