@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '20'
+CUDA = '00'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -38,12 +38,12 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
-add_parameters(GRID_SIZE = 20)
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
+add_parameters(GRID_SIZE = 5)
 
 
 '''default setting'''
@@ -59,10 +59,12 @@ if params['RUINER_MODE']=='use-r':
     if params['DOMAIN']=='vector':
         add_parameters(FASTEN_D = 1.0)
         add_parameters(GP_TO = 1.0)
+        add_parameters(GP_SIDE = 'bothside')
 
     elif params['DOMAIN']=='image':
         add_parameters(FASTEN_D = 1.0)
         add_parameters(GP_TO = 1.0)
+        add_parameters(GP_SIDE = 'oneside')
 
     else:
         print(unsupport)
@@ -71,6 +73,7 @@ else:
     add_parameters(G_INIT_SIGMA = 0.02)
     add_parameters(FASTEN_D = 1.0)
     add_parameters(GP_TO = 1.0)
+    add_parameters(GP_SIDE = 'bothside')
 
 add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
@@ -1069,7 +1072,10 @@ def calc_gradient_penalty(netD, state, interpolates):
                     only_inputs=True)[0]
     gradients = gradients.contiguous()
     gradients = gradients.view(gradients.size()[0],-1)
-    gradient_penalty = ((gradients.norm(2, dim=1) - params['GP_TO']) ** 2).mean() * params['LAMBDA']
+    if params['GP_SIDE']=='bothside':
+        gradient_penalty = ((gradients.norm(2, dim=1) - params['GP_TO']) ** 2).mean() * params['LAMBDA']
+    elif params['GP_SIDE']=='oneside':
+        gradient_penalty = (((gradients.norm(2, dim=1) - params['GP_TO'])).clamp(0.0,10000000000.0) ** 2).mean() * params['LAMBDA']
 
     return gradient_penalty
 
