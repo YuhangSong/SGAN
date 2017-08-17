@@ -187,8 +187,8 @@ def log_img(x,name,iteration):
     x = x.squeeze(1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
-                win=name,
-                opts=dict(caption=name+'_'+str(iteration)))
+                win=params['EXP']+'-'+name,
+                opts=dict(caption=params['EXP']+'-'+name+'_'+str(iteration)))
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -205,8 +205,8 @@ def plt_to_vis(fig,win,name):
     img = img.astype(float)[:,:,0:3]
     img = torch.FloatTensor(img).permute(2,0,1)
     vis.image(  img,
-                win=win,
-                opts=dict(title=name))
+                win=params['EXP']+'-'+win,
+                opts=dict(title=params['EXP']+'-'+name))
 
 class D_out_layer(nn.Module):
 
