@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '11'
+CUDA = '00'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -38,12 +38,12 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_2_10')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'vector') # scalar, vector, image
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
-add_parameters(GRID_SIZE = 10)
+add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(RUINER_MODE = 'test-r') # none-r, use-r, test-r
+add_parameters(GRID_SIZE = 20)
 
 
 '''default setting'''
@@ -99,8 +99,8 @@ if params['DOMAIN']=='scalar':
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['DOMAIN']=='vector':
-    add_parameters(DIM = 512)
-    add_parameters(NOISE_SIZE = params['GRID_SIZE'])
+    add_parameters(DIM = 128)
+    add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.0)
@@ -121,7 +121,7 @@ if params['DOMAIN']=='vector':
     add_parameters(GRID_ACCEPT = 0.3)
 else:
     add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(MULTI_RUN = 'no_relu_1_no_bn_after_cat')
+add_parameters(MULTI_RUN = 'all relu all bn')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -237,17 +237,23 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
             )
             if params['DOMAIN']=='scalar':
                 deconv_layer = nn.Sequential(
