@@ -1494,8 +1494,9 @@ while True:
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
             generate_image(iteration)
         
-        print('[{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+        print('[%s][{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
             .format(
+                CUDA,
                 iteration,
                 Wasserstein_D[0],
                 GP_cost[0],
