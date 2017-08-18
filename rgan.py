@@ -95,7 +95,7 @@ elif params['DOMAIN']=='vector':
 elif params['DOMAIN']=='image':
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 10)
+    add_parameters(LAMBDA = 1)
     add_parameters(BATCH_SIZE = 64)
     add_parameters(TARGET_W_DISTANCE = 0.0)
 
@@ -105,7 +105,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = 'Vector part Follow Chris 16')
+add_parameters(NETWORK = 'Vector part Follow Chris 17')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -126,7 +126,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
-LOG_INTER = 100
+LOG_INTER = 500
 
 if params['DOMAIN']=='scalar':
     if params['DATASET']=='2Dgrid':
@@ -586,7 +586,6 @@ class Discriminator(nn.Module):
             )
             final_layer = nn.Sequential(
                 nn.Linear(params['DIM'], 1),
-                D_out_layer(),
             )
 
         if params['GAN_MODE']=='wgan-grad-panish':
@@ -1214,31 +1213,35 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
     gradients = gradients.contiguous()
     gradients = gradients.view(gradients.size()[0],-1)
 
-    gradients_lenth_penalty = ((gradients.norm(2,dim=1)-1.0)**2).mean()
+    # gradients_lenth_penalty = ((gradients.norm(2,dim=1)-1.0)**2).mean()
 
-    prediction_gt = prediction_gt.contiguous().view(gradients.size()[0],-1)
-    interpolates = interpolates.data.contiguous().view(gradients.size()[0],-1)
+    prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+    interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
     gradients_direction_gt = prediction_gt - interpolates
-    gradients_direction_gt_lenth = gradients_direction_gt.norm(2,dim=1)
-    gradients_direction_gt_lenth = gradients_direction_gt_lenth.unsqueeze(1)
-    gradients_direction_gt_lenth = gradients_direction_gt_lenth.repeat(1,gradients_direction_gt.size()[1])
-    gradients_direction_gt = gradients_direction_gt / gradients_direction_gt_lenth
+    # gradients_direction_gt_lenth = gradients_direction_gt.norm(2,dim=1)
+    # gradients_direction_gt_lenth = gradients_direction_gt_lenth.unsqueeze(1)
+    # gradients_direction_gt_lenth = gradients_direction_gt_lenth.repeat(1,gradients_direction_gt.size()[1])
+    # gradients_direction_gt = gradients_direction_gt / gradients_direction_gt_lenth
     gradients_direction_gt = autograd.Variable(gradients_direction_gt)
 
-    gradients_lenth = gradients.data.norm(2,dim=1)
-    gradients_lenth = gradients_lenth.unsqueeze(1)
-    gradients_lenth = gradients_lenth.repeat(1,gradients.size()[1])
-    gradients_lenth = autograd.Variable(gradients_lenth)
-    gradients_direction = gradients / gradients_lenth
+    # gradients_lenth = gradients.data.norm(2,dim=1)
+    # gradients_lenth = gradients_lenth.unsqueeze(1)
+    # gradients_lenth = gradients_lenth.repeat(1,gradients.size()[1])
+    # gradients_lenth = autograd.Variable(gradients_lenth)
+    # gradients_direction = gradients / gradients_lenth
 
-    gradients_direction_penalty = (gradients_direction-gradients_direction_gt).norm(2,dim=1).mean()
+    # gradients_direction_penalty = (gradients_direction-gradients_direction_gt).norm(2,dim=1).mean()
     
-    print(str(gradients_lenth_penalty.data.cpu().numpy())+str(gradients_direction_penalty.data.cpu().numpy()))
+    # print(str(gradients_lenth_penalty.data.cpu().numpy())+str(gradients_direction_penalty.data.cpu().numpy()))
 
-    if math.isnan(gradients_direction_penalty.data.cpu().numpy()[0]):
-        gradients_penalty = gradients_lenth_penalty
-    else:
-        gradients_penalty = gradients_lenth_penalty+gradients_direction_penalty
+    # if math.isnan(gradients_direction_penalty.data.cpu().numpy()[0]):
+    #     gradients_penalty = gradients_lenth_penalty
+    # else:
+    #     gradients_penalty = gradients_lenth_penalty+gradients_direction_penalty
+
+    gradients_penalty = (((gradients-gradients_direction_gt).norm(2,dim=1))**2).mean()
+
+    print(gradients_penalty.data.cpu().numpy())
 
     return gradients_penalty*params['LAMBDA']
 
