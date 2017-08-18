@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '01'
+CUDA = '11'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -87,8 +87,8 @@ elif params['DATASET']=='1Dgrid':
     FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
 elif params['DATASET']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
 
 else:
