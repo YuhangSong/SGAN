@@ -18,8 +18,8 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'rungg_3_on_image'
-GPU = '0'
+MULTI_RUN = 'rungg_3_on_image_norm'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -105,7 +105,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = 'Vector part Follow Chris 17')
+add_parameters(NETWORK = 'try norm 1')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -1218,30 +1218,12 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
     prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
     interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
     gradients_direction_gt = prediction_gt - interpolates
-    # gradients_direction_gt_lenth = gradients_direction_gt.norm(2,dim=1)
-    # gradients_direction_gt_lenth = gradients_direction_gt_lenth.unsqueeze(1)
-    # gradients_direction_gt_lenth = gradients_direction_gt_lenth.repeat(1,gradients_direction_gt.size()[1])
-    # gradients_direction_gt = gradients_direction_gt / gradients_direction_gt_lenth
+    gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
     gradients_direction_gt = autograd.Variable(gradients_direction_gt)
 
-    # gradients_lenth = gradients.data.norm(2,dim=1)
-    # gradients_lenth = gradients_lenth.unsqueeze(1)
-    # gradients_lenth = gradients_lenth.repeat(1,gradients.size()[1])
-    # gradients_lenth = autograd.Variable(gradients_lenth)
-    # gradients_direction = gradients / gradients_lenth
+    gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).mean()
 
-    # gradients_direction_penalty = (gradients_direction-gradients_direction_gt).norm(2,dim=1).mean()
-    
-    # print(str(gradients_lenth_penalty.data.cpu().numpy())+str(gradients_direction_penalty.data.cpu().numpy()))
-
-    # if math.isnan(gradients_direction_penalty.data.cpu().numpy()[0]):
-    #     gradients_penalty = gradients_lenth_penalty
-    # else:
-    #     gradients_penalty = gradients_lenth_penalty+gradients_direction_penalty
-
-    gradients_penalty = (((gradients-gradients_direction_gt).norm(2,dim=1))**2).mean()
-
-    print(gradients_penalty.data.cpu().numpy())
+    # print(gradients_penalty.data.cpu().numpy())
 
     return gradients_penalty*params['LAMBDA']
 
