@@ -16,9 +16,10 @@ import torchvision.utils as vutils
 import visdom
 vis = visdom.Visdom()
 import time
+import math
 
-MULTI_RUN = 'b2-0'
-GPU = '1'
+MULTI_RUN = 'rungg_3'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -39,10 +40,10 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 '''main settings'''
-add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(EXP = 'rungg_6')
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(GAME_MDOE = 'same-start') # same-start, full
+add_parameters(DOMAIN = 'scalar') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
@@ -55,7 +56,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 
 add_parameters(FASTEN_D = 1.0)
-add_parameters(GP_TO = 1.0)
+add_parameters(GP_TO = 0.0)
 add_parameters(GP_SIDE = 'bothside') # oneside, bothside
 
 add_parameters(GRID_BACKGROUND = 0.1)
@@ -104,7 +105,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = 'Vector part Follow Chris')
+add_parameters(NETWORK = 'Vector part Follow Chris 15')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -125,7 +126,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
-LOG_INTER = 500
+LOG_INTER = 100
 
 if params['DOMAIN']=='scalar':
     if params['DATASET']=='2Dgrid':
@@ -1194,7 +1195,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         yield dataset
 
-def calc_gradient_penalty(netD, state, interpolates):
+def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -1212,14 +1213,31 @@ def calc_gradient_penalty(netD, state, interpolates):
                     only_inputs=True)[0]
     gradients = gradients.contiguous()
     gradients = gradients.view(gradients.size()[0],-1)
-    if params['GP_SIDE']=='bothside':
-        gradient_penalty = ((gradients.norm(2, dim=1) - params['GP_TO']) ** 2).mean() * params['LAMBDA']
-    elif params['GP_SIDE']=='oneside':
-        gradient_penalty = (((gradients.norm(2, dim=1) - params['GP_TO'])).clamp(0.0,10000000000.0) ** 2).mean() * params['LAMBDA']
-    else:
-        print(unsupport)
 
-    return gradient_penalty
+    gradient_lenth_penalty = ((gradients.norm(2,dim=1)-1.0)**2).mean()
+
+    prediction_gt = prediction_gt.contiguous().view(gradients.size()[0],-1)
+    interpolates = interpolates.data.contiguous().view(gradients.size()[0],-1)
+    delta = prediction_gt - interpolates
+    gradient_direction_gt = delta / delta.abs()
+    gradient_direction_gt = gradient_direction_gt / ((gradient_direction_gt.size()[1])**0.5)
+    gradient_direction_gt = autograd.Variable(gradient_direction_gt)
+
+    gradients_lenth = gradients.data.norm(2,dim=1)
+    gradients_lenth = gradients_lenth.unsqueeze(1)
+    gradients_lenth = gradients_lenth.repeat(1,gradients.size()[1])
+    gradients_lenth = autograd.Variable(gradients_lenth)
+    gradients_direction = gradients / gradients_lenth
+
+    gradient_direction_penalty = (gradients_direction-gradient_direction_gt).norm(2,dim=1).mean()
+    print(str(gradient_lenth_penalty.data.cpu().numpy())+str(gradient_direction_penalty.data.cpu().numpy()))
+
+    if math.isnan(gradient_direction_penalty.data.cpu().numpy()[0]):
+        gradient_penalty = gradient_lenth_penalty
+    else:
+        gradient_penalty = gradient_lenth_penalty+gradient_direction_penalty
+
+    return gradient_penalty*params['LAMBDA']
 
 def restore_model():
     print('Trying load models....')
@@ -1549,7 +1567,8 @@ while True:
                 gradient_penalty = calc_gradient_penalty(
                     netD = netD,
                     state = state,
-                    interpolates = interpolates
+                    interpolates = interpolates,
+                    prediction_gt = prediction_gt
                 )
                 gradient_penalty.backward()
                 GP_cost = gradient_penalty.data.cpu().numpy()
@@ -1701,7 +1720,7 @@ while True:
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
             generate_image(iteration)
         
-        print('[{}][{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+        print('[{}][{:<6}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
