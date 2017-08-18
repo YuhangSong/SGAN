@@ -18,7 +18,7 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'rungg_3_on_image_norm_pow'
+MULTI_RUN = 'run_gg_none_guide'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -39,17 +39,19 @@ def add_parameters(**kwargs):
     global params_seq
     params_seq += kwargs.keys()
     params.update(kwargs)
+
 '''main settings'''
 add_parameters(EXP = 'rungg_6')
 add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
 
 '''default setting'''
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
 add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
@@ -105,7 +107,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = 'try norm 1 pow')
+add_parameters(NETWORK = '0')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -1213,18 +1215,20 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
     gradients = gradients.contiguous()
     gradients = gradients.view(gradients.size()[0],-1)
 
-    # gradients_lenth_penalty = ((gradients.norm(2,dim=1)-1.0)**2).mean()
+    if params['GP_MODE']=='use-guide':
+        prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+        interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
+        gradients_direction_gt = prediction_gt - interpolates
+        gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
+        gradients_direction_gt = autograd.Variable(gradients_direction_gt)
+        gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
 
-    prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
-    interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
-    gradients_direction_gt = prediction_gt - interpolates
-    gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
-    gradients_direction_gt = autograd.Variable(gradients_direction_gt)
-
-    gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
-
-    # print(gradients_penalty.data.cpu().numpy())
-
+    elif params['GP_MODE']=='none-guide':
+        gradients_penalty = ((gradients.norm(2, dim=1) - 1.0) ** 2).mean()
+    
+    else:
+        print(unsupport)
+    
     return gradients_penalty*params['LAMBDA']
 
 def restore_model():
