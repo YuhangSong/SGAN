@@ -17,8 +17,8 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-MULTI_RUN = 'b2-0'
-GPU = '1'
+MULTI_RUN = 'e_image_works'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -39,12 +39,12 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 '''main settings'''
-add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'same-start') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(EXP = 'e_image_works')
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(GAME_MDOE = 'full') # same-start, full
+add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
 
