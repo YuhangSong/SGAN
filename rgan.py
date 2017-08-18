@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '20'
+CUDA = '01'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -38,12 +38,12 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
-add_parameters(GRID_SIZE = 20)
+add_parameters(GRID_SIZE = 5)
 
 
 '''default setting'''
@@ -80,7 +80,7 @@ add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
+    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2+1)
 
 elif params['DATASET']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
@@ -124,7 +124,7 @@ if params['DOMAIN']=='vector':
     add_parameters(GRID_ACCEPT = 0.3)
 else:
     add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(MULTI_RUN = 'all relu all bn 2')
+add_parameters(MULTI_RUN = 'all relu all bn 3')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -1431,7 +1431,7 @@ while True:
                         'tabular'+'-KL',
                         np.asarray([kl])
                     )
-                l1 = np.squeeze(np.mean(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
+                l1 = np.squeeze(np.sum(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
                 logger.plot(
                     'tabular'+'-L1',
                     np.asarray([l1])
@@ -1439,9 +1439,10 @@ while True:
 
                 break
 
-        print('[{:<10}]'
+        print('[{:<10}] l1: {:f}'
             .format(
-                iteration
+                iteration,
+                l1
             )
         )
 
