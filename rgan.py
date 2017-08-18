@@ -18,8 +18,8 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'rungg_3_on_image_norm'
-GPU = '1'
+MULTI_RUN = 'rungg_3_on_image_norm_pow'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -105,7 +105,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = 'try norm 1')
+add_parameters(NETWORK = 'try norm 1 pow')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -1221,7 +1221,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
     gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
     gradients_direction_gt = autograd.Variable(gradients_direction_gt)
 
-    gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).mean()
+    gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
 
     # print(gradients_penalty.data.cpu().numpy())
 
