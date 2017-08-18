@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '00'
+CUDA = '01'
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
 if CUDA[1:2]!=None:
@@ -38,10 +38,10 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'use-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
@@ -80,7 +80,7 @@ add_parameters(GRID_FOREGROUND = 0.9)
 
 if params['DATASET']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2+1)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2)
+    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']/2+1)
 
 elif params['DATASET']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
@@ -124,7 +124,7 @@ if params['DOMAIN']=='vector':
     add_parameters(GRID_ACCEPT = 0.3)
 else:
     add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(MULTI_RUN = 'all relu all bn')
+add_parameters(MULTI_RUN = 'all relu all bn 2')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -377,6 +377,169 @@ class Generator(nn.Module):
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
+        x = self.unsqueeze_layer(x)
+        if params['DOMAIN']=='image':
+            x = x.view(temp)
+        x = self.deconv_layer(x)
+
+        '''decompose'''
+        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+            stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
+            prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
+            x = torch.cat([stater_v,prediction_v],1)
+
+        elif params['DOMAIN']=='image':
+            # N*F*D*H*W to N*D*F*H*W
+            x = x.permute(0,2,1,3,4)
+
+        return x
+
+class Transitor(nn.Module):
+
+    def __init__(self):
+        super(Transitor, self).__init__()
+
+        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+            
+            conv_layer = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
+            )
+            squeeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
+            )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
+            )
+            unsqueeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.BatchNorm1d(params['DIM']),
+            )
+            if params['DOMAIN']=='scalar':
+                deconv_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
+                )
+            elif params['DOMAIN']=='vector':
+                deconv_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                    nn.Sigmoid()
+                )
+
+        elif params['DOMAIN']=='image':
+
+            conv_layer = nn.Sequential(
+                # params['FEATURE']*1*32*32
+                nn.Conv3d(
+                    in_channels=params['FEATURE'],
+                    out_channels=64,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.BatchNorm3d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                # 64*1*16*16
+                nn.Conv3d(
+                    in_channels=64,
+                    out_channels=128,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.BatchNorm3d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                # 128*1*8*8
+                nn.Conv3d(
+                    in_channels=128,
+                    out_channels=256,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.BatchNorm3d(256),
+                nn.LeakyReLU(0.2, inplace=True),
+                # 256*1*4*4
+            )
+            squeeze_layer = nn.Sequential(
+                nn.Linear(256*1*4*4, params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+            unsqueeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], 256*1*4*4),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+            deconv_layer = nn.Sequential(
+                # 256*1*4*4
+                nn.ConvTranspose3d(
+                    in_channels=256,
+                    out_channels=128,
+                    kernel_size=(2,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.BatchNorm3d(128),
+                nn.LeakyReLU(0.2, inplace=True),
+                # 128*2*8*8
+                nn.ConvTranspose3d(
+                    in_channels=128,
+                    out_channels=64,
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.BatchNorm3d(64),
+                nn.LeakyReLU(0.2, inplace=True),
+                # 64*2*16*16
+                nn.ConvTranspose3d(
+                    in_channels=64,
+                    out_channels=params['FEATURE'],
+                    kernel_size=(1,4,4),
+                    stride=(1,2,2),
+                    padding=(0,1,1),
+                    bias=False
+                ),
+                nn.Sigmoid()
+                # params['FEATURE']*2*32*32  
+            )
+
+        self.conv_layer = nn.DataParallel(conv_layer,GPU)
+        self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
+        self.cat_layer = nn.DataParallel(cat_layer,GPU)
+        self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
+        self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
+        
+
+    def forward(self, state_v):
+
+        '''prepare'''
+        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+            state_v = state_v.squeeze(1)
+        elif params['DOMAIN']=='image':
+            # N*D*F*H*W to N*F*D*H*W
+            state_v = state_v.permute(0,2,1,3,4)
+
+        '''forward'''
+        x = self.conv_layer(state_v)
+        if params['DOMAIN']=='image':
+            temp = x.size()
+            x = x.view(x.size()[0], -1)
+        x = self.squeeze_layer(x)
+        x = self.cat_layer(x)
         x = self.unsqueeze_layer(x)
         if params['DOMAIN']=='image':
             x = x.view(temp)
@@ -1135,6 +1298,23 @@ class Tabular(object):
 if params['METHOD']=='tabular':
     tabular_dic = []
 
+elif params['METHOD']=='deterministic-deep-net':
+    netT = Transitor().cuda()
+    netT.apply(weights_init)
+    print netT
+
+    if params['OPTIMIZER']=='Adam':
+        optimizerT = optim.Adam(netT.parameters(), lr=1e-4, betas=(0.5, 0.9))
+    elif params['OPTIMIZER']=='RMSprop':
+        optimizerT = optim.RMSprop(netT.parameters(), lr = 0.00005)
+
+    mse_loss_model = torch.nn.MSELoss(size_average=True)
+
+    data_fix_state = dataset_iter(
+        fix_state=True,
+        batch_size=1
+    )
+
 elif params['METHOD']=='grl':
 
     netG = Generator().cuda()
@@ -1265,6 +1445,53 @@ while True:
             )
         )
 
+    elif params['METHOD']=='deterministic-deep-net':
+
+        '''get data set'''
+        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+
+        netT.zero_grad()
+        
+        prediction = netT(
+            state_v = autograd.Variable(state)
+        ).narrow(1,(params['STATE_DEPTH']-1),1)
+
+        T = mse_loss_model(prediction, autograd.Variable(prediction_gt))
+
+        T.backward()
+
+        T_cost = T.data.cpu().numpy()
+        logger.plot('T_cost', T_cost)
+        
+        optimizerT.step()
+
+        print('[{}][{:<10}] T_cost:{:2.4f}'
+            .format(
+                CUDA,
+                iteration,
+                T_cost[0]
+            )
+        )
+
+        dataset = data_fix_state.next()
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction = netT(
+            state_v = autograd.Variable(state)
+        ).narrow(1,(params['STATE_DEPTH']-1),1).data
+        try:
+            prediction_dic = torch.cat([prediction_dic,prediction],0)
+        except Exception as e:
+            prediction_dic = prediction
+        if prediction_dic.size()[0]>RESULT_SAMPLE_NUM:
+            prediction_dic = prediction_dic.narrow(0,prediction_dic.size()[0]-RESULT_SAMPLE_NUM,RESULT_SAMPLE_NUM)
+        if iteration % LOG_INTER == 5:
+            if prediction_dic.size()[0]>=RESULT_SAMPLE_NUM:
+                plot_convergence(
+                    images=prediction_dic,
+                    name='deterministic-deep-net'
+                )
 
     elif params['METHOD']=='grl':
 
