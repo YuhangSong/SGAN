@@ -17,10 +17,12 @@ import visdom
 vis = visdom.Visdom()
 import time
 
-CUDA = '11'
+MULTI_RUN = 'b2-0'
+GPU = '1'
+
 #-------reuse--device
-os.environ["CUDA_VISIBLE_DEVICES"] = CUDA[1:2]
-if CUDA[1:2]!=None:
+os.environ["CUDA_VISIBLE_DEVICES"] = GPU
+if GPU!=None:
     import torch
     import torch.autograd as autograd
     import torch.nn as nn
@@ -38,10 +40,10 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 '''main settings'''
 add_parameters(EXP = 'exp_3_1')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
-add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GRID_SIZE = 5)
 
@@ -52,28 +54,9 @@ add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 
-'''some special settings if use-r'''
-if params['RUINER_MODE']=='use-r':
-    add_parameters(G_INIT_SIGMA = 0.00002)
-
-    if params['DOMAIN']=='vector':
-        add_parameters(FASTEN_D = 1.0)
-        add_parameters(GP_TO = 1.0)
-        add_parameters(GP_SIDE = 'bothside')
-
-    elif params['DOMAIN']=='image':
-        add_parameters(FASTEN_D = 1.0)
-        add_parameters(GP_TO = 1.0)
-        add_parameters(GP_SIDE = 'oneside')
-
-    else:
-        print(unsupport)
-
-else:
-    add_parameters(G_INIT_SIGMA = 0.02)
-    add_parameters(FASTEN_D = 1.0)
-    add_parameters(GP_TO = 1.0)
-    add_parameters(GP_SIDE = 'bothside')
+add_parameters(FASTEN_D = 1.0)
+add_parameters(GP_TO = 1.0)
+add_parameters(GP_SIDE = 'bothside') # oneside, bothside
 
 add_parameters(GRID_BACKGROUND = 0.1)
 add_parameters(GRID_FOREGROUND = 0.9)
@@ -102,14 +85,14 @@ if params['DOMAIN']=='scalar':
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['DOMAIN']=='vector':
-    add_parameters(DIM = 128)
+    add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 1)
-    add_parameters(BATCH_SIZE = 64)
+    add_parameters(LAMBDA = 5)
+    add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.0)
 
 elif params['DOMAIN']=='image':
-    add_parameters(DIM = 128)
+    add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
     add_parameters(BATCH_SIZE = 64)
@@ -120,11 +103,8 @@ else:
     
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
-if params['DOMAIN']=='vector':
-    add_parameters(GRID_ACCEPT = 0.3)
-else:
-    add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(MULTI_RUN = 'all relu all bn 3')
+add_parameters(GRID_ACCEPT = 0.1)
+add_parameters(NETWORK = 'Vector part Follow Chris')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -139,7 +119,7 @@ print(params_str)
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 subprocess.call(["mkdir", "-p", LOGDIR])
-with open(LOGDIR+"Settins.txt","a") as f:
+with open(LOGDIR+"Settings.txt","a") as f:
     f.write(params_str)
 
 N_POINTS = 128
@@ -197,8 +177,8 @@ def log_img(x,name,iteration):
     x = x.squeeze(1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
-                win=str(CUDA)+'-'+name,
-                opts=dict(caption=str(CUDA)+'-'+name+'_'+str(iteration)))
+                win=str(MULTI_RUN)+'-'+name,
+                opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)))
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -215,21 +195,8 @@ def plt_to_vis(fig,win,name):
     img = img.astype(float)[:,:,0:3]
     img = torch.FloatTensor(img).permute(2,0,1)
     vis.image(  img,
-                win=str(CUDA)+'-'+win,
-                opts=dict(title=str(CUDA)+'-'+name))
-
-class D_out_layer(nn.Module):
-
-    def __init__(self):
-        super(D_out_layer, self).__init__()
-    def forward(self, x):
-        if params['GAN_MODE']=='wgan-gravity':
-            for i in range(x.size()[0]):
-                if x[i].data.cpu().numpy()[0]>0.0:
-                    x[i] = torch.log(x[i]+1.0)
-                elif x[i].data.cpu().numpy()[0]<0.0:
-                    x[i] = -torch.log(-x[i]+1.0)
-        return x
+                win=str(MULTI_RUN)+'-'+win,
+                opts=dict(title=str(MULTI_RUN)+'-'+name))
 
 class Generator(nn.Module):
 
@@ -240,23 +207,22 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
             if params['DOMAIN']=='scalar':
                 deconv_layer = nn.Sequential(
@@ -566,17 +532,16 @@ class Discriminator(nn.Module):
 
             conv_layer = nn.Sequential(
                 nn.Linear(2*DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.001),
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
+                nn.LeakyReLU(0.001),
             )
             final_layer = nn.Sequential(
                 nn.Linear(params['DIM'], 1),
-                D_out_layer(),
             )
 
         elif params['DOMAIN']=='image':
@@ -748,28 +713,40 @@ class Corrector(nn.Module):
 
 def weights_init_g(m):
     classname = m.__class__.__name__
-    sigma = params['G_INIT_SIGMA']
+    # sigma = params['G_INIT_SIGMA']
+    # if classname.find('Linear') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
+    #     if params['DOMAIN']=='vector':
+    #         m.bias.data.normal_(0.0, sigma)
+    #     else:
+    #         m.bias.data.fill_(0.0)
+    # elif classname.find('Conv3d') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
+    # elif classname.find('ConvTranspose3d') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
     if classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, sigma)
-        if params['DOMAIN']=='vector':
-            m.bias.data.normal_(0.0, sigma)
-        else:
-            m.bias.data.fill_(0.0)
-    elif classname.find('Conv3d') != -1:
-        m.weight.data.normal_(0.0, sigma)
-    elif classname.find('ConvTranspose3d') != -1:
-        m.weight.data.normal_(0.0, sigma)
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
+        m.bias.data.fill_(0.1)
 
 def weights_init(m):
     classname = m.__class__.__name__
-    sigma = 0.02
+    # sigma = 0.02
+    # if classname.find('Linear') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
+    #     m.bias.data.fill_(0.0)
+    # elif classname.find('Conv3d') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
+    # elif classname.find('ConvTranspose3d') != -1:
+    #     m.weight.data.normal_(0.0, sigma)
     if classname.find('Linear') != -1:
-        m.weight.data.normal_(0.0, sigma)
-        m.bias.data.fill_(0.0)
-    elif classname.find('Conv3d') != -1:
-        m.weight.data.normal_(0.0, sigma)
-    elif classname.find('ConvTranspose3d') != -1:
-        m.weight.data.normal_(0.0, sigma)
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
+        m.bias.data.fill_(0.1)
 
 def generate_image(iteration):
 
@@ -1239,6 +1216,8 @@ def calc_gradient_penalty(netD, state, interpolates):
         gradient_penalty = ((gradients.norm(2, dim=1) - params['GP_TO']) ** 2).mean() * params['LAMBDA']
     elif params['GP_SIDE']=='oneside':
         gradient_penalty = (((gradients.norm(2, dim=1) - params['GP_TO'])).clamp(0.0,10000000000.0) ** 2).mean() * params['LAMBDA']
+    else:
+        print(unsupport)
 
     return gradient_penalty
 
@@ -1330,8 +1309,8 @@ elif params['METHOD']=='grl':
 
     if params['OPTIMIZER']=='Adam':
         optimizerD = optim.Adam(netD.parameters(), lr=(1e-4)*params['FASTEN_D'], betas=(0.5, 0.9))
-        optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.5, 0.9))
-        optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.5, 0.9))
+        optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.0, 0.9))
+        optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.0, 0.9))
     elif params['OPTIMIZER']=='RMSprop':
         optimizerD = optim.RMSprop(netD.parameters(), lr = (0.00005)*params['FASTEN_D'])
         optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
@@ -1355,7 +1334,7 @@ if params['GAME_MDOE']=='same-start':
 elif params['GAME_MDOE']=='full':
     data = dataset_iter(fix_state=False)
 
-logger = lib.plot.logger(LOGDIR,DSP,params_str,CUDA)
+logger = lib.plot.logger(LOGDIR,DSP,params_str,MULTI_RUN)
 iteration = logger.restore()
 
 while True:
@@ -1470,7 +1449,7 @@ while True:
 
         print('[{}][{:<10}] T_cost:{:2.4f}'
             .format(
-                CUDA,
+                MULTI_RUN,
                 iteration,
                 T_cost[0]
             )
@@ -1724,7 +1703,7 @@ while True:
         
         print('[{}][{:<10}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
             .format(
-                CUDA,
+                MULTI_RUN,
                 iteration,
                 Wasserstein_D[0],
                 GP_cost[0],
