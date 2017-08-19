@@ -49,6 +49,7 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GRID_SIZE = 5)
 
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
+add_parameters(EPSILON = 0.001)
 
 '''default setting'''
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
@@ -1201,7 +1202,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
         prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
         gradients_direction_gt = prediction_gt - interpolates
-        gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
+        gradients_direction_gt = gradients_direction_gt/((gradients_direction_gt+params['EPSILON']).norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
 
         gradients_direction_gt = autograd.Variable(gradients_direction_gt)
         gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
