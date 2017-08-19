@@ -17,9 +17,10 @@ import visdom
 vis = visdom.Visdom()
 import time
 import math
+import all_domains
 
-MULTI_RUN = 'w4-1'
-GPU = '1'
+MULTI_RUN = 'w4-0'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -40,61 +41,46 @@ def add_parameters(**kwargs):
     params_seq += kwargs.keys()
     params.update(kwargs)
 
-'''main settings'''
-add_parameters(EXP = 'rungg_6')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+'''domain settings'''
+add_parameters(EXP = 'gg_uni_domain')
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(REPRESENTATION = domain.IMAGE) # scalar, domain.VECTOR, domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
-add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-
-'''default setting'''
-add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
-add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
-add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
-add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
-
-add_parameters(FASTEN_D = 1.0)
-add_parameters(GP_TO = 0.0)
-add_parameters(GP_SIDE = 'bothside') # oneside, bothside
-
-add_parameters(GRID_BACKGROUND = 0.1)
-add_parameters(GRID_FOREGROUND = 0.9)
-
-if params['DATASET']=='1Dflip':
+if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']-params['GRID_SIZE']/2)
 
-elif params['DATASET']=='1Dgrid':
+elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
-    FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
-elif params['DATASET']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
+elif params['DOMAIN']=='2Dgrid':
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
+    add_parameters(OBSTACLE_POS_LIST = [])
 
 else:
     print(unsupport)
 
-if params['DOMAIN']=='scalar':
+'''method settings'''
+add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
+
+'''model settings'''
+if params['REPRESENTATION']=='scalar':
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 2)
     add_parameters(LAMBDA = 0.1)
     add_parameters(BATCH_SIZE = 256)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
-elif params['DOMAIN']=='vector':
+elif params['REPRESENTATION']=='vector':
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 5)
     add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.0)
 
-elif params['DOMAIN']=='image':
+elif params['REPRESENTATION']=='image':
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 1)
@@ -103,12 +89,58 @@ elif params['DOMAIN']=='image':
 
 else:
     print(unsupport)
-    
-add_parameters(CRITIC_ITERS = 5)
-add_parameters(GRID_DETECTION = 'threshold')
-add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = '2')
 
+if params['DOMAIN']=='marble':
+    add_parameters(STATE_DEPTH = 3)
+    add_parameters(FEATURE = 3)
+    add_parameters(IMAGE_SIZE = 128)
+
+else:
+    add_parameters(STATE_DEPTH = 1)
+    add_parameters(FEATURE = 1)
+    add_parameters(IMAGE_SIZE = 32)
+
+'''default domain settings generate'''
+if params['DOMAIN']=='1Dflip':
+    domain = BitFlip1D(
+        length=params['GRID_SIZE'],
+        mode=params['REPRESENTATION'].upper()
+    )
+    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']-params['GRID_SIZE']/2)
+
+elif params['DOMAIN']=='1Dgrid':
+    domain = Walk1D(
+        length=params['GRID_SIZE'],
+        prob_left=params['GRID_ACTION_DISTRIBUTION'][0],
+        mode=params['REPRESENTATION'].upper()
+    )
+    FIX_STATE_TO = [params['GRID_SIZE']/2,0]
+
+elif params['DOMAIN']=='2Dgrid':
+    domain = Walk2D(
+        width=params['GRID_SIZE'],
+        height=params['GRID_SIZE'],
+        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
+        obstacle_pos_list=params['OBSTACLE_POS_LIST'],
+        mode=params['REPRESENTATION'].upper(),
+        should_wrap=True
+    )
+    FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
+
+else:
+    print(unsupport)
+
+'''history settings'''
+add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
+add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
+add_parameters(FILTER_MODE = 'filter-d-c') # none-f, filter-c, filter-d, filter-d-c
+add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
+add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
+add_parameters(CRITIC_ITERS = 5)
+
+add_parameters(AUX_INFO = '0')
+
+'''summary settings'''
 DSP = ''
 params_str = 'Settings'+'\n'
 params_str += '##################################'+'\n'
@@ -118,7 +150,6 @@ for i in range(len(params_seq)):
 params_str += '##################################'+'\n'
 print(params_str)
 
-############################### Generated Settings ###############################
 BASIC = '../../result/'
 LOGDIR = BASIC+DSP
 subprocess.call(["mkdir", "-p", LOGDIR])
@@ -130,32 +161,21 @@ RESULT_SAMPLE_NUM = 2000
 FILTER_RATE = 0.5
 LOG_INTER = 500
 
-if params['DOMAIN']=='scalar':
-    if params['DATASET']=='2Dgrid':
+if params['REPRESENTATION']=='scalar':
+    if params['DOMAIN']=='2Dgrid':
         DESCRIBE_DIM = 2
 
     else:
         print(unsupport)
 
-elif params['DOMAIN']=='vector':
-    if params['DATASET']=='1Dgrid' or params['DATASET']=='1Dflip':
+elif params['REPRESENTATION']=='vector':
+    if params['DOMAIN']=='1Dgrid' or params['DOMAIN']=='1Dflip':
         DESCRIBE_DIM = params['GRID_SIZE']
 
     else:
         print(unsupport)
 
-if params['DATASET']=='marble':
-    add_parameters(STATE_DEPTH = 3)
-    add_parameters(FEATURE = 3)
-    add_parameters(IMAGE_SIZE = 128)
-
-else:
-    add_parameters(STATE_DEPTH = 1)
-    add_parameters(FEATURE = 1)
-    add_parameters(IMAGE_SIZE = 32)
-
-BOX_SIZE = params['IMAGE_SIZE']/params['GRID_SIZE']
-
+print(pppp)
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -175,7 +195,7 @@ def vector2image(x):
     return x_temp
 
 def log_img(x,name,iteration):
-    if params['DOMAIN']=='vector':
+    if params['REPRESENTATION']=='vector':
         x = vector2image(x)
     x = x.squeeze(1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
@@ -206,7 +226,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
@@ -227,17 +247,17 @@ class Generator(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            if params['DOMAIN']=='scalar':
+            if params['REPRESENTATION']=='scalar':
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
                 )
-            elif params['DOMAIN']=='vector':
+            elif params['REPRESENTATION']=='vector':
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
                     nn.Sigmoid()
                 )
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
 
             conv_layer = nn.Sequential(
                 # params['FEATURE']*1*32*32
@@ -333,31 +353,31 @@ class Generator(nn.Module):
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             state_v = state_v.squeeze(1)
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(state_v)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             temp = x.size()
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
             prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             # N*F*D*H*W to N*D*F*H*W
             x = x.permute(0,2,1,3,4)
 
@@ -368,7 +388,7 @@ class Transitor(nn.Module):
     def __init__(self):
         super(Transitor, self).__init__()
 
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
@@ -390,17 +410,17 @@ class Transitor(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
             )
-            if params['DOMAIN']=='scalar':
+            if params['REPRESENTATION']=='scalar':
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
                 )
-            elif params['DOMAIN']=='vector':
+            elif params['REPRESENTATION']=='vector':
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
                     nn.Sigmoid()
                 )
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
 
             conv_layer = nn.Sequential(
                 # params['FEATURE']*1*32*32
@@ -496,31 +516,31 @@ class Transitor(nn.Module):
     def forward(self, state_v):
 
         '''prepare'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             state_v = state_v.squeeze(1)
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(state_v)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             temp = x.size()
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.cat_layer(x)
         x = self.unsqueeze_layer(x)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
             prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             # N*F*D*H*W to N*D*F*H*W
             x = x.permute(0,2,1,3,4)
 
@@ -531,7 +551,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2*DESCRIBE_DIM, params['DIM']),
@@ -547,7 +567,7 @@ class Discriminator(nn.Module):
                 nn.Linear(params['DIM'], 1),
             )
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
 
             conv_layer =    nn.Sequential(
                 # params['FEATURE']*2*32*32
@@ -602,18 +622,18 @@ class Discriminator(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(x)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.final_layer(x)
@@ -626,7 +646,7 @@ class Corrector(nn.Module):
     def __init__(self):
         super(Corrector, self).__init__()
 
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
 
             conv_layer = nn.Sequential(
                 nn.Linear(2*DESCRIBE_DIM, params['DIM']),
@@ -643,7 +663,7 @@ class Corrector(nn.Module):
                 nn.Sigmoid(),
             )
 
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
 
             conv_layer =    nn.Sequential(
                 # params['FEATURE']*2*32*32
@@ -694,18 +714,18 @@ class Corrector(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
         '''forward'''
         x = self.conv_layer(x)
-        if params['DOMAIN']=='image':
+        if params['REPRESENTATION']=='image':
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
         x = self.final_layer(x)
@@ -735,9 +755,9 @@ def weights_init(m):
 def generate_image(iteration):
 
     '''get data'''
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         batch_size = (N_POINTS**2)
-    elif params['DOMAIN']=='vector' or params['DOMAIN']=='image':
+    elif params['REPRESENTATION']=='vector' or params['REPRESENTATION']=='image':
         batch_size = RESULT_SAMPLE_NUM
 
     data_fix_state = dataset_iter(
@@ -771,12 +791,12 @@ def generate_image(iteration):
 
 def transition(cur_x,cur_y,action):
 
-    if params['DATASET']=='1Dflip':
+    if params['DOMAIN']=='1Dflip':
         next_x = np.copy(cur_x)
         next_x[action] = 1.0 - next_x[action]
         return next_x, 0.0
 
-    elif params['DATASET']=='1Dgrid':
+    elif params['DOMAIN']=='1Dgrid':
 
         next_x = cur_x
         if action==0:
@@ -786,7 +806,7 @@ def transition(cur_x,cur_y,action):
         next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
         return next_x, 0.0
 
-    elif params['DATASET']=='2Dgrid':
+    elif params['DOMAIN']=='2Dgrid':
         next_x = cur_x
         next_y = cur_y
         if action==0:
@@ -803,27 +823,27 @@ def transition(cur_x,cur_y,action):
 
 def get_ob(x,y):
 
-    if params['DATASET']=='1Dflip':
-        if params['DOMAIN']=='vector':
+    if params['DOMAIN']=='1Dflip':
+        if params['REPRESENTATION']=='vector':
             ob = x
         else:
             print(unsupport)
-    elif params['DATASET']=='1Dgrid':
-        if params['DOMAIN']=='vector':
+    elif params['DOMAIN']=='1Dgrid':
+        if params['REPRESENTATION']=='vector':
             ob = np.zeros((params['GRID_SIZE']))
             ob.fill(params['GRID_BACKGROUND'])
             ob[x] = params['GRID_FOREGROUND']
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
             ob.fill(params['GRID_BACKGROUND'])
             ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),:] = params['GRID_FOREGROUND']
             ob = np.expand_dims(ob,0)
         else:
             print(unsupport)
-    elif params['DATASET']=='2Dgrid':
-        if params['DOMAIN']=='scalar':
+    elif params['DOMAIN']=='2Dgrid':
+        if params['REPRESENTATION']=='scalar':
             ob = [x,y]
-        elif params['DOMAIN']=='image':
+        elif params['REPRESENTATION']=='image':
             ob = np.zeros((params['IMAGE_SIZE'],params['IMAGE_SIZE']))
             ob.fill(params['GRID_BACKGROUND'])
             ob[x*(params['IMAGE_SIZE']/params['GRID_SIZE']):(x+1)*(params['IMAGE_SIZE']/params['GRID_SIZE']),y*(params['IMAGE_SIZE']/params['GRID_SIZE']):(y+1)*(params['IMAGE_SIZE']/params['GRID_SIZE'])] = params['GRID_FOREGROUND']
@@ -840,7 +860,7 @@ def get_ob(x,y):
 
 def get_state(fix_state=False):
 
-    if params['DATASET']=='1Dgrid' or params['DATASET']=='2Dgrid':
+    if params['DOMAIN']=='1Dgrid' or params['DOMAIN']=='2Dgrid':
         if not fix_state:
             cur_x = np.random.choice(range(params['GRID_SIZE']))
             cur_y = np.random.choice(range(params['GRID_SIZE']))
@@ -848,7 +868,7 @@ def get_state(fix_state=False):
             cur_x = FIX_STATE_TO[0]
             cur_y = FIX_STATE_TO[1]
 
-    elif params['DATASET']=='1Dflip':
+    elif params['DOMAIN']=='1Dflip':
         if not fix_state:
             cur_x = []
             for i in range(params['GRID_SIZE']):
@@ -875,8 +895,8 @@ def get_transition_prob_distribution(images):
             ob_next = ob_next.squeeze()
             for b in range(images.size()[0]):
                 image = images[b]
-                if params['DATASET']=='1Dflip' or params['DATASET']=='1Dgrid':
-                    if params['DOMAIN']=='vector':
+                if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
+                    if params['REPRESENTATION']=='vector':
                         accept = True
                         for ii in range(params['GRID_SIZE']):
                             if np.abs(image[ii]-ob_next[ii]) < params['GRID_ACCEPT']:
@@ -884,7 +904,7 @@ def get_transition_prob_distribution(images):
                             else:
                                 accept=False
                                 break
-                    elif params['DOMAIN']=='image':
+                    elif params['REPRESENTATION']=='image':
                         accept = True
                         for ii in range(params['GRID_SIZE']):
                             if (image[ii*BOX_SIZE:(ii+1)*BOX_SIZE,:]-ob_next[ii*BOX_SIZE:(ii+1)*BOX_SIZE,:]).abs().mean() < params['GRID_ACCEPT']:
@@ -894,8 +914,8 @@ def get_transition_prob_distribution(images):
                                 break
                     else:
                         print(unsupport)
-                if params['DATASET']=='2Dgrid':
-                    if params['DOMAIN']=='image':
+                if params['DOMAIN']=='2Dgrid':
+                    if params['REPRESENTATION']=='image':
                         accept = True
                         for ii_x in range(params['GRID_SIZE']):
                             breaking = False
@@ -957,7 +977,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
     '''disc_map'''
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
         points[:, :, 0] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[:, None]
         points[:, :, 1] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[None, :]
@@ -980,7 +1000,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt_mean = prediction_gt.mean(0,keepdim=True)
 
     '''prediction_gt'''
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         plt.scatter(
             prediction_gt.squeeze(1).cpu().numpy()[:, 0], 
             prediction_gt.squeeze(1).cpu().numpy()[:, 1],
@@ -999,7 +1019,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             )
 
     '''prediction_gt_r'''
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
         prediction_gt_r = netG(
             noise_v = autograd.Variable(noise, volatile=True),
@@ -1045,7 +1065,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             return
         F_out = (F_out - torch.min(F_out)) / normal_f
 
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         plt.scatter(
             prediction.squeeze(1).cpu().numpy()[:, 0], 
             prediction.squeeze(1).cpu().numpy()[:, 1], 
@@ -1086,12 +1106,12 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
 
             while len(F_out.size())!=len(prediction.size()):
                 F_out = F_out.unsqueeze(1)
-            if params['DOMAIN']=='vector':
+            if params['REPRESENTATION']=='vector':
                 F_out = F_out.repeat(
                     1,
                     prediction.size()[1],
                     prediction.size()[2])
-            elif params['DOMAIN']=='image':
+            elif params['REPRESENTATION']=='image':
                 F_out = F_out.repeat(
                     1,
                     prediction.size()[1],
@@ -1138,7 +1158,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                 name='prediction-filtered-by-'+str(filter_net.__class__.__name__)
             )
 
-    if params['DOMAIN']=='scalar':
+    if params['REPRESENTATION']=='scalar':
         if filter_net is None:
             file_name = ''
         else:
@@ -1528,13 +1548,13 @@ while True:
                 alpha = torch.rand(params['BATCH_SIZE']).cuda()
                 while len(alpha.size())!=len(prediction_gt.size()):
                     alpha = alpha.unsqueeze(1)
-                if params['DOMAIN']=='scalar' or params['DOMAIN']=='vector':
+                if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']=='vector':
                     alpha = alpha.repeat(
                         1,
                         prediction_gt.size()[1],
                         prediction_gt.size()[2]
                     )
-                elif params['DOMAIN']=='image':
+                elif params['REPRESENTATION']=='image':
                     alpha = alpha.repeat(
                         1,
                         prediction_gt.size()[1],
@@ -1556,9 +1576,9 @@ while True:
 
             DC_cost = [0.0]
             if params['GAN_MODE']=='wgan-decade':
-                if params['DOMAIN']=='scalar':
+                if params['REPRESENTATION']=='scalar':
                     prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
-                elif params['DOMAIN']=='image':
+                elif params['REPRESENTATION']=='image':
                     prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
                 D_uni = netD(
                     state_v = autograd.Variable(torch.cat([state,state],0)),
@@ -1594,9 +1614,9 @@ while True:
 
                 elif params['CORRECTOR_MODE']=='c-decade':
 
-                    if params['DOMAIN']=='scalar':
+                    if params['REPRESENTATION']=='scalar':
                         prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
-                    elif params['DOMAIN']=='vector' or params['DOMAIN']=='image':
+                    elif params['REPRESENTATION']=='vector' or params['REPRESENTATION']=='image':
                         prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
                     C_out_v = netC(
                         state_v = autograd.Variable(torch.cat([state,state],0)),
