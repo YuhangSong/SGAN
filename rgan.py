@@ -18,8 +18,8 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'b1-0'
-GPU = '0'
+MULTI_RUN = 'w4-1'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -42,14 +42,13 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'rungg_6')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'same-start') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(GAME_MDOE = 'full') # same-start, full
+add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GRID_SIZE = 5)
 
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-add_parameters(EPSILON = 1e-8)
 
 '''default setting'''
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
@@ -722,16 +721,16 @@ def weights_init(m):
             gain=1
         )
         m.bias.data.fill_(0.1)
-    elif classname.find('Conv3d') != -1:
-        torch.nn.init.xavier_uniform(
-            m.weight.data,
-            gain=1
-        )
-    elif classname.find('ConvTranspose3d') != -1:
-        torch.nn.init.xavier_uniform(
-            m.weight.data,
-            gain=1
-        )
+    # elif classname.find('Conv3d') != -1:
+    #     torch.nn.init.xavier_uniform(
+    #         m.weight.data,
+    #         gain=1
+    #     )
+    # elif classname.find('ConvTranspose3d') != -1:
+    #     torch.nn.init.xavier_uniform(
+    #         m.weight.data,
+    #         gain=1
+    #     )
 
 def generate_image(iteration):
 
@@ -1202,7 +1201,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
         prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
         gradients_direction_gt = prediction_gt - interpolates
-        gradients_direction_gt = gradients_direction_gt/((gradients_direction_gt+params['EPSILON']).norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
+        gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
 
         gradients_direction_gt = autograd.Variable(gradients_direction_gt)
         gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
