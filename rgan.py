@@ -49,7 +49,7 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GRID_SIZE = 5)
 
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
-add_parameters(EPSILON = 0.001)
+add_parameters(EPSILON = 1e-8)
 
 '''default setting'''
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
