@@ -18,7 +18,7 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'b1-0'
+MULTI_RUN = 'w4-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -42,13 +42,13 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'rungg_6')
-add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'same-start') # same-start, full
-add_parameters(DOMAIN = 'vector') # scalar, vector, image
+add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(GAME_MDOE = 'full') # same-start, full
+add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GRID_SIZE = 5)
 
-add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
 add_parameters(EPSILON = 0.001)
 
 '''default setting'''
@@ -74,8 +74,8 @@ elif params['DATASET']=='1Dgrid':
     FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
 elif params['DATASET']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8,0.1,0.0,0.1])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
 
 else:
