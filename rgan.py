@@ -18,7 +18,7 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'run_gg_none_guide'
+MULTI_RUN = 'b1-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -42,13 +42,13 @@ def add_parameters(**kwargs):
 
 '''main settings'''
 add_parameters(EXP = 'rungg_6')
-add_parameters(DATASET = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(DOMAIN = 'image') # scalar, vector, image
+add_parameters(DATASET = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(GAME_MDOE = 'same-start') # same-start, full
+add_parameters(DOMAIN = 'vector') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GRID_SIZE = 5)
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
 
 '''default setting'''
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
@@ -107,7 +107,7 @@ else:
 add_parameters(CRITIC_ITERS = 5)
 add_parameters(GRID_DETECTION = 'threshold')
 add_parameters(GRID_ACCEPT = 0.1)
-add_parameters(NETWORK = '0')
+add_parameters(NETWORK = '2')
 
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -713,42 +713,24 @@ class Corrector(nn.Module):
 
         return x
 
-def weights_init_g(m):
-    classname = m.__class__.__name__
-    # sigma = params['G_INIT_SIGMA']
-    # if classname.find('Linear') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
-    #     if params['DOMAIN']=='vector':
-    #         m.bias.data.normal_(0.0, sigma)
-    #     else:
-    #         m.bias.data.fill_(0.0)
-    # elif classname.find('Conv3d') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
-    # elif classname.find('ConvTranspose3d') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
-    if classname.find('Linear') != -1:
-        torch.nn.init.xavier_uniform(
-            m.weight.data,
-            gain=1
-        )
-        m.bias.data.fill_(0.1)
-
 def weights_init(m):
     classname = m.__class__.__name__
-    # sigma = 0.02
-    # if classname.find('Linear') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
-    #     m.bias.data.fill_(0.0)
-    # elif classname.find('Conv3d') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
-    # elif classname.find('ConvTranspose3d') != -1:
-    #     m.weight.data.normal_(0.0, sigma)
     if classname.find('Linear') != -1:
         torch.nn.init.xavier_uniform(
             m.weight.data,
             gain=1
         )
         m.bias.data.fill_(0.1)
+    elif classname.find('Conv3d') != -1:
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
+    elif classname.find('ConvTranspose3d') != -1:
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
 
 def generate_image(iteration):
 
@@ -1220,8 +1202,13 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
         interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
         gradients_direction_gt = prediction_gt - interpolates
         gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
+
         gradients_direction_gt = autograd.Variable(gradients_direction_gt)
         gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
+
+        if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
+            print('Bad gradients_penalty, return!')
+            return autograd.Variable(torch.cuda.FloatTensor([0.0]))
 
     elif params['GP_MODE']=='none-guide':
         gradients_penalty = ((gradients.norm(2, dim=1) - 1.0) ** 2).mean()
@@ -1312,7 +1299,7 @@ elif params['METHOD']=='grl':
 
     netD.apply(weights_init)
     netC.apply(weights_init)
-    netG.apply(weights_init_g)
+    netG.apply(weights_init)
     print netG
     print netD
     print netC
@@ -1374,6 +1361,7 @@ while True:
                 # print('Create a tabular.')
                 tabular_dic[-1].push(np.copy(prediction_gt[b]))
 
+        l1 = 2.0
         x, y = get_state(fix_state=True)
         fix_state_ob = np.expand_dims(get_ob(x,y),0)
         for tabular_i in tabular_dic:
@@ -1428,8 +1416,9 @@ while True:
 
                 break
 
-        print('[{:<10}] l1: {:f}'
+        print('[{}][{:<6}] l1: {:f}'
             .format(
+                MULTI_RUN,
                 iteration,
                 l1
             )
@@ -1457,7 +1446,7 @@ while True:
         
         optimizerT.step()
 
-        print('[{}][{:<10}] T_cost:{:2.4f}'
+        print('[{}][{:<6}] T_cost:{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
