@@ -18,8 +18,8 @@ vis = visdom.Visdom()
 import time
 import math
 
-MULTI_RUN = 'w4-0'
-GPU = '0'
+MULTI_RUN = 'w4-1'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -48,7 +48,7 @@ add_parameters(DOMAIN = 'image') # scalar, vector, image
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GRID_SIZE = 5)
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
 add_parameters(EPSILON = 1e-8)
 
 '''default setting'''
