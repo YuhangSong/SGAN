@@ -97,7 +97,10 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
-    add_parameters(BATCH_SIZE = 32)
+    if params['GP_MODE']=='pure-guide':
+        add_parameters(BATCH_SIZE = 8)
+    else
+        add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.0)
 
 else:
