@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'w4-0-gg_auto_interplots'
+MULTI_RUN = 'h-0-gg_auto_interplots'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -67,7 +67,7 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-add_parameters(GP_GUIDE_FACTOR = 0.0001)
+add_parameters(GP_GUIDE_FACTOR = 0.01)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
 
@@ -144,7 +144,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '9')
+add_parameters(AUX_INFO = '7')
 
 '''summary settings'''
 DSP = ''
