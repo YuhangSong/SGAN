@@ -37,7 +37,7 @@ class logger(object):
 		try:
 			self._since_beginning = dill.load(open(self.LOGDIR+'log.pkl', "r"))
 			self._iter = dill.load(open(self.LOGDIR+'iteration.pkl', "r"))
-			self._iter += 1
+			# self._iter += 1
 			print('Restore plot from iter: '+str(self._iter))
 			return self._iter
 		except Exception, e:

@@ -343,7 +343,7 @@ def determine_transition(domain, sample):
         return cleaned_sample
 
 def l1_distance(dist1, dist2):
-    l1 = 0.
+    l1 = 0.0
     combined_keyset = set(dist1.keys()).union(set(dist2.keys()))
     for key in combined_keyset:
         l1 += np.abs(dist1.get(key, 0) - dist2.get(key, 0))
@@ -374,13 +374,10 @@ def evaluate_domain(domain, s1_state, s2_samples):
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
 
-        print(sample_distribution)
-        print(true_distribution)
-
         return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
     else:
 
-        return 2.0, good_count / float(good_count + bad_count)
+        return 2.0, 0.0
     
                 
 

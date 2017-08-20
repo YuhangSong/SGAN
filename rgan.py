@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'w4-0-gg_auto_interplots'
+MULTI_RUN = 'b2-0-gg_auto_interplots'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -142,7 +142,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '8')
+add_parameters(AUX_INFO = '9')
 
 '''summary settings'''
 DSP = ''
@@ -1335,6 +1335,8 @@ elif params['METHOD']=='grl':
 
     restore_model()
 
+    L1, AC = 2.0, 0.0
+
 if params['GAME_MDOE']=='same-start':
     data = dataset_iter(fix_state=True)
 elif params['GAME_MDOE']=='full':
@@ -1521,7 +1523,7 @@ while True:
 
             if params['GAN_MODE']=='wgan-grad-panish':
                 D_cost = D_fake - D_real + gradient_penalty
-            if params['GAN_MODE']=='wgan-decade':
+            elif params['GAN_MODE']=='wgan-decade':
                 D_cost = D_fake - D_real + decade_cost
             else:
                 D_cost = D_fake - D_real
@@ -1652,20 +1654,35 @@ while True:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
             torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
-            generate_image(iteration)
+            L1, AC = generate_image(iteration)
         
-        print('[{}][{:<6}] T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+        # print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+        #     .format(
+        #         MULTI_RUN,
+        #         iteration,
+        #         L1,
+        #         AC,
+        #         num_t_mean,
+        #         Wasserstein_D[0],
+        #         GP_cost[0],
+        #         D_cost[0],
+        #         G_R,
+        #         G_cost[0],
+        #         R_cost[0],
+        #         C_cost[0]
+        #     )
+        # )
+        print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_cost:{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
+                L1,
+                AC,
                 num_t_mean,
                 Wasserstein_D[0],
                 GP_cost[0],
                 D_cost[0],
-                G_R,
                 G_cost[0],
-                R_cost[0],
-                C_cost[0]
             )
         )
 
