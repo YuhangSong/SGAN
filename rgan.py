@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'w4-0'
+MULTI_RUN = 'w4-1'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -65,7 +65,7 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -1042,7 +1042,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
     while True:
 
         dataset = None
-        
+
         for i in xrange(batch_size):
 
             if fix_state==True:
