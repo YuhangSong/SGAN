@@ -4,10 +4,12 @@ import cv2
 from random import choice
 import itertools
 import numpy as np
+import torch
 
 IMAGE = 0
 VECTOR = 1
-BLOCK_SIZE = 20
+BLOCK_SIZE = 5
+ACCEPT_GATE = 0.1
 
 class Walk1D(object):
 
@@ -122,6 +124,7 @@ class Walk2D(object):
 
     def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap):
         self.UP, self.DOWN, self.LEFT, self.RIGHT = 0, 1, 2, 3
+        self.action_dic = [self.UP, self.DOWN, self.LEFT, self.RIGHT]
         assert sum(prob_dirs) == 1
         self.h = height
         self.w = width
@@ -151,22 +154,73 @@ class Walk2D(object):
         return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
     def state_vector_to_position(self, state_vector):
-        state_2d = np.reshape(state_vector, [self.h, self.w])
-        for y in range(state_2d.shape[0]):
-            for x in range(state_2d.shape[1]):
-                if state_2d[y, x] == 1:
-                    return (x, y)
-        raise Exception('No agent found in vector')
 
-    def get_transition_probs(self, state_vector):
-        state_pos = self.state_vector_to_position(state_vector)
-        all_possible = self.get_all_possible_start_states()
-        prob_dict = {tuple(state): 0.0 for state in all_possible}
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.UP)))] += 0.8
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] += 0.1
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] += 0.1
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.DOWN)))] += 0.0
-        return prob_dict
+        if self.mode==IMAGE:
+
+            '''detect agent opsition from image'''
+
+            agent_channel_should_be = [255,0,0]
+
+            agent_count = 0
+            for x in range(self.w):
+                for y in range(self.h):
+                    valid_on_channel = True
+                    for c in range(3):
+                        pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
+                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
+                            valid_on_channel = False
+                            break
+                    if valid_on_channel:
+                        pos = (x,y)
+                        agent_count += 1
+
+            if agent_count==1:
+                return pos
+
+            else:
+                return 'bad state'
+
+        elif self.mode==VECTOR:
+            state_2d = np.reshape(state_vector, [self.h, self.w])
+            for y in range(state_2d.shape[0]):
+                for x in range(state_2d.shape[1]):
+                    if state_2d[y, x] == 1:
+                        return (x, y)
+            raise Exception('No agent found in vector')
+        else:
+            raise Exception('Not a valid mode')
+
+    def get_transition_probs(self, state_vector=None, state_pos=None):
+
+        '''
+        Yuhang: since I donot know your logic here, I thing using
+        state_vector to detect state position is a waste of compution.
+        So I just add a parameter of state_pos
+        '''
+
+        if self.mode==VECTOR:
+
+            '''
+            Yuhang: I have difficulty understanding the logicol here,
+            I will leave these code here and implement the evaluation 
+            of image in the next 'elif' block. If you wish, you can 
+            integrate these two parts of the code.
+            '''
+            state_pos = self.state_vector_to_position(state_vector)
+            all_possible = self.get_all_possible_start_states()
+            prob_dict = {tuple(state): 0.0 for state in all_possible}
+            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.UP)))] += 0.8
+            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] += 0.1
+            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] += 0.1
+            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.DOWN)))] += 0.0
+            return prob_dict
+
+        elif self.mode==IMAGE:
+
+            prob_dict = {}
+            for action_i in range(len(self.action_dic)):
+                prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
+            return prob_dict
 
 
     def reset(self):
@@ -246,37 +300,56 @@ def l1_distance(dist1, dist2):
     return l1
 
 def evaluate_domain(domain, s1_state, s2_samples):
-    s1_state = np.array(s1_state)
-    true_distribution = domain.get_transition_probs(s1_state)
-    sample_counts = {}
-    bad_count = 0
-    good_count = 0
-    for sample in s2_samples:
-        determined_state = determine_transition(domain, sample)
-        if determined_state == 'bad state':
-            bad_count += 1
-        else:
-            if tuple(determined_state) in sample_counts:
-                sample_counts[tuple(determined_state)] += 1
+
+    if domain.mode==VECTOR:
+        '''
+        Yuhang: I have difficulty understanding the logicol here,
+        I will leave these code here and implement the evaluation 
+        of image in the next 'elif' block. If you wish, you can 
+        integrate these two parts of the code.
+        '''
+        s1_state = np.array(s1_state)
+        true_distribution = domain.get_transition_probs(s1_state)
+        print(true_distribution)
+        sample_counts = {}
+        bad_count = 0
+        good_count = 0
+        for sample in s2_samples:
+            determined_state = determine_transition(domain, sample)
+            if determined_state == 'bad state':
+                bad_count += 1
             else:
-                sample_counts[tuple(determined_state)] = 1
-            good_count += 1
-    sample_distribution = {state: sample_count / float(good_count) for state, sample_count in sample_counts.items()}
-    return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
+                if tuple(determined_state) in sample_counts:
+                    sample_counts[tuple(determined_state)] += 1
+                else:
+                    sample_counts[tuple(determined_state)] = 1
+                good_count += 1
+        sample_distribution = {state: sample_count / float(good_count) for state, sample_count in sample_counts.items()}
+        return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
 
+    elif domain.mode==IMAGE:
+        s1_pos = domain.state_vector_to_position(s1_state)
+        true_distribution = domain.get_transition_probs(
+            state_pos=s1_pos
+        )
+        bad_count = 0
+        good_count = 0
+        sample_distribution = {}
+        for b in range(np.shape(s2_samples)[0]):
+            s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
+            if s2_sample_pos=='bad state':
+                bad_count += 1
+            else:
+                good_count += 1
+                try:
+                    sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
+                except Exception as e:
+                    sample_distribution[str(s2_sample_pos)] = 1
 
+        for key in sample_distribution.keys():
+            sample_distribution[key] = sample_distribution[key] / float(good_count)
 
-#evaluate_bit_vector(5, [0,0,0,0,0], [])
-
-# 1D random walk domain with length-5, 50 percent chance of moving left, represented as VECTOR
-#domain = Walk1D(5, 0.5, VECTOR)
-# 1D random walk domain with length-5 50 percent change of moving right, represented as IMAGE
-#domain = Walk1D(5, 0.5, IMAGE)
-# 1D random bit flip domain with length-5 represented as IMAGE
-#domain = BitFlip1D(5, IMAGE)
-# 2D 5x5 random walk domain with norvig move-dynamics, no obstacles, a vector representation, and wrapping.
-#domain = Walk2D(5, 5, [0.8, 0.0, 0.1, 0.1], [], VECTOR, True)
-# 2D 5x5 random walk domain with norvig move-dynamics, an obstacle in the center, a vector representation, and no wrapping.
-#domain = Walk2D(5, 5, [0.8, 0.0, 0.1, 0.1], [(2, 2)], VECTOR, False)
+        return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
+                
 
 

@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 MULTI_RUN = 'w4-0'
-GPU = '1'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -159,7 +159,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
     f.write(params_str)
 
 N_POINTS = 128
-RESULT_SAMPLE_NUM = 100
+RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
 LOG_INTER = 500
 
@@ -261,7 +261,7 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer = nn.Sequential(
-                # params['FEATURE']*1*64*64
+                # params['FEATURE']*1*25*25
                 nn.Conv3d(
                     in_channels=params['FEATURE'],
                     out_channels=64,
@@ -272,7 +272,7 @@ class Generator(nn.Module):
                 ),
                 nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.001),
-                # 64*1*32*32
+                # 64*1*12*12
                 nn.Conv3d(
                     in_channels=64,
                     out_channels=128,
@@ -283,7 +283,7 @@ class Generator(nn.Module):
                 ),
                 nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.001),
-                # 128*1*16*16
+                # 128*1*6*6
                 nn.Conv3d(
                     in_channels=128,
                     out_channels=256,
@@ -294,21 +294,10 @@ class Generator(nn.Module):
                 ),
                 nn.BatchNorm3d(256),
                 nn.LeakyReLU(0.001),
-                # 256*1*8*8
-                nn.Conv3d(
-                    in_channels=256,
-                    out_channels=512,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(512),
-                nn.LeakyReLU(0.001),
-                # 512*1*4*4
+                # 256*1*3*3
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(512*1*4*4, params['DIM']),
+                nn.Linear(256*1*3*3, params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -316,33 +305,22 @@ class Generator(nn.Module):
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 512*1*4*4),
+                nn.Linear(params['DIM'], 256*1*3*3),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
-                # 512*1*4*4
-                nn.ConvTranspose3d(
-                    in_channels=512,
-                    out_channels=256,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(256),
-                nn.LeakyReLU(0.001),
-                # 256*2*8*8
+                # 256*1*3*3
                 nn.ConvTranspose3d(
                     in_channels=256,
                     out_channels=128,
-                    kernel_size=(1,4,4),
+                    kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False
                 ),
                 nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.001),
-                # 128*2*16*16
+                # 128*2*6*6
                 nn.ConvTranspose3d(
                     in_channels=128,
                     out_channels=64,
@@ -353,17 +331,18 @@ class Generator(nn.Module):
                 ),
                 nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.001),
-                # 64*2*32*32
+                # 64*2*12*12
                 nn.ConvTranspose3d(
                     in_channels=64,
                     out_channels=params['FEATURE'],
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=False
+                    bias=False,
+                    output_padding=(0,1,1)
                 ),
                 nn.Sigmoid()
-                # params['FEATURE']*2*64*64  
+                # params['FEATURE']*2*25*25
             )
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
@@ -578,13 +557,13 @@ class Discriminator(nn.Module):
 
             conv_layer = nn.Sequential(
                 nn.Linear(2*DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
                 nn.Linear(params['DIM'], 1),
@@ -593,7 +572,7 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer = nn.Sequential(
-                # params['FEATURE']*2*64*64
+                # params['FEATURE']*2*25*25
                 nn.Conv3d(
                     in_channels=params['FEATURE'],
                     out_channels=64,
@@ -602,8 +581,8 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.LeakyReLU(0.001),
-                # 64*1*32*32
+                nn.LeakyReLU(0.001, inplace=True),
+                # 64*1*12*12
                 nn.Conv3d(
                     in_channels=64,
                     out_channels=128,
@@ -612,8 +591,8 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.LeakyReLU(0.001),
-                # 128*1*16*16
+                nn.LeakyReLU(0.001, inplace=True),
+                # 128*1*6*6
                 nn.Conv3d(
                     in_channels=128,
                     out_channels=256,
@@ -622,22 +601,12 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
-                nn.LeakyReLU(0.001),
-                # 256*1*8*8
-                nn.Conv3d(
-                    in_channels=256,
-                    out_channels=512,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.001),
-                # 512*1*4*4
+                nn.LeakyReLU(0.001, inplace=True),
+                # 256*1*3*3
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(512*1*4*4, params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.Linear(256*1*3*3, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
                 nn.Linear(params['DIM'], 1),
@@ -785,78 +754,69 @@ def weights_init(m):
     #         gain=1
     #     )
 
-def collect_samples():
+def chris2song(x):
+    x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+    return x
 
-    all_possible = domain.get_all_possible_start_states()
+def song2chris(x):
+    x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+    return x
 
-    all_l1s = []
-    all_bad_frac = []
-    for ii, start_state in enumerate(all_possible):
-        print ii, '/', len(all_possible)
-        start_state = torch.cuda.FloatTensor(process_chris_ob(start_state))
-        print(start_state.size())
-        start_state_batch = start_state.unsqueeze(0).repeat(
-            RESULT_SAMPLE_NUM,
-            start_state.size()[0],
-            start_state.size()[1],
-            start_state.size()[2],
-            start_state.size()[3]
-        )
-        print(start_state_batch.size())
-        print(ppp)
+def collect_samples(iteration):
+
+    all_possible = chris2song(domain.get_all_possible_start_states())
+
+    all_l1 = []
+    all_ac = []
+    for ii in range(all_possible.size()[0]):
+
+        start_state = all_possible[ii:ii+1]
+        start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+        
         '''prediction'''
         noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
         prediction = netG(
             noise_v = autograd.Variable(noise, volatile=True),
-            state_v = autograd.Variable(state, volatile=True)
+            state_v = autograd.Variable(start_state_batch, volatile=True)
         ).data.narrow(1,params['STATE_DEPTH'],1)
 
-        state_l1, frac_bad = all_domains.evaluate_domain(domain, start_state, prediction.cpu.numpy())
-        all_bad_frac.append(frac_bad)
-        all_l1s.append(state_l1)
-    return np.mean(all_l1s), (1.0-np.mean(all_bad_frac))
+        if ii==all_possible.size()[0]/2:
+            log_img(prediction,'prediction',iteration)
+
+        l1, ac = chris_domain.evaluate_domain(
+            domain=domain,
+            s1_state=song2chris(start_state)[0],
+            s2_samples=song2chris(prediction)
+        )
+
+        all_l1.append(l1)
+        all_ac.append(ac)
+
+        print('[{}][{}][Eval:{}/{}] L1:{:2.4f} AC:{:2.4f}'
+            .format(
+                MULTI_RUN,
+                iteration,
+                ii,
+                all_possible.size()[0],
+                l1,
+                ac
+            )
+        )
+
+    return np.mean(all_l1), np.mean(all_ac)
 
 def generate_image(iteration):
 
-    l1, accept_rate = collect_samples()
+    l1, accept_rate = collect_samples(iteration)
 
     logger.plot(
-        name+'-L1',
+        '-L1',
         np.asarray([l1])
     )
     logger.plot(
-        name+'-AR',
+        '-AR',
         np.asarray([accept_rate])
     )
-
-    '''get data'''
-    # if params['REPRESENTATION']=='scalar':
-    #     batch_size = (N_POINTS**2)
-    # elif params['REPRESENTATION']==chris_domain.VECTOR or params['REPRESENTATION']==chris_domain.IMAGE:
-    #     batch_size = RESULT_SAMPLE_NUM
-
-    # generate_image_with_filter(
-    #     iteration=iteration,
-    #     dataset=dataset,
-    #     gen_basic=True,
-    #     filter_net=None
-    # )
-
-    # if params['FILTER_MODE']=='filter-d-c' or params['FILTER_MODE']=='filter-d':
-    #     generate_image_with_filter(
-    #         iteration=iteration,
-    #         dataset=dataset,
-    #         gen_basic=False,
-    #         filter_net=netD
-    #     )
-
-    # if params['FILTER_MODE']=='filter-d-c' or params['FILTER_MODE']=='filter-c':
-    #     generate_image_with_filter(
-    #         iteration=iteration,
-    #         dataset=dataset,
-    #         gen_basic=False,
-    #         filter_net=netC
-    #     )
 
 def plot_convergence(images,name):
     dis, accept_rate = get_transition_prob_distribution(images)
@@ -1077,32 +1037,31 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             win=file_name,
             name=file_name+'_'+str(iteration))
 
-def process_chris_ob(x):
-    x = x / 255.0
-    x = np.expand_dims(np.transpose(cv2.resize(x,(params['IMAGE_SIZE'],params['IMAGE_SIZE'])), (2,0,1)),0)
-    return x
-
 def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
     while True:
-        dataset = []
+
+        dataset = None
+        
         for i in xrange(batch_size):
 
             if fix_state==True:
                 print(unsupport)
 
             domain.reset()
-            ob = process_chris_ob(domain.get_state())
-            ob_next = process_chris_ob(domain.update())
+            ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
+            ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
 
-            data =  np.concatenate(
-                        (ob,ob_next),
-                        axis=0
-                    )
+            data = torch.cat([ob,ob_next],0).unsqueeze(0)
 
-            dataset.append(data)
+            try:
+                dataset = torch.cat([dataset,data],0)
+            except Exception as e:
+                dataset = data
 
-        dataset = np.array(dataset, dtype='float32')
+        dataset = dataset.permute(0,1,4,2,3)
+        dataset = dataset.float()
+        dataset = dataset / 255.0
 
         yield dataset
 
@@ -1249,11 +1208,6 @@ elif params['METHOD']=='grl':
 
     restore_model()
 
-    state_prediction_gt = torch.Tensor(dataset_iter(fix_state=False).next()).cuda()
-    state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-    prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
-    alpha_expand = torch.FloatTensor(prediction_gt.size()).cuda()
-
 if params['GAME_MDOE']=='same-start':
     data = dataset_iter(fix_state=True)
 elif params['GAME_MDOE']=='full':
@@ -1271,6 +1225,9 @@ while True:
         state_prediction_gt = torch.Tensor(data.next()).cuda()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH']).cpu().numpy()
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1).cpu().numpy()
+
+        print(state_prediction_gt.size())
+        print(pppp)
 
         for b in range(np.shape(state)[0]):
             in_tabular = False
@@ -1416,7 +1373,7 @@ while True:
                     p.data.clamp_(-0.01, +0.01)
 
             '''get data set'''
-            state_prediction_gt = torch.Tensor(data.next()).cuda()
+            state_prediction_gt = data.next()
             state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
             prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
@@ -1571,7 +1528,7 @@ while True:
         # (3) Update G network or R
         ###########################
 
-        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state_prediction_gt = data.next()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
