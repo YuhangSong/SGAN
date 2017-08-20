@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'h-1-gg_auto_interplots'
+MULTI_RUN = 'w4-1-gg_auto_interplots'
 GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -66,7 +66,7 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
@@ -1210,7 +1210,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
 
-    if params['GP_MODE']=='use-guide':
+    if params['GP_MODE']=='use-guide' or params['GP_MODE']=='pure-guide':
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
@@ -1465,19 +1465,27 @@ while True:
 
             netD.zero_grad()
 
-            '''train with real'''
-            D_real = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = autograd.Variable(prediction_gt)
-            ).mean()
-            D_real.backward(mone)
+            if params['GP_MODE']=='pure-guide':
+                D_real = autograd.Variable(torch.cuda.FloatTensor([0.0]))
 
-            '''train with fake'''
-            D_fake = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = autograd.Variable(prediction)
-            ).mean()
-            D_fake.backward(one)
+            else:
+                '''train with real'''
+                D_real = netD(
+                    state_v = autograd.Variable(state),
+                    prediction_v = autograd.Variable(prediction_gt)
+                ).mean()
+                D_real.backward(mone)
+
+            if params['GP_MODE']=='pure-guide':
+                D_fake = autograd.Variable(torch.cuda.FloatTensor([0.0]))
+
+            else:
+                '''train with fake'''
+                D_fake = netD(
+                    state_v = autograd.Variable(state),
+                    prediction_v = autograd.Variable(prediction)
+                ).mean()
+                D_fake.backward(one)
 
             GP_cost = [0.0]
             if params['GAN_MODE']=='wgan-grad-panish':
@@ -1489,10 +1497,12 @@ while True:
                     prediction = prediction,
                     prediction_gt = prediction_gt
                 )
+
                 if gradient_penalty is not None:
                     gradient_penalty.backward()
                 else:
                     gradient_penalty = autograd.Variable(torch.cuda.FloatTensor([0.0]))
+
                 GP_cost = gradient_penalty.data.cpu().numpy()
 
             DC_cost = [0.0]
