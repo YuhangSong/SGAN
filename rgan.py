@@ -20,8 +20,8 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'w4-1'
-GPU = '1'
+MULTI_RUN = 'b1-0'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -44,9 +44,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_uni_domain')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
@@ -65,7 +65,7 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -755,11 +755,17 @@ def weights_init(m):
     #     )
 
 def chris2song(x):
-    x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+    if params['REPRESENTATION']==chris_domain.IMAGE:
+        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+    elif params['REPRESENTATION']==chris_domain.VECTOR:
+        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).float()
     return x
 
 def song2chris(x):
-    x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+    if params['REPRESENTATION']==chris_domain.IMAGE:
+        x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+    elif params['REPRESENTATION']==chris_domain.VECTOR:
+        x = x.squeeze(1).cpu().numpy()
     return x
 
 def collect_samples(iteration):
@@ -771,7 +777,10 @@ def collect_samples(iteration):
     for ii in range(all_possible.size()[0]):
 
         start_state = all_possible[ii:ii+1]
-        start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+        elif params['REPRESENTATION']==chris_domain.VECTOR:
+            start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
         
         '''prediction'''
         noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
@@ -1042,7 +1051,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
     while True:
 
         dataset = None
-        
+
         for i in xrange(batch_size):
 
             if fix_state==True:
@@ -1059,9 +1068,12 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             except Exception as e:
                 dataset = data
 
-        dataset = dataset.permute(0,1,4,2,3)
-        dataset = dataset.float()
-        dataset = dataset / 255.0
+        if params['REPRESENTATION']==chris_domain.VECTOR:
+            dataset = dataset.float()
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
+            dataset = dataset.permute(0,1,4,2,3)
+            dataset = dataset.float()
+            dataset = dataset / 255.0
 
         yield dataset
 

@@ -265,19 +265,19 @@ class Walk2D(object):
 
 
 def clean_entry_01(entry):
-    if np.abs(entry - 0) <= 0.1:
+    if np.abs(entry - 0) <= ACCEPT_GATE:
         return 0
-    elif np.abs(entry - 1) <= 0.1:
+    elif np.abs(entry - 1) <= ACCEPT_GATE:
         return 1
     else:
         return -1
 
 def clean_entry_012(entry):
-    if np.abs(entry - 0) <= 0.1:
+    if np.abs(entry - 0) <= ACCEPT_GATE:
         return 0
-    elif np.abs(entry - 1) <= 0.1:
+    elif np.abs(entry - 1) <= ACCEPT_GATE:
         return 1
-    elif np.abs(entry - 2) <= 0.1:
+    elif np.abs(entry - 2) <= ACCEPT_GATE:
         return 2
     else:
         return -1
@@ -310,11 +310,11 @@ def evaluate_domain(domain, s1_state, s2_samples):
         '''
         s1_state = np.array(s1_state)
         true_distribution = domain.get_transition_probs(s1_state)
-        print(true_distribution)
         sample_counts = {}
         bad_count = 0
         good_count = 0
-        for sample in s2_samples:
+        for b in range(np.shape(s2_samples)[0]):
+            sample = s2_samples[b]
             determined_state = determine_transition(domain, sample)
             if determined_state == 'bad state':
                 bad_count += 1
