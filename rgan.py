@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-2'
+MULTI_RUN = 'b2-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -74,12 +74,12 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GUIDE_MODE = 'norm') # norm, direction
 add_parameters(GP_GUIDE_FACTOR = 1.0)
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 add_parameters(DELTA_T = 0.01)
-add_parameters(STABLE_MSE = 0.001) # None, 0.001
+add_parameters(STABLE_MSE = None) # None, 0.001
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -150,13 +150,9 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(FILTER_MODE = 'none-f') # none-f, filter-c, filter-d, filter-d-c
 add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
+add_parameters(CRITIC_ITERS = 5)
 
-if params['GP_MODE']=='pure-guide':
-    add_parameters(CRITIC_ITERS = 1)
-else:
-    add_parameters(CRITIC_ITERS = 5)
-
-add_parameters(AUX_INFO = '10')
+add_parameters(AUX_INFO = 'chris low dim net 1')
 
 '''summary settings'''
 DSP = ''
@@ -202,19 +198,19 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 ############################### Definition Start ###############################
 
 def vector2image(x):
-
+    block_size = chris_domain.BLOCK_SIZE*3
     x_temp = torch.FloatTensor(
         x.size()[0],
         x.size()[1],
         1,
-        chris_domain.BLOCK_SIZE,
-        params['GRID_SIZE']*chris_domain.BLOCK_SIZE
+        block_size,
+        params['GRID_SIZE']*block_size
     ).cuda().fill_(0.0)
     for b in range(x.size()[0]):
         for d in range(x.size()[1]):
             for i in range(x.size()[2]):
-                from_ = i*chris_domain.BLOCK_SIZE
-                to_ = (i+1)*chris_domain.BLOCK_SIZE
+                from_ = i*block_size
+                to_ = (i+1)*block_size
                 fill_ = float(x[b][d][i])
                 x_temp[b,d,0,:,from_:to_].fill_(fill_)
     return x_temp
@@ -579,18 +575,27 @@ class Discriminator(nn.Module):
 
         if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
 
-            conv_layer = nn.Sequential(
-                nn.Linear(2*DESCRIBE_DIM, params['DIM']),
+            conv_layer_state = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
+            )
+            squeeze_layer_state = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
-            squeeze_layer = nn.Sequential(
+            conv_layer_prediction = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            squeeze_layer_prediction = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
+                nn.Linear(params['DIM']*2, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], 1),
+                nn.LeakyReLU(0.001, inplace=True),
             )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
@@ -636,34 +641,73 @@ class Discriminator(nn.Module):
                 nn.Linear(params['DIM'], 1),
             )
 
-        if params['GAN_MODE']=='wgan-grad-panish':
-            self.conv_layer = conv_layer
-            self.squeeze_layer = squeeze_layer
-            self.final_layer = final_layer
         else:
-            self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-            self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
+            raise Exception('Unsupport')
+
+        if params['GAN_MODE']=='wgan-grad-panish':
+
+            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+                self.conv_layer_state = conv_layer_state
+                self.squeeze_layer_state = squeeze_layer_state
+                self.conv_layer_prediction = conv_layer_prediction
+                self.squeeze_layer_prediction = squeeze_layer_prediction
+
+            elif params['REPRESENTATION']==chris_domain.IMAGE:
+                self.conv_layer = conv_layer
+                self.squeeze_layer = squeeze_layer
+
+            else:
+                raise Exception('Unsupport')
+
+            self.final_layer = final_layer
+
+        else:
+
+            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+                self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
+                self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
+                self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
+                self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
+
+            elif params['REPRESENTATION']==chris_domain.IMAGE:
+                self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
+                self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
+
+            else:
+                raise Exception('Unsupport')
+
             self.final_layer = torch.nn.DataParallel(final_layer,GPU)
 
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
         if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
+
+            state_v = self.conv_layer_state(state_v)
+            state_v = self.squeeze_layer_state(state_v)
+
+            prediction_v = self.conv_layer_prediction(prediction_v)
+            prediction_v = self.squeeze_layer_prediction(prediction_v)
+
             x = torch.cat([state_v,prediction_v],1)
+            x = self.final_layer(x)
+            x = x.view(-1)
+
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
-        '''forward'''
-        x = self.conv_layer(x)
-        if params['REPRESENTATION']==chris_domain.IMAGE:
-            x = x.view(x.size()[0], -1)
-        x = self.squeeze_layer(x)
-        x = self.final_layer(x)
-        x = x.view(-1)
+            '''forward'''
+            x = self.conv_layer(x)
+            if params['REPRESENTATION']==chris_domain.IMAGE:
+                x = x.view(x.size()[0], -1)
+            x = self.squeeze_layer(x)
+            x = self.final_layer(x)
+            x = x.view(-1)
 
         return x
 
@@ -1242,7 +1286,10 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
                     gradients_penalty = gradients_penalty + dot_unit
                 except Exception as e:
                     gradients_penalty = dot_unit
-            gradients_penalty = gradients_penalty / gradients_fl.size()[0]
+            gradients_penalty = (gradients_penalty / gradients_fl.size()[0]) * params['GP_GUIDE_FACTOR']
+
+        else:
+            raise Exception('Unsupport')
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
@@ -1363,6 +1410,11 @@ elif params['METHOD']=='grl':
 
     L1, AC = 2.0, 0.0
 
+    if params['STABLE_MSE'] is not None:
+        stabling_mse = True
+    else:
+        stabling_mse = False
+
 if params['GAME_MDOE']=='same-start':
     data = dataset_iter(fix_state=True)
 elif params['GAME_MDOE']=='full':
@@ -1458,179 +1510,184 @@ while True:
 
     elif params['METHOD']=='grl':
 
-        ########################################################
-        ############### (1) Update D network ###################
-        ########################################################
+        if not stabling_mse:
 
-        for p in netD.parameters():
-            p.requires_grad = True
+            ########################################################
+            ############### (1) Update D network ###################
+            ########################################################
 
-        for iter_d in xrange(params['CRITIC_ITERS']):
+            for p in netD.parameters():
+                p.requires_grad = True
 
-            if params['GAN_MODE']=='wgan':
+            for iter_d in xrange(params['CRITIC_ITERS']):
+
+                if params['GAN_MODE']=='wgan':
+                    '''
+                    original wgan clip the weights of netD
+                    '''
+                    for p in netD.parameters():
+                        p.data.clamp_(-0.01, +0.01)
+
+                '''get data set'''
+                state_prediction_gt = data.next()
+                state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+                prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+
+                '''get generated data'''
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                prediction = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(state, volatile=True)
+                ).data.narrow(1,params['STATE_DEPTH'],1)
+
+                if params['RUINER_MODE']=='use-r':
+                    '''
+                    if use-r, prediction is processed be r
+                    '''
+                    noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                    prediction_gt = netG(
+                        noise_v = autograd.Variable(noise, volatile=True),
+                        state_v = autograd.Variable(prediction_gt, volatile=True)
+                    ).data.narrow(1,params['STATE_DEPTH']-1,1)
+                    state_prediction_gt = torch.cat([state,prediction_gt],1)
+
                 '''
-                original wgan clip the weights of netD
+                call backward in the following,
+                prepare it.
                 '''
+                netD.zero_grad()
+
+                '''train with real'''
+                D_real = netD(
+                    state_v = autograd.Variable(state),
+                    prediction_v = autograd.Variable(prediction_gt)
+                ).mean()
+                '''if pure-guide, no wgan poss is used'''
+                if not (params['GP_MODE']=='pure-guide'):
+                    D_real.backward(mone)
+
+                '''train with fake'''
+                D_fake = netD(
+                    state_v = autograd.Variable(state),
+                    prediction_v = autograd.Variable(prediction)
+                ).mean()
+                '''if pure-guide, no wgan poss is used'''
+                if not (params['GP_MODE']=='pure-guide'):              
+                    D_fake.backward(one)
+
+                GP_cost = [0.0]
+                if params['GAN_MODE']=='wgan-grad-panish':
+                    '''
+                    train with gradient penalty,
+                    '''
+                    gradient_penalty, num_t_mean = calc_gradient_penalty(
+                        netD = netD,
+                        state = state,
+                        prediction = prediction,
+                        prediction_gt = prediction_gt
+                    )
+
+                    if gradient_penalty is not None:
+                        gradient_penalty.backward()
+                    else:
+                        gradient_penalty = autograd.Variable(torch.cuda.FloatTensor([0.0]))
+
+                    GP_cost = gradient_penalty.data.cpu().numpy()
+
+                DC_cost = [0.0]
+                if params['GAN_MODE']=='wgan-decade':
+                    raise Exception('Unsupport.')
+                    if params['REPRESENTATION']=='scalar':
+                        prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
+                    elif params['REPRESENTATION']==chris_domain.IMAGE:
+                        prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
+                    D_uni = netD(
+                        state_v = autograd.Variable(torch.cat([state,state],0)),
+                        prediction_v = autograd.Variable(prediction_uni)
+                    )
+                    decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
+                    decade_cost.backward()
+                    DC_cost = decade_cost.cpu().data.numpy()
+
+                if params['GAN_MODE']=='wgan-grad-panish':
+                    D_cost = D_fake - D_real + gradient_penalty
+                elif params['GAN_MODE']=='wgan-decade':
+                    D_cost = D_fake - D_real + decade_cost
+                else:
+                    D_cost = D_fake - D_real
+                D_cost = D_cost.data.cpu().numpy()
+
+                Wasserstein_D = (D_real - D_fake).data.cpu().numpy()
+
+                optimizerD.step()
+
+                C_cost = [0.0]
+                if (params['FILTER_MODE']=='filter-c') or (params['FILTER_MODE']=='filter-d-c'):
+
+                    raise Exception('Unsupport')
+                    netC.zero_grad()
+
+                    if params['CORRECTOR_MODE']=='c-normal':
+
+                        C_out_v = netC(
+                            state_v = autograd.Variable(torch.cat([state,state],0)),
+                            prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
+                        )
+                        C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
+
+                    elif params['CORRECTOR_MODE']=='c-decade':
+
+                        if params['REPRESENTATION']=='scalar':
+                            prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
+                        elif params['REPRESENTATION']==chris_domain.VECTOR or params['REPRESENTATION']==chris_domain.IMAGE:
+                            prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
+                        C_out_v = netC(
+                            state_v = autograd.Variable(torch.cat([state,state],0)),
+                            prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
+                        )
+                        C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
+
+                    C_cost_v.backward()
+                    C_cost = C_cost_v.cpu().data.numpy()
+                    optimizerC.step()
+
+            if params['GAN_MODE']=='wgan-gravity':
                 for p in netD.parameters():
-                    p.data.clamp_(-0.01, +0.01)
+                    p.data = p.data * (1.0-0.0001)
 
-            '''get data set'''
-            state_prediction_gt = data.next()
-            state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-            prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+            if params['CORRECTOR_MODE']=='c-decade':
+                for p in netC.parameters():
+                    p.data = p.data * (1.0-0.01)
 
-            '''get generated data'''
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            prediction = netG(
-                noise_v = autograd.Variable(noise, volatile=True),
-                state_v = autograd.Variable(state, volatile=True)
-            ).data.narrow(1,params['STATE_DEPTH'],1)
+            if params['GAN_MODE']=='wgan-grad-panish':
+                logger.plot('GP_cost', GP_cost)
+            if params['GAN_MODE']=='wgan-decade':
+                logger.plot('DC_cost', DC_cost)
+            if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
+                logger.plot('C_cost', C_cost)
+            logger.plot('D_cost', D_cost)
+            logger.plot('W_dis', Wasserstein_D)
+
+            logger.plot('num_t_mean', [num_t_mean])
+
+            ############################
+            # (2) Control R
+            ############################
 
             if params['RUINER_MODE']=='use-r':
-                '''
-                if use-r, prediction is processed be r
-                '''
-                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-                prediction_gt = netG(
-                    noise_v = autograd.Variable(noise, volatile=True),
-                    state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,params['STATE_DEPTH']-1,1)
-                state_prediction_gt = torch.cat([state,prediction_gt],1)
-
-            '''
-            call backward in the following,
-            prepare it.
-            '''
-            netD.zero_grad()
-
-            '''train with real'''
-            D_real = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = autograd.Variable(prediction_gt)
-            ).mean()
-            '''if pure-guide, no wgan poss is used'''
-            if not (params['GP_MODE']=='pure-guide'):
-                D_real.backward(mone)
-
-            '''train with fake'''
-            D_fake = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = autograd.Variable(prediction)
-            ).mean()
-            '''if pure-guide, no wgan poss is used'''
-            if not (params['GP_MODE']=='pure-guide'):              
-                D_fake.backward(one)
-
-            GP_cost = [0.0]
-            if params['GAN_MODE']=='wgan-grad-panish':
-                '''
-                train with gradient penalty,
-                '''
-                gradient_penalty, num_t_mean = calc_gradient_penalty(
-                    netD = netD,
-                    state = state,
-                    prediction = prediction,
-                    prediction_gt = prediction_gt
-                )
-
-                if gradient_penalty is not None:
-                    gradient_penalty.backward()
+                if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
+                    update_type = 'g'
                 else:
-                    gradient_penalty = autograd.Variable(torch.cuda.FloatTensor([0.0]))
-
-                GP_cost = gradient_penalty.data.cpu().numpy()
-
-            DC_cost = [0.0]
-            if params['GAN_MODE']=='wgan-decade':
-                raise Exception('Unsupport.')
-                if params['REPRESENTATION']=='scalar':
-                    prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
-                elif params['REPRESENTATION']==chris_domain.IMAGE:
-                    prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
-                D_uni = netD(
-                    state_v = autograd.Variable(torch.cat([state,state],0)),
-                    prediction_v = autograd.Variable(prediction_uni)
-                )
-                decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
-                decade_cost.backward()
-                DC_cost = decade_cost.cpu().data.numpy()
-
-            if params['GAN_MODE']=='wgan-grad-panish':
-                D_cost = D_fake - D_real + gradient_penalty
-            elif params['GAN_MODE']=='wgan-decade':
-                D_cost = D_fake - D_real + decade_cost
-            else:
-                D_cost = D_fake - D_real
-            D_cost = D_cost.data.cpu().numpy()
-
-            Wasserstein_D = (D_real - D_fake).data.cpu().numpy()
-
-            optimizerD.step()
-
-            C_cost = [0.0]
-            if (params['FILTER_MODE']=='filter-c') or (params['FILTER_MODE']=='filter-d-c'):
-
-                raise Exception('Unsupport')
-                netC.zero_grad()
-
-                if params['CORRECTOR_MODE']=='c-normal':
-
-                    C_out_v = netC(
-                        state_v = autograd.Variable(torch.cat([state,state],0)),
-                        prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
-                    )
-                    C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
-
-                elif params['CORRECTOR_MODE']=='c-decade':
-
-                    if params['REPRESENTATION']=='scalar':
-                        prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
-                    elif params['REPRESENTATION']==chris_domain.VECTOR or params['REPRESENTATION']==chris_domain.IMAGE:
-                        prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
-                    C_out_v = netC(
-                        state_v = autograd.Variable(torch.cat([state,state],0)),
-                        prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
-                    )
-                    C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
-
-                C_cost_v.backward()
-                C_cost = C_cost_v.cpu().data.numpy()
-                optimizerC.step()
-
-        if params['GAN_MODE']=='wgan-gravity':
-            for p in netD.parameters():
-                p.data = p.data * (1.0-0.0001)
-
-        if params['CORRECTOR_MODE']=='c-decade':
-            for p in netC.parameters():
-                p.data = p.data * (1.0-0.01)
-
-        if params['GAN_MODE']=='wgan-grad-panish':
-            logger.plot('GP_cost', GP_cost)
-        if params['GAN_MODE']=='wgan-decade':
-            logger.plot('DC_cost', DC_cost)
-        if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
-            logger.plot('C_cost', C_cost)
-        logger.plot('D_cost', D_cost)
-        logger.plot('W_dis', Wasserstein_D)
-
-        logger.plot('num_t_mean', [num_t_mean])
-
-        ############################
-        # (2) Control R
-        ############################
-
-        if params['RUINER_MODE']=='use-r':
-            if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
+                    update_type = 'r'
+            elif params['RUINER_MODE']=='none-r':
                 update_type = 'g'
-            else:
+            elif params['RUINER_MODE']=='test-r':
                 update_type = 'r'
-        elif params['RUINER_MODE']=='none-r':
+            else:
+                raise Exception('Unsupport')
+
+        if stabling_mse:
             update_type = 'g'
-        elif params['RUINER_MODE']=='test-r':
-            update_type = 'r'
-        else:
-            raise Exception('Unsupport')
 
         ############################
         # (3) Update G network or R
@@ -1655,16 +1712,26 @@ while True:
                 state_v = autograd.Variable(state)
             ).narrow(1,params['STATE_DEPTH'],1)
 
-            G = netD(
-                    state_v = autograd.Variable(state),
-                    prediction_v = prediction_v
-                ).mean()
+            if stabling_mse:
 
-            G.backward(mone)
-            G_cost = -G.data.cpu().numpy()
-            logger.plot('G_cost', G_cost)
-            G_R = 'G'
-            logger.plot('G_R', np.asarray([1.0]))
+                S = mse_loss_model(prediction_v, autograd.Variable(prediction_gt))
+                S.backward()
+                S_cost = S.data.cpu().numpy()
+                logger.plot('S_cost', S_cost)
+                G_R = 'S'
+                logger.plot('G_R', np.asarray([0.0]))
+
+            else:
+
+                G = netD(
+                        state_v = autograd.Variable(state),
+                        prediction_v = prediction_v
+                    ).mean()
+                G.backward(mone)
+                G_cost = -G.data.cpu().numpy()
+                logger.plot('G_cost', G_cost)
+                G_R = 'G'
+                logger.plot('G_R', np.asarray([1.0]))
 
         elif update_type=='r':
             raise Exception('Uncheacked')
@@ -1688,41 +1755,45 @@ while True:
         # (4) Log summary
         ############################
 
+        if stabling_mse:
+            print('[{}][{:<6}] S_cost:{:2.4f}'
+                .format(
+                    MULTI_RUN,
+                    iteration,
+                    S_cost[0],
+                )
+            )
+        else:
+            print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_cost:{:2.4f}'
+                .format(
+                    MULTI_RUN,
+                    iteration,
+                    L1,
+                    AC,
+                    num_t_mean,
+                    Wasserstein_D[0],
+                    GP_cost[0],
+                    D_cost[0],
+                    G_cost[0],
+                )
+            )
+
         if iteration % LOG_INTER == 5:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
             torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
-            L1, AC = generate_image(iteration)
-        
-        # print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
-        #     .format(
-        #         MULTI_RUN,
-        #         iteration,
-        #         L1,
-        #         AC,
-        #         num_t_mean,
-        #         Wasserstein_D[0],
-        #         GP_cost[0],
-        #         D_cost[0],
-        #         G_R,
-        #         G_cost[0],
-        #         R_cost[0],
-        #         C_cost[0]
-        #     )
-        # )
-        print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_cost:{:2.4f}'
-            .format(
-                MULTI_RUN,
-                iteration,
-                L1,
-                AC,
-                num_t_mean,
-                Wasserstein_D[0],
-                GP_cost[0],
-                D_cost[0],
-                G_cost[0],
-            )
-        )
+            if stabling_mse:
+                _, y = logger.get_plot('S_cost')
+                stable_range = 200
+                try:
+                    stable = np.abs(np.mean(y[-1-stable_range*2:-1-stable_range])-np.mean(y[-1-stable_range:-1]))
+                    print('Stable to:'+str(stable))
+                    if stable<params['STABLE_MSE']:
+                        stabling_mse = False
+                except Exception as e:
+                    pass
+            else:
+                L1, AC = generate_image(iteration)
 
     if iteration % LOG_INTER == 5:
         logger.flush()

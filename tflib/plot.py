@@ -52,6 +52,12 @@ class logger(object):
 		value = np.asarray(value)
 		self._since_last_flush[name][self._iter] = value
 
+
+	def get_plot(self, name):
+		x_vals = np.asarray(np.sort(self._since_beginning[name].keys()))
+		y_vals = np.asarray(np.squeeze(np.asarray([self._since_beginning[name][x] for x in x_vals])))
+		return x_vals, y_vals
+		
 	def flush(self):
 
 		vis.text(
