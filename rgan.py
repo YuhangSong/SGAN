@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'b2-0-gg_auto_interplots'
+MULTI_RUN = 'w4-4-gg_auto_interplots'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -66,10 +66,10 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.01)
+add_parameters(DELTA_T = 0.0001)
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -1124,11 +1124,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
         num_t = (d_mean / params['DELTA_T']).round().int()
         num_t_mean = num_t.float().mean()
 
-        alpha = torch.rand(num_t.sum()).cuda()
-
         for b in range(num_t.size()[0]):
 
-            if num_t[b]<=0.0:
+            if num_t[b]<=1.0:
                 t = 1
             else:
                 t = num_t[b]
@@ -1167,7 +1165,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
     else:
         num_t_mean = 1.0
 
-    alpha = torch.rand(state.size()[0]).cuda()
+    alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
