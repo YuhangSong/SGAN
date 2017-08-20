@@ -33,3 +33,5 @@ source ~/.bashrc && source activate grl_2 && python -m visdom.server
 wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
 ```
 ##### Brows the address provided by above command, like: http://bbc9b540.ngrok.io/
+
+### none-guide with auto is bad
