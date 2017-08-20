@@ -99,12 +99,10 @@ else:
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 3)
     add_parameters(FEATURE = 3)
-    add_parameters(IMAGE_SIZE = 128)
 
 else:
     add_parameters(STATE_DEPTH = 1)
     add_parameters(FEATURE = 3)
-    add_parameters(IMAGE_SIZE = 64)
 
 '''default domain settings generate'''
 if params['DOMAIN']=='1Dflip':
@@ -188,17 +186,19 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 ############################### Definition Start ###############################
 
 def vector2image(x):
+
     x_temp = torch.FloatTensor(
         x.size()[0],
         x.size()[1],
         1,
-        params['IMAGE_SIZE']/params['GRID_SIZE'],
-        params['IMAGE_SIZE']).cuda().fill_(0.0)
+        chris_domain.BLOCK_SIZE,
+        params['GRID_SIZE']*chris_domain.BLOCK_SIZE
+    ).cuda().fill_(0.0)
     for b in range(x.size()[0]):
         for d in range(x.size()[1]):
             for i in range(x.size()[2]):
-                from_ = i*params['IMAGE_SIZE']/params['GRID_SIZE']
-                to_ = (i+1)*params['IMAGE_SIZE']/params['GRID_SIZE']
+                from_ = i*chris_domain.BLOCK_SIZE
+                to_ = (i+1)*chris_domain.BLOCK_SIZE
                 fill_ = float(x[b][d][i])
                 x_temp[b,d,0,:,from_:to_].fill_(fill_)
     return x_temp

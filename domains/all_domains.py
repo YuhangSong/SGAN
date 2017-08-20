@@ -17,9 +17,11 @@ class Walk1D(object):
         assert 0 <= prob_left <= 1
         assert mode in [IMAGE, VECTOR]
         self.LEFT, self.RIGHT = 0, 1
+        self.action_dic = [self.LEFT, self.RIGHT]
         self.mode = mode
         self.n = length
         self.p = prob_left
+        self.prob_dirs = [self.p, (1-self.p)]
         self.state = np.random.randint(0, length)
         self.visualizer = visualizer.Visualizer(BLOCK_SIZE, 1, self.n,
                                                 {0: visualizer.WHITE,
@@ -32,12 +34,17 @@ class Walk1D(object):
     def get_all_possible_start_states(self):
         return [self.get_state(pos) for pos in range(self.n)]
 
-    def get_transition_probs(self, state_vec):
-        all_possible = self.get_all_possible_start_states()
-        state_pos = np.argmax(state_vec)
-        prob_dict = {tuple(state): 0. for state in all_possible}
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] = self.p
-        prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] = 1 - self.p
+    def get_transition_probs(self, state_pos):
+        # all_possible = self.get_all_possible_start_states()
+        # state_pos = np.argmax(state_vec)
+        # prob_dict = {tuple(state): 0. for state in all_possible}
+        # prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] = self.p
+        # prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] = 1 - self.p
+        # return prob_dict
+
+        prob_dict = {}
+        for action_i in range(len(self.action_dic)):
+            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
         return prob_dict
 
 
@@ -67,6 +74,49 @@ class Walk1D(object):
         direction = self.LEFT if np.random.uniform(0, 1) < self.p else self.RIGHT
         self.state = self.update_state(self.state, direction)
         return self.get_state(self.state)
+
+    def state_vector_to_position(self, state_vector):
+
+        if self.mode==IMAGE:
+
+            '''detect agent opsition from image'''
+
+            agent_channel_should_be = [255,0,0]
+
+            agent_count = 0
+            for x in range(self.w):
+                for y in range(self.h):
+                    valid_on_channel = True
+                    for c in range(3):
+                        pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
+                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
+                            valid_on_channel = False
+                            break
+                    if valid_on_channel:
+                        pos = (x,y)
+                        agent_count += 1
+
+            if agent_count==1:
+                return pos
+
+            else:
+                return 'bad state'
+
+        elif self.mode==VECTOR:
+
+            agent_channel_should_be = 1.0
+
+            agent_count = 0
+            for x in range(self.n):
+                if abs(state_vector[x]-agent_channel_should_be) < 1.0*ACCEPT_GATE:
+                    pos = x
+                    agent_count += 1
+
+            if agent_count==1:
+                return pos
+
+            else:
+                return 'bad state'
 
 
 class BitFlip1D(object):
@@ -301,56 +351,37 @@ def l1_distance(dist1, dist2):
 
 def evaluate_domain(domain, s1_state, s2_samples):
 
-    if domain.mode==VECTOR:
-        '''
-        Yuhang: I have difficulty understanding the logicol here,
-        I will leave these code here and implement the evaluation 
-        of image in the next 'elif' block. If you wish, you can 
-        integrate these two parts of the code.
-        '''
-        s1_state = np.array(s1_state)
-        true_distribution = domain.get_transition_probs(s1_state)
-        sample_counts = {}
-        bad_count = 0
-        good_count = 0
-        for b in range(np.shape(s2_samples)[0]):
-            sample = s2_samples[b]
-            determined_state = determine_transition(domain, sample)
-            if determined_state == 'bad state':
-                bad_count += 1
-            else:
-                if tuple(determined_state) in sample_counts:
-                    sample_counts[tuple(determined_state)] += 1
-                else:
-                    sample_counts[tuple(determined_state)] = 1
-                good_count += 1
-        sample_distribution = {state: sample_count / float(good_count) for state, sample_count in sample_counts.items()}
-        return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
+    s1_pos = domain.state_vector_to_position(s1_state)
+    true_distribution = domain.get_transition_probs(
+        state_pos=s1_pos
+    )
+    bad_count = 0
+    good_count = 0
+    sample_distribution = {}
+    for b in range(np.shape(s2_samples)[0]):
+        s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
+        if s2_sample_pos=='bad state':
+            bad_count += 1
+        else:
+            good_count += 1
+            try:
+                sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
+            except Exception as e:
+                sample_distribution[str(s2_sample_pos)] = 1
 
-    elif domain.mode==IMAGE:
-        s1_pos = domain.state_vector_to_position(s1_state)
-        true_distribution = domain.get_transition_probs(
-            state_pos=s1_pos
-        )
-        bad_count = 0
-        good_count = 0
-        sample_distribution = {}
-        for b in range(np.shape(s2_samples)[0]):
-            s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
-            if s2_sample_pos=='bad state':
-                bad_count += 1
-            else:
-                good_count += 1
-                try:
-                    sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
-                except Exception as e:
-                    sample_distribution[str(s2_sample_pos)] = 1
+    if good_count>0.0:
 
-        print(sample_distribution)
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
 
+        print(sample_distribution)
+        print(true_distribution)
+        
         return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
+    else:
+
+        return 2.0, good_count / float(good_count + bad_count)
+    
                 
 
 
