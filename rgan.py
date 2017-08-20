@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'b2-1-small-100'
+MULTI_RUN = 'b2-1-big-100'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -67,7 +67,7 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-add_parameters(GP_GUIDE_FACTOR = 0.01)
+add_parameters(GP_GUIDE_FACTOR = 100)
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
