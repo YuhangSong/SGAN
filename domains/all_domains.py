@@ -9,7 +9,7 @@ import torch
 IMAGE = 0
 VECTOR = 1
 BLOCK_SIZE = 5
-ACCEPT_GATE = 0.2
+ACCEPT_GATE = 0.1
 
 class Walk1D(object):
 
@@ -345,6 +345,9 @@ def determine_transition(domain, sample):
 def l1_distance(dist1, dist2):
     l1 = 0.0
     combined_keyset = set(dist1.keys()).union(set(dist2.keys()))
+    print(dist1)
+    print(dist2)
+    print('----------------------------------------------')
     for key in combined_keyset:
         l1 += np.abs(dist1.get(key, 0) - dist2.get(key, 0))
     return l1

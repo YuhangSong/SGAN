@@ -20,8 +20,8 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'w4-2'
-GPU = '2'
+MULTI_RUN = 'w4-1'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -56,11 +56,11 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -73,9 +73,9 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
 
 '''model settings'''
@@ -1196,7 +1196,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
     else:
         raise Exception('Unsupport')
 
-    interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
+    interpolates = (alpha * prediction_gt) + ((1 - alpha) * prediction)
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -1231,7 +1231,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
         gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
     
     else:
-        print(unsupport)
+        raise Exception('Unsupport')
     
     return gradients_penalty*params['LAMBDA'], num_t_mean
 
@@ -1437,9 +1437,9 @@ while True:
 
     elif params['METHOD']=='grl':
 
-        ############################
-        # (1) Update D network
-        ############################
+        ########################################################
+        ############### (1) Update D network ###################
+        ########################################################
 
         for p in netD.parameters():
             p.requires_grad = True
@@ -1447,6 +1447,9 @@ while True:
         for iter_d in xrange(params['CRITIC_ITERS']):
 
             if params['GAN_MODE']=='wgan':
+                '''
+                original wgan clip the weights of netD
+                '''
                 for p in netD.parameters():
                     p.data.clamp_(-0.01, +0.01)
 
@@ -1460,44 +1463,50 @@ while True:
             prediction = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(state, volatile=True)
-            ).data.narrow(1,1,1)
+            ).data.narrow(1,params['STATE_DEPTH'],1)
 
             if params['RUINER_MODE']=='use-r':
+                '''
+                if use-r, prediction is processed be r
+                '''
                 noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
                 prediction_gt = netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(prediction_gt, volatile=True)
-                ).data.narrow(1,0,1)
+                ).data.narrow(1,params['STATE_DEPTH']-1,1)
                 state_prediction_gt = torch.cat([state,prediction_gt],1)
 
+            '''
+            call backward in the following,
+            prepare it.
+            '''
             netD.zero_grad()
 
-            if params['GP_MODE']=='pure-guide':
-                D_real = autograd.Variable(torch.cuda.FloatTensor([0.0]))
-
-            else:
-                '''train with real'''
-                D_real = netD(
-                    state_v = autograd.Variable(state),
-                    prediction_v = autograd.Variable(prediction_gt)
-                ).mean()
+            '''train with real'''
+            D_real = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = autograd.Variable(prediction_gt)
+            ).mean()
+            '''if pure-guide, no wgan poss is used'''
+            if not (params['GP_MODE']=='pure-guide'):
                 D_real.backward(mone)
+                raise Exception('oo')
 
-            if params['GP_MODE']=='pure-guide':
-                D_fake = autograd.Variable(torch.cuda.FloatTensor([0.0]))
-
-            else:
-                '''train with fake'''
-                D_fake = netD(
-                    state_v = autograd.Variable(state),
-                    prediction_v = autograd.Variable(prediction)
-                ).mean()
+            '''train with fake'''
+            D_fake = netD(
+                state_v = autograd.Variable(state),
+                prediction_v = autograd.Variable(prediction)
+            ).mean()
+            '''if pure-guide, no wgan poss is used'''
+            if not (params['GP_MODE']=='pure-guide'):              
                 D_fake.backward(one)
+                raise Exception('oo')
 
             GP_cost = [0.0]
             if params['GAN_MODE']=='wgan-grad-panish':
-
-                '''train with gradient penalty'''
+                '''
+                train with gradient penalty,
+                '''
                 gradient_penalty, num_t_mean = calc_gradient_penalty(
                     netD = netD,
                     state = state,
@@ -1514,6 +1523,7 @@ while True:
 
             DC_cost = [0.0]
             if params['GAN_MODE']=='wgan-decade':
+                raise Exception('Unsupport.')
                 if params['REPRESENTATION']=='scalar':
                     prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
                 elif params['REPRESENTATION']==chris_domain.IMAGE:
@@ -1539,7 +1549,9 @@ while True:
             optimizerD.step()
 
             C_cost = [0.0]
-            if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
+            if (params['FILTER_MODE']=='filter-c') or (params['FILTER_MODE']=='filter-d-c'):
+
+                raise Exception('Unsupport')
                 netC.zero_grad()
 
                 if params['CORRECTOR_MODE']=='c-normal':
@@ -1598,6 +1610,8 @@ while True:
             update_type = 'g'
         elif params['RUINER_MODE']=='test-r':
             update_type = 'r'
+        else:
+            raise Exception('Unsupport')
 
         ############################
         # (3) Update G network or R
@@ -1620,7 +1634,7 @@ while True:
             prediction_v = netG(
                 noise_v = autograd.Variable(noise),
                 state_v = autograd.Variable(state)
-            ).narrow(1,1,1)
+            ).narrow(1,params['STATE_DEPTH'],1)
 
             G = netD(
                     state_v = autograd.Variable(state),
@@ -1634,7 +1648,7 @@ while True:
             logger.plot('G_R', np.asarray([1.0]))
 
         elif update_type=='r':
-
+            raise Exception('Uncheacked')
             noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
             prediction_gt_r_v = netG(
                 noise_v = autograd.Variable(noise),
