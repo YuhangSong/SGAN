@@ -9,7 +9,7 @@ import torch
 IMAGE = 0
 VECTOR = 1
 BLOCK_SIZE = 5
-ACCEPT_GATE = 0.1
+ACCEPT_GATE = 0.2
 
 class Walk1D(object):
 
@@ -376,7 +376,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
 
         print(sample_distribution)
         print(true_distribution)
-        
+
         return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
     else:
 
