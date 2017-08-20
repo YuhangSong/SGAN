@@ -346,6 +346,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
                 except Exception as e:
                     sample_distribution[str(s2_sample_pos)] = 1
 
+        print(sample_distribution)
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
 

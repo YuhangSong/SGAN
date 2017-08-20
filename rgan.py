@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'b1-4'
+MULTI_RUN = 'b2-1-small-100'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -44,9 +44,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_uni_domain')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
@@ -56,17 +56,18 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
-    # add_parameters(OBSTACLE_POS_LIST = [])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
 else:
     print(unsupport)
 
 '''method settings'''
-add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
+add_parameters(GP_GUIDE_FACTOR = 0.01)
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -141,7 +142,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '3')
+add_parameters(AUX_INFO = '6')
 
 '''summary settings'''
 DSP = ''
@@ -160,9 +161,13 @@ with open(LOGDIR+"Settings.txt","a") as f:
     f.write(params_str)
 
 N_POINTS = 128
-RESULT_SAMPLE_NUM = 100
+RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
-LOG_INTER = 5000
+LOG_INTER = 500
+
+if params['METHOD']=='tabular':
+    RESULT_SAMPLE_NUM = 100
+    LOG_INTER = 20000
 
 if params['REPRESENTATION']=='scalar':
     if params['DOMAIN']=='2Dgrid':
@@ -776,7 +781,7 @@ def get_tabular_samples(tabular_dic,start_state):
             np.abs(start_state - tabular_i.x),
             keepdims=False
         )
-        if delta<chris_domain.ACCEPT_GATE:
+        if delta==0.0:
             print('Found tabular.')
             total = 0
             for x_next_i in tabular_i.x_next_dic:
@@ -809,17 +814,22 @@ def collect_samples(iteration,tabular=None):
                 state_v = autograd.Variable(start_state_batch, volatile=True)
             ).data.narrow(1,params['STATE_DEPTH'],1)
         else:
-            prediction=torch.cuda.FloatTensor(get_tabular_samples(tabular,start_state[0].cpu().numpy()))
-            print(prediction.size())
+            prediction = get_tabular_samples(tabular,start_state[0].cpu().numpy())
+            if prediction is not None:
+                prediction = torch.cuda.FloatTensor(prediction)
 
-        if ii==all_possible.size()[0]/2:
+        if ii==all_possible.size()[0]/2 and prediction is not None:
             log_img(prediction,'prediction',iteration)
 
-        l1, ac = chris_domain.evaluate_domain(
-            domain=domain,
-            s1_state=song2chris(start_state)[0],
-            s2_samples=song2chris(prediction)
-        )
+        if prediction is not None:
+            l1, ac = chris_domain.evaluate_domain(
+                domain=domain,
+                s1_state=song2chris(start_state)[0],
+                s2_samples=song2chris(prediction)
+            )
+
+        else:
+            l1, ac = 2.0, 0.0
 
         all_l1.append(l1)
         all_ac.append(ac)
@@ -1128,7 +1138,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
         gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
 
         gradients_direction_gt = autograd.Variable(gradients_direction_gt)
-        gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean()
+        gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean() * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
@@ -1183,7 +1193,7 @@ class Tabular(object):
                 np.abs((x_next_push-x_next.x)),
                 keepdims=False
             )
-            if delta<chris_domain.ACCEPT_GATE:
+            if delta==0.0:
                 x_next.push()
                 in_cell = True
                 break
@@ -1192,6 +1202,7 @@ class Tabular(object):
             self.x_next_dic += [TabulatCell(np.copy(x_next_push))]
             # print('Create a cell.')
             self.x_next_dic[-1].push()
+            print(len(self.x_next_dic))
         
 ############################### Definition End ###############################
 
@@ -1271,15 +1282,14 @@ while True:
                     np.abs(state[b] - tabular_i.x),
                     keepdims=False
                 )
-                if delta<chris_domain.ACCEPT_GATE:
+                if delta==0.0:
                     tabular_i.push(np.copy(prediction_gt[b]))
                     in_tabular = True
-                    # print('Push in a tabular.')
                     break
             if not in_tabular:
                 tabular_dic += [Tabular(np.copy(state[b]))]
-                # print('Create a tabular.')
                 tabular_dic[-1].push(np.copy(prediction_gt[b]))
+                print('Create a tabular: '+str(len(tabular_dic)))
 
         if iteration % LOG_INTER == 5:
             l1,_ = generate_image(iteration,tabular_dic)
