@@ -1642,10 +1642,11 @@ while True:
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
             generate_image(iteration)
         
-        print('[{}][{:<6}] W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
+        print('[{}][{:<6}] T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_R:{} G_cost:{:2.4f} R_cost:{:2.4f} C_cost:{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
+                num_t_mean,
                 Wasserstein_D[0],
                 GP_cost[0],
                 D_cost[0],
