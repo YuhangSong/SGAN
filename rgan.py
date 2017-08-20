@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 MULTI_RUN = 'b2-1-small-1000000'
-GPU = '0'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
