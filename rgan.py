@@ -20,8 +20,8 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'b2-1-small-1000000'
-GPU = '1'
+MULTI_RUN = 'h-0-gg_auto_interplots'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -43,7 +43,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'gg_uni_domain')
+add_parameters(EXP = 'gg_auto_interplots')
 add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
 add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
@@ -67,7 +67,9 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-add_parameters(GP_GUIDE_FACTOR = 0.000001)
+add_parameters(GP_GUIDE_FACTOR = 1.0)
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(DELTA_T = 0.01)
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -142,7 +144,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '6')
+add_parameters(AUX_INFO = '7')
 
 '''summary settings'''
 DSP = ''
@@ -1112,7 +1114,82 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         yield dataset
 
-def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
+def calc_gradient_penalty(netD, state, prediction, prediction_gt):
+    
+    if params['INTERPOLATES_MODE']=='auto':
+        prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
+        prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+        max_norm = (prediction_gt_fl.size()[1])**0.5      
+        d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
+        num_t = (d_mean / params['DELTA_T']).round().int()
+        num_t_mean = num_t.float().mean()
+
+        alpha = torch.rand(num_t.sum()).cuda()
+
+        for b in range(num_t.size()[0]):
+
+            if num_t[b]<=0.0:
+                continue
+
+            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+                state_b = state[b].unsqueeze(0).repeat(num_t[b],1,1)
+                prediction_b = prediction[b].unsqueeze(0).repeat(num_t[b],1,1)
+                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(num_t[b],1,1)
+            elif params['REPRESENTATION']==chris_domain.IMAGE:
+                state_b = state[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
+                prediction_b = prediction[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
+                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
+            
+            try:
+                state_delted = torch.cat(
+                    [state_delted,state_b],
+                    0
+                )
+                prediction_delted = torch.cat(
+                    [prediction_delted,prediction_b],
+                    0
+                )
+                prediction_gt_delted = torch.cat(
+                    [prediction_gt_delted,prediction_gt_b],
+                    0
+                )
+            except Exception as e:
+                state_delted = state_b
+                prediction_delted = prediction_b
+                prediction_gt_delted = prediction_gt_b
+
+        state = state_delted
+        prediction = prediction_delted
+        prediction_gt = prediction_gt_delted
+
+    else:
+        num_t_mean = 1.0
+
+    alpha = torch.rand(state.size()[0]).cuda()
+
+    while len(alpha.size())!=len(prediction_gt.size()):
+        alpha = alpha.unsqueeze(1)
+
+    if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        alpha = alpha.repeat(
+            1,
+            prediction_gt.size()[1],
+            prediction_gt.size()[2]
+        )
+
+    elif params['REPRESENTATION']==chris_domain.IMAGE:
+        alpha = alpha.repeat(
+            1,
+            prediction_gt.size()[1],
+            prediction_gt.size()[2],
+            prediction_gt.size()[3],
+            prediction_gt.size()[4]
+        )
+
+    else:
+        raise Exception('Unsupport')
+
+    interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -1129,16 +1206,15 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
                     retain_graph=True,
                     only_inputs=True)[0]
     gradients = gradients.contiguous()
-    gradients = gradients.view(gradients.size()[0],-1)
+    gradients_fl = gradients.view(gradients.size()[0],-1)
 
     if params['GP_MODE']=='use-guide':
-        prediction_gt = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
-        interpolates = interpolates.data.contiguous().view(interpolates.size()[0],-1)
-        gradients_direction_gt = prediction_gt - interpolates
-        gradients_direction_gt = gradients_direction_gt/(gradients_direction_gt.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt.size()[1]))
-
-        gradients_direction_gt = autograd.Variable(gradients_direction_gt)
-        gradients_penalty = (gradients-gradients_direction_gt).norm(2,dim=1).pow(2).mean() * params['GP_GUIDE_FACTOR']
+        prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
+        prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+        gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
+        gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
+        gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
+        gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean() * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
@@ -1150,7 +1226,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
     else:
         print(unsupport)
     
-    return gradients_penalty*params['LAMBDA']
+    return gradients_penalty*params['LAMBDA'], num_t_mean
 
 def restore_model():
     print('Trying load models....')
@@ -1403,30 +1479,12 @@ while True:
 
             GP_cost = [0.0]
             if params['GAN_MODE']=='wgan-grad-panish':
-                alpha = torch.rand(params['BATCH_SIZE']).cuda()
-                while len(alpha.size())!=len(prediction_gt.size()):
-                    alpha = alpha.unsqueeze(1)
-                if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
-                    alpha = alpha.repeat(
-                        1,
-                        prediction_gt.size()[1],
-                        prediction_gt.size()[2]
-                    )
-                elif params['REPRESENTATION']==chris_domain.IMAGE:
-                    alpha = alpha.repeat(
-                        1,
-                        prediction_gt.size()[1],
-                        prediction_gt.size()[2],
-                        prediction_gt.size()[3],
-                        prediction_gt.size()[4]
-                    )
 
-                interpolates = alpha * prediction_gt + ((1 - alpha) * prediction)
                 '''train with gradient penalty'''
-                gradient_penalty = calc_gradient_penalty(
+                gradient_penalty, num_t_mean = calc_gradient_penalty(
                     netD = netD,
                     state = state,
-                    interpolates = interpolates,
+                    prediction = prediction,
                     prediction_gt = prediction_gt
                 )
                 if gradient_penalty is not None:
@@ -1505,6 +1563,8 @@ while True:
             logger.plot('C_cost', C_cost)
         logger.plot('D_cost', D_cost)
         logger.plot('W_dis', Wasserstein_D)
+
+        logger.plot('num_t_mean', [num_t_mean])
 
         ############################
         # (2) Control R
