@@ -1129,16 +1129,18 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
         for b in range(num_t.size()[0]):
 
             if num_t[b]<=0.0:
-                continue
+                t = 1
+            else:
+                t = num_t[b]
 
             if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
-                state_b = state[b].unsqueeze(0).repeat(num_t[b],1,1)
-                prediction_b = prediction[b].unsqueeze(0).repeat(num_t[b],1,1)
-                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(num_t[b],1,1)
+                state_b = state[b].unsqueeze(0).repeat(t,1,1)
+                prediction_b = prediction[b].unsqueeze(0).repeat(t,1,1)
+                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(t,1,1)
             elif params['REPRESENTATION']==chris_domain.IMAGE:
-                state_b = state[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
-                prediction_b = prediction[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
-                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(num_t[b],1,1,1,1)
+                state_b = state[b].unsqueeze(0).repeat(t,1,1,1,1)
+                prediction_b = prediction[b].unsqueeze(0).repeat(t,1,1,1,1)
+                prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(t,1,1,1,1)
             
             try:
                 state_delted = torch.cat(
