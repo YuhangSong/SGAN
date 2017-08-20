@@ -20,8 +20,8 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'h-0-gg_auto_interplots'
-GPU = '0'
+MULTI_RUN = 'h-1-gg_auto_interplots'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -67,7 +67,7 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
-add_parameters(GP_GUIDE_FACTOR = 0.01)
+add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
 
