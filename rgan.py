@@ -1220,7 +1220,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
-            return None
+            return None, num_t_mean
 
     elif params['GP_MODE']=='none-guide':
         gradients_penalty = ((gradients.norm(2, dim=1) - 1.0) ** 2).mean()
