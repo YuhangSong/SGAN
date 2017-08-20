@@ -1490,7 +1490,6 @@ while True:
             '''if pure-guide, no wgan poss is used'''
             if not (params['GP_MODE']=='pure-guide'):
                 D_real.backward(mone)
-                raise Exception('oo')
 
             '''train with fake'''
             D_fake = netD(
@@ -1500,7 +1499,6 @@ while True:
             '''if pure-guide, no wgan poss is used'''
             if not (params['GP_MODE']=='pure-guide'):              
                 D_fake.backward(one)
-                raise Exception('oo')
 
             GP_cost = [0.0]
             if params['GAN_MODE']=='wgan-grad-panish':
