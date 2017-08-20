@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 MULTI_RUN = 'w4-1'
-GPU = '0'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -1042,7 +1042,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
     while True:
 
         dataset = None
-
+        
         for i in xrange(batch_size):
 
             if fix_state==True:
