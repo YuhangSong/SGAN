@@ -99,7 +99,7 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(LAMBDA = 10)
     if params['GP_MODE']=='pure-guide':
         add_parameters(BATCH_SIZE = 8)
-    else
+    else:
         add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.0)
 
