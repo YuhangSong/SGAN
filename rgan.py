@@ -20,7 +20,7 @@ import time
 import math
 import domains.all_domains as chris_domain
 
-MULTI_RUN = 'b1-0'
+MULTI_RUN = 'b1-4'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -44,9 +44,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_uni_domain')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
@@ -56,16 +56,17 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    add_parameters(OBSTACLE_POS_LIST = [])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
 else:
     print(unsupport)
 
 '''method settings'''
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide
+add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -140,7 +141,7 @@ add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '2')
+add_parameters(AUX_INFO = '3')
 
 '''summary settings'''
 DSP = ''
@@ -159,9 +160,9 @@ with open(LOGDIR+"Settings.txt","a") as f:
     f.write(params_str)
 
 N_POINTS = 128
-RESULT_SAMPLE_NUM = 1000
+RESULT_SAMPLE_NUM = 100
 FILTER_RATE = 0.5
-LOG_INTER = 500
+LOG_INTER = 5000
 
 if params['REPRESENTATION']=='scalar':
     if params['DOMAIN']=='2Dgrid':
@@ -768,7 +769,25 @@ def song2chris(x):
         x = x.squeeze(1).cpu().numpy()
     return x
 
-def collect_samples(iteration):
+def get_tabular_samples(tabular_dic,start_state):
+
+    for tabular_i in tabular_dic:
+        delta = np.mean(
+            np.abs(start_state - tabular_i.x),
+            keepdims=False
+        )
+        if delta<chris_domain.ACCEPT_GATE:
+            print('Found tabular.')
+            total = 0
+            for x_next_i in tabular_i.x_next_dic:
+                total += x_next_i.count
+            samples = []
+            for x_next_i in tabular_i.x_next_dic:
+                if x_next_i.count!=0:
+                    samples += [x_next_i.x]*long((float(x_next_i.count)/total*RESULT_SAMPLE_NUM))
+            return np.array(samples).astype(float)
+
+def collect_samples(iteration,tabular=None):
 
     all_possible = chris2song(domain.get_all_possible_start_states())
 
@@ -777,17 +796,21 @@ def collect_samples(iteration):
     for ii in range(all_possible.size()[0]):
 
         start_state = all_possible[ii:ii+1]
-        if params['REPRESENTATION']==chris_domain.IMAGE:
-            start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
-        elif params['REPRESENTATION']==chris_domain.VECTOR:
-            start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
         
-        '''prediction'''
-        noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
-        prediction = netG(
-            noise_v = autograd.Variable(noise, volatile=True),
-            state_v = autograd.Variable(start_state_batch, volatile=True)
-        ).data.narrow(1,params['STATE_DEPTH'],1)
+        if tabular is None:
+            if params['REPRESENTATION']==chris_domain.IMAGE:
+                start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+            elif params['REPRESENTATION']==chris_domain.VECTOR:
+                start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
+            '''prediction'''
+            noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
+            prediction = netG(
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(start_state_batch, volatile=True)
+            ).data.narrow(1,params['STATE_DEPTH'],1)
+        else:
+            prediction=torch.cuda.FloatTensor(get_tabular_samples(tabular,start_state[0].cpu().numpy()))
+            print(prediction.size())
 
         if ii==all_possible.size()[0]/2:
             log_img(prediction,'prediction',iteration)
@@ -814,9 +837,9 @@ def collect_samples(iteration):
 
     return np.mean(all_l1), np.mean(all_ac)
 
-def generate_image(iteration):
+def generate_image(iteration,tabular=None):
 
-    l1, accept_rate = collect_samples(iteration)
+    l1, accept_rate = collect_samples(iteration,tabular)
 
     logger.plot(
         '-L1',
@@ -826,6 +849,8 @@ def generate_image(iteration):
         '-AR',
         np.asarray([accept_rate])
     )
+
+    return l1, accept_rate
 
 def plot_convergence(images,name):
     dis, accept_rate = get_transition_prob_distribution(images)
@@ -1107,7 +1132,7 @@ def calc_gradient_penalty(netD, state, interpolates, prediction_gt):
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
-            return autograd.Variable(torch.cuda.FloatTensor([0.0]))
+            return None
 
     elif params['GP_MODE']=='none-guide':
         gradients_penalty = ((gradients.norm(2, dim=1) - 1.0) ** 2).mean()
@@ -1158,7 +1183,7 @@ class Tabular(object):
                 np.abs((x_next_push-x_next.x)),
                 keepdims=False
             )
-            if delta<params['GRID_ACCEPT']:
+            if delta<chris_domain.ACCEPT_GATE:
                 x_next.push()
                 in_cell = True
                 break
@@ -1172,6 +1197,7 @@ class Tabular(object):
 
 if params['METHOD']=='tabular':
     tabular_dic = []
+    l1 = 2.0
 
 elif params['METHOD']=='deterministic-deep-net':
     netT = Transitor().cuda()
@@ -1234,12 +1260,9 @@ while True:
     if params['METHOD']=='tabular':
 
         '''get data set'''
-        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state_prediction_gt = data.next()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH']).cpu().numpy()
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1).cpu().numpy()
-
-        print(state_prediction_gt.size())
-        print(pppp)
 
         for b in range(np.shape(state)[0]):
             in_tabular = False
@@ -1248,7 +1271,7 @@ while True:
                     np.abs(state[b] - tabular_i.x),
                     keepdims=False
                 )
-                if delta<params['GRID_ACCEPT']:
+                if delta<chris_domain.ACCEPT_GATE:
                     tabular_i.push(np.copy(prediction_gt[b]))
                     in_tabular = True
                     # print('Push in a tabular.')
@@ -1258,62 +1281,10 @@ while True:
                 # print('Create a tabular.')
                 tabular_dic[-1].push(np.copy(prediction_gt[b]))
 
-        l1 = 2.0
-        x, y = get_state(fix_state=True)
-        fix_state_ob = np.expand_dims(get_ob(x,y),0)
-        for tabular_i in tabular_dic:
-            delta = np.mean(
-                np.abs(fix_state_ob - tabular_i.x),
-                keepdims=False
-            )
-            if delta<params['GRID_ACCEPT']:
-                tabular_i
-                if params['GRID_DETECTION']=='threshold':
-                    cur_x, cur_y = get_state(fix_state=True)
-                    accept_num = 0.0
-                    next_state_dic = []
-                    for action in range(len(params['GRID_ACTION_DISTRIBUTION'])):
-                        next_x, next_y = transition(cur_x, cur_y, action)
-                        ob_next = get_ob(next_x,next_y)
-                        in_cell = False
-                        temp = 0.0
-                        for cell_i in tabular_i.x_next_dic:
-                            delta = np.mean(
-                                np.abs(ob_next-cell_i.x),
-                                keepdims=False
-                            )
-                            if delta<params['GRID_ACCEPT']:
-                                in_cell = True
-                                temp = cell_i.count
-                                break
-                        next_state_dic += [temp]
-                else:
-                    print(unsupport)
-                next_state_dic = np.asarray(next_state_dic)
-                sum_ = np.sum(next_state_dic)
-                if not (sum_==0):
-                    next_state_dic = next_state_dic / sum_
+        if iteration % LOG_INTER == 5:
+            l1,_ = generate_image(iteration,tabular_dic)
 
-                dis = next_state_dic
-                if not (np.sum(dis)==0.0):
-                    kl = scipy.stats.entropy(
-                        dis,
-                        qk=params['GRID_ACTION_DISTRIBUTION'],
-                        base=None
-                    )
-                    logger.plot(
-                        'tabular'+'-KL',
-                        np.asarray([kl])
-                    )
-                l1 = np.squeeze(np.sum(np.abs(dis - np.asarray(params['GRID_ACTION_DISTRIBUTION']))))
-                logger.plot(
-                    'tabular'+'-L1',
-                    np.asarray([l1])
-                )
-
-                break
-
-        print('[{}][{:<6}] l1: {:f}'
+        print('[{}][{}] l1: {}'
             .format(
                 MULTI_RUN,
                 iteration,
@@ -1448,7 +1419,10 @@ while True:
                     interpolates = interpolates,
                     prediction_gt = prediction_gt
                 )
-                gradient_penalty.backward()
+                if gradient_penalty is not None:
+                    gradient_penalty.backward()
+                else:
+                    gradient_penalty = autograd.Variable(torch.cuda.FloatTensor([0.0]))
                 GP_cost = gradient_penalty.data.cpu().numpy()
 
             DC_cost = [0.0]
