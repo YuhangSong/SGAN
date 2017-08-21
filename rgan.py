@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-3'
+MULTI_RUN = 'h-1'
 GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
