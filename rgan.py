@@ -997,7 +997,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     '''disc_map'''
     if params['REPRESENTATION']=='scalar':
 
-        plt.title(MULTI_RUN)
+        plt.title(MULTI_RUN+'@'+str(iteration))
 
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
         points[:, :, 0] = np.linspace(0, 1.0, N_POINTS)[:, None]
