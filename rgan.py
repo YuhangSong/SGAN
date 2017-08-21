@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-7'
-GPU = '0'
+MULTI_RUN = 'b2-8'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -83,7 +83,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.02)
 
 add_parameters(SOFT_GP = True)
-add_parameters(SOFT_GP_FACTOR = 4)
+add_parameters(SOFT_GP_FACTOR = 3)
 
 add_parameters(STABLE_MSE = None) # None, 0.001
 
