@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-1'
+MULTI_RUN = 'b2-1'
 GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -44,12 +44,13 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'gg_auto_interplots')
+add_parameters(EXP = 'simple_gg')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = 'scalar') # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
+'''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
 
@@ -57,11 +58,11 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -75,18 +76,17 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(GUIDE_MODE = 'norm') # norm, direction
-add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.01)
-add_parameters(STABLE_MSE = 0.001) # None, 0.001
+add_parameters(DELTA_T = 0.1)
+add_parameters(STABLE_MSE = None) # None, 0.001
+add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
     add_parameters(DIM = 512)
-    add_parameters(NOISE_SIZE = 2)
+    add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 0.1)
-    add_parameters(BATCH_SIZE = 256)
+    add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.VECTOR:
@@ -94,25 +94,25 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 5)
     add_parameters(BATCH_SIZE = 32)
-    add_parameters(TARGET_W_DISTANCE = 0.0)
+    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
     add_parameters(BATCH_SIZE = 32)
-    add_parameters(TARGET_W_DISTANCE = 0.0)
+    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
     print(unsupport)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 3)
-    add_parameters(FEATURE = 3)
 
 else:
     add_parameters(STATE_DEPTH = 1)
-    add_parameters(FEATURE = 3)
+
+add_parameters(FEATURE = 3)
 
 '''default domain settings generate'''
 if params['DOMAIN']=='1Dflip':
@@ -147,12 +147,10 @@ else:
 '''history settings'''
 add_parameters(RUINER_MODE = 'none-r') # none-r, use-r, test-r
 add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gravity, wgan-decade
-add_parameters(FILTER_MODE = 'none-f') # none-f, filter-c, filter-d, filter-d-c
-add_parameters(CORRECTOR_MODE = 'c-decade') # c-normal, c-decade
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'chris low dim net 1')
+add_parameters(AUX_INFO = 'chris low dim net 3')
 
 '''summary settings'''
 DSP = ''
@@ -992,8 +990,8 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     '''disc_map'''
     if params['REPRESENTATION']=='scalar':
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
-        points[:, :, 0] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[:, None]
-        points[:, :, 1] = np.linspace(0, params['GRID_SIZE'], N_POINTS)[None, :]
+        points[:, :, 0] = np.linspace(0, 1.0, N_POINTS)[:, None]
+        points[:, :, 1] = np.linspace(0, 1.0, N_POINTS)[None, :]
         points = points.reshape((-1, 2))
         points = np.expand_dims(points,1)
 
@@ -1001,7 +999,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                         state_v = autograd.Variable(state, volatile=True),
                         prediction_v = autograd.Variable(torch.Tensor(points).cuda(), volatile=True)
                     ).cpu().data.numpy()
-        x = y = np.linspace(0, params['GRID_SIZE'], N_POINTS)
+        x = y = np.linspace(0, 1.0, N_POINTS)
         disc_map = disc_map.reshape((len(x), len(y))).transpose()
         plt.contour(x, y, disc_map)
 
@@ -1032,33 +1030,34 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             )
 
     '''prediction_gt_r'''
-    if params['REPRESENTATION']=='scalar':
-        noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
-        prediction_gt_r = netG(
-            noise_v = autograd.Variable(noise, volatile=True),
-            state_v = autograd.Variable(prediction_gt, volatile=True)
-        ).data.narrow(1,0,1)
-        plt.scatter(
-            prediction_gt_r.squeeze(1).cpu().numpy()[:, 0], 
-            prediction_gt_r.squeeze(1).cpu().numpy()[:, 1], 
-            c='blue', 
-            marker='+', 
-            alpha=0.5
-        )
-    else:
-        if gen_basic:
+    if params['RUINER_MODE']!='none-r':
+        if params['REPRESENTATION']=='scalar':
             noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
             prediction_gt_r = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(prediction_gt, volatile=True)
             ).data.narrow(1,0,1)
-            log_img(prediction_gt_r,'prediction_gt_r',iteration)
-            prediction_gt_r_mean = prediction_gt_r.mean(0,keepdim=True)
-            log_img(prediction_gt_r_mean,'prediction_gt_r_mean',iteration)
-            plot_convergence(
-                images=prediction_gt_r,
-                name='prediction_gt_r_mean'
+            plt.scatter(
+                prediction_gt_r.squeeze(1).cpu().numpy()[:, 0], 
+                prediction_gt_r.squeeze(1).cpu().numpy()[:, 1], 
+                c='blue', 
+                marker='+', 
+                alpha=0.5
             )
+        else:
+            if gen_basic:
+                noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
+                prediction_gt_r = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(prediction_gt, volatile=True)
+                ).data.narrow(1,0,1)
+                log_img(prediction_gt_r,'prediction_gt_r',iteration)
+                prediction_gt_r_mean = prediction_gt_r.mean(0,keepdim=True)
+                log_img(prediction_gt_r_mean,'prediction_gt_r_mean',iteration)
+                plot_convergence(
+                    images=prediction_gt_r,
+                    name='prediction_gt_r_mean'
+                )
 
     '''prediction'''
     noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
@@ -1212,7 +1211,7 @@ def transition(cur_x,cur_y,action):
 def get_ob(x,y):
 
     ob = [x,y]
-    ob = np.asarray(ob)
+    ob = np.asarray(ob).astype(float) / (params['GRID_SIZE']-1)
     ob = np.expand_dims(ob,0)
 
     return ob
@@ -1258,13 +1257,14 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
 def calc_gradient_penalty(netD, state, prediction, prediction_gt):
     
+    '''get multiple interplots'''
     if params['INTERPOLATES_MODE']=='auto':
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
         num_t = (d_mean / params['DELTA_T']).round().int()
-        num_t_mean = num_t.float().mean()
+        num_t_mean = num_t.float().mean() + 2
 
         for b in range(num_t.size()[0]):
 
@@ -1300,14 +1300,17 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
                 prediction_delted = prediction_b
                 prediction_gt_delted = prediction_gt_b
 
-        state = state_delted
-        prediction = prediction_delted
-        prediction_gt = prediction_gt_delted
+        state = torch.cat([state,state,state_delted],0)
+        prediction = torch.cat([prediction,prediction,prediction_delted],0)
+        prediction_gt = torch.cat([prediction_gt,prediction_gt,prediction_gt_delted],0)
+
+        alpha = torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(1.0)
+        alpha = torch.cat([alpha,torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(0.0)],0)
+        alpha = torch.cat([alpha,torch.rand(prediction_gt.size()[0]-params['BATCH_SIZE']*2).cuda()],0)
 
     else:
         num_t_mean = 1.0
-
-    alpha = torch.rand(prediction_gt.size()[0]).cuda()
+        alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
@@ -1350,40 +1353,33 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
 
-    if params['GP_MODE']=='use-guide' or params['GP_MODE']=='pure-guide':
+    if (params['GP_MODE']=='use-guide') or (params['GP_MODE']=='pure-guide'):
+
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
+
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
+
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
-        if params['GUIDE_MODE']=='norm':
-            gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean() * params['GP_GUIDE_FACTOR']
+        gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
 
-        elif params['GUIDE_MODE']=='direction':
-            gradients_fl = gradients_fl/(gradients_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_fl.size()[1]))
-            for b in range(gradients_fl.size()[0]):
-                dot_unit = torch.dot(gradients_direction_gt_fl[b],gradients_fl[b]).pow(2)
-                try:
-                    gradients_penalty = gradients_penalty + dot_unit
-                except Exception as e:
-                    gradients_penalty = dot_unit
-            gradients_penalty = (gradients_penalty / gradients_fl.size()[0]) * params['GP_GUIDE_FACTOR']
-
-        else:
-            raise Exception('Unsupport')
+        if params['GP_MODE']=='use-guide':
+            gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
-            return None, num_t_mean
+            gradients_penalty = None
 
     elif params['GP_MODE']=='none-guide':
         gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
+        gradients_penalty = gradients_penalty * params['LAMBDA']
     
     else:
         raise Exception('Unsupport')
     
-    return gradients_penalty*params['LAMBDA'], num_t_mean
+    return gradients_penalty, num_t_mean
 
 def restore_model():
     print('Trying load models....')
@@ -1628,29 +1624,32 @@ while True:
                 '''
                 netD.zero_grad()
 
-                '''train with real'''
-                D_real = netD(
-                    state_v = autograd.Variable(state),
-                    prediction_v = autograd.Variable(prediction_gt)
-                ).mean()
                 '''if pure-guide, no wgan poss is used'''
                 if not (params['GP_MODE']=='pure-guide'):
+                    '''train with real'''
+                    D_real = netD(
+                        state_v = autograd.Variable(state),
+                        prediction_v = autograd.Variable(prediction_gt)
+                    ).mean()
                     D_real.backward(mone)
 
-                '''train with fake'''
-                D_fake = netD(
-                    state_v = autograd.Variable(state),
-                    prediction_v = autograd.Variable(prediction)
-                ).mean()
+                else:
+                    D_real = autograd.Variable(torch.cuda.FloatTensor([0.0]))
+
                 '''if pure-guide, no wgan poss is used'''
-                if not (params['GP_MODE']=='pure-guide'):              
+                if not (params['GP_MODE']=='pure-guide'): 
+                    '''train with fake'''
+                    D_fake = netD(
+                        state_v = autograd.Variable(state),
+                        prediction_v = autograd.Variable(prediction)
+                    ).mean()             
                     D_fake.backward(one)
+
+                else:
+                    D_fake = autograd.Variable(torch.cuda.FloatTensor([0.0]))
 
                 GP_cost = [0.0]
                 if params['GAN_MODE']=='wgan-grad-panish':
-                    '''
-                    train with gradient penalty,
-                    '''
                     gradient_penalty, num_t_mean = calc_gradient_penalty(
                         netD = netD,
                         state = state,
@@ -1660,25 +1659,11 @@ while True:
 
                     if gradient_penalty is not None:
                         gradient_penalty.backward()
+
                     else:
                         gradient_penalty = autograd.Variable(torch.cuda.FloatTensor([0.0]))
 
                     GP_cost = gradient_penalty.data.cpu().numpy()
-
-                DC_cost = [0.0]
-                if params['GAN_MODE']=='wgan-decade':
-                    raise Exception('Unsupport.')
-                    if params['REPRESENTATION']=='scalar':
-                        prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,params['GRID_SIZE'])
-                    elif params['REPRESENTATION']==chris_domain.IMAGE:
-                        prediction_uni = torch.cuda.FloatTensor(torch.cat([prediction_gt,prediction],0).size()).uniform_(0.0,1.0)
-                    D_uni = netD(
-                        state_v = autograd.Variable(torch.cat([state,state],0)),
-                        prediction_v = autograd.Variable(prediction_uni)
-                    )
-                    decade_cost = mse_loss_model(D_uni, autograd.Variable(torch.cuda.FloatTensor(D_uni.size()).fill_(0.0)))
-                    decade_cost.backward()
-                    DC_cost = decade_cost.cpu().data.numpy()
 
                 if params['GAN_MODE']=='wgan-grad-panish':
                     D_cost = D_fake - D_real + gradient_penalty
@@ -1692,58 +1677,15 @@ while True:
 
                 optimizerD.step()
 
-                C_cost = [0.0]
-                if (params['FILTER_MODE']=='filter-c') or (params['FILTER_MODE']=='filter-d-c'):
-
-                    raise Exception('Unsupport')
-                    netC.zero_grad()
-
-                    if params['CORRECTOR_MODE']=='c-normal':
-
-                        C_out_v = netC(
-                            state_v = autograd.Variable(torch.cat([state,state],0)),
-                            prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction],0))
-                        )
-                        C_cost_v = torch.nn.functional.binary_cross_entropy(C_out_v,autograd.Variable(ones_zeros))
-
-                    elif params['CORRECTOR_MODE']=='c-decade':
-
-                        if params['REPRESENTATION']=='scalar':
-                            prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,params['GRID_SIZE'])
-                        elif params['REPRESENTATION']==chris_domain.VECTOR or params['REPRESENTATION']==chris_domain.IMAGE:
-                            prediction_uni = torch.cuda.FloatTensor(prediction_gt.size()).uniform_(0.0,1.0)
-                        C_out_v = netC(
-                            state_v = autograd.Variable(torch.cat([state,state],0)),
-                            prediction_v = autograd.Variable(torch.cat([prediction_gt,prediction_uni],0))
-                        )
-                        C_cost_v = mse_loss_model(C_out_v,autograd.Variable(ones_zeros))
-
-                    C_cost_v.backward()
-                    C_cost = C_cost_v.cpu().data.numpy()
-                    optimizerC.step()
-
-            if params['GAN_MODE']=='wgan-gravity':
-                for p in netD.parameters():
-                    p.data = p.data * (1.0-0.0001)
-
-            if params['CORRECTOR_MODE']=='c-decade':
-                for p in netC.parameters():
-                    p.data = p.data * (1.0-0.01)
-
             if params['GAN_MODE']=='wgan-grad-panish':
                 logger.plot('GP_cost', GP_cost)
-            if params['GAN_MODE']=='wgan-decade':
-                logger.plot('DC_cost', DC_cost)
-            if params['FILTER_MODE']=='filter-c' or params['FILTER_MODE']=='filter-d-c':
-                logger.plot('C_cost', C_cost)
             logger.plot('D_cost', D_cost)
             logger.plot('W_dis', Wasserstein_D)
-
             logger.plot('num_t_mean', [num_t_mean])
 
-            ############################
-            # (2) Control R
-            ############################
+            ########################################################
+            ################## (2) Control R #######################
+            ########################################################
 
             if params['RUINER_MODE']=='use-r':
                 if Wasserstein_D[0] > params['TARGET_W_DISTANCE']:
@@ -1760,9 +1702,9 @@ while True:
         if stabling_mse:
             update_type = 'g'
 
-        ############################
-        # (3) Update G network or R
-        ###########################
+        ########################################################
+        ############# (3) Update G network or R ################
+        ########################################################
 
         state_prediction_gt = data.next()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
@@ -1805,7 +1747,6 @@ while True:
                 logger.plot('G_R', np.asarray([1.0]))
 
         elif update_type=='r':
-            raise Exception('Uncheacked')
             noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
             prediction_gt_r_v = netG(
                 noise_v = autograd.Variable(noise),
@@ -1864,6 +1805,7 @@ while True:
                 except Exception as e:
                     pass
             else:
+                pass
                 L1, AC = generate_image(iteration)
 
     if iteration % LOG_INTER == 5:
