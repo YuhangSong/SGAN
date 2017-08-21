@@ -21,8 +21,8 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-1'
-GPU = '1'
+MULTI_RUN = 'b2-0'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -75,8 +75,13 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+
+# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+
 add_parameters(DELTA_T = 0.1)
 add_parameters(STABLE_MSE = None) # None, 0.001
 add_parameters(GP_GUIDE_FACTOR = 1.0)
@@ -150,7 +155,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'chris low dim net 3')
+add_parameters(AUX_INFO = 'chris low dim net 4')
 
 '''summary settings'''
 DSP = ''
@@ -268,7 +273,8 @@ class Generator(nn.Module):
             )
             if params['REPRESENTATION']=='scalar':
                 deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
+                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                    nn.Sigmoid()
                 )
             elif params['REPRESENTATION']==chris_domain.VECTOR:
                 deconv_layer = nn.Sequential(
