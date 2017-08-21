@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = True
+CLEAR_RUN = False
 MULTI_RUN = 'h-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -56,8 +56,8 @@ if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
 
 elif params['DOMAIN']=='1Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
-    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
@@ -77,16 +77,17 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 add_parameters(DELTA_T = 0.1)
 
-add_parameters(SOFT_GP = True)
+add_parameters(SOFT_GP = False)
 add_parameters(SOFT_GP_FACTOR = 3)
 
-add_parameters(STABLE_MSE = 0.0) # None
+add_parameters(STABLE_MSE = None) # None
 
 '''model settings'''
 if params['REPRESENTATION']==chris_domain.SCALAR:
@@ -110,11 +111,7 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
 else:
     print(unsupport)
 
-if params['INTERPOLATES_MODE']=='auto':
-    add_parameters(BATCH_SIZE = 32)
-
-else:
-    add_parameters(BATCH_SIZE = 32)
+add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 3)
@@ -160,7 +157,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'chris low dim net 6')
+add_parameters(AUX_INFO = 'no bn on vector and scalar domain')
 
 '''summary settings'''
 DSP = ''
@@ -259,17 +256,14 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
@@ -808,12 +802,12 @@ class Corrector(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    # if classname.find('Linear') != -1:
-    #     torch.nn.init.xavier_uniform(
-    #         m.weight.data,
-    #         gain=1
-    #     )
-    #     m.bias.data.fill_(0.1)
+    if classname.find('Linear') != -1:
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
+        m.bias.data.fill_(0.1)
     # elif classname.find('Conv3d') != -1:
     #     torch.nn.init.xavier_uniform(
     #         m.weight.data,
