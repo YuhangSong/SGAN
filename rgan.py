@@ -21,8 +21,8 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-0'
-GPU = '0'
+MULTI_RUN = 'h-1'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -74,10 +74,10 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GUIDE_MODE = 'norm') # norm, direction
 add_parameters(GP_GUIDE_FACTOR = 1.0)
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
 add_parameters(STABLE_MSE = None) # None, 0.001
 
