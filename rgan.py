@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-11'
-GPU = '1'
+MULTI_RUN = 'h-0'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -46,9 +46,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'simple_gg')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = True)
-add_parameters(REPRESENTATION = chris_domain.SCALAR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(FIX_STATE = False)
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -182,7 +182,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
-LOG_INTER = 100
+LOG_INTER = 1000
 
 if params['METHOD']=='tabular':
     RESULT_SAMPLE_NUM = 100

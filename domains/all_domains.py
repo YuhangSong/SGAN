@@ -15,12 +15,13 @@ ACCEPT_GATE = 0.1
 
 class Walk1D(object):
 
-    def __init__(self, length, prob_left, mode):
+    def __init__(self, length, prob_left, mode, fix_state=False):
         assert 0 <= prob_left <= 1
         assert mode in [IMAGE, VECTOR]
         self.LEFT, self.RIGHT = 0, 1
         self.action_dic = [self.LEFT, self.RIGHT]
         self.mode = mode
+        self.fix_state = fix_state
         self.n = length
         self.p = prob_left
         self.prob_dirs = [self.p, (1-self.p)]
@@ -37,12 +38,6 @@ class Walk1D(object):
         return [self.get_state(pos) for pos in range(self.n)]
 
     def get_transition_probs(self, state_pos):
-        # all_possible = self.get_all_possible_start_states()
-        # state_pos = np.argmax(state_vec)
-        # prob_dict = {tuple(state): 0. for state in all_possible}
-        # prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] = self.p
-        # prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] = 1 - self.p
-        # return prob_dict
 
         prob_dict = {}
         for action_i in range(len(self.action_dic)):
