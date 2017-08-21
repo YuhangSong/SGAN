@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-3'
-GPU = '1'
+MULTI_RUN = 'b2-4'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -76,11 +76,12 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-add_parameters(DELTA_T = 0.01)
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(SOFT_GP = True)
+
+add_parameters(DELTA_T = 0.1)
 add_parameters(STABLE_MSE = None) # None, 0.001
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
@@ -107,7 +108,7 @@ else:
     print(unsupport)
 
 if params['INTERPOLATES_MODE']=='auto':
-    add_parameters(BATCH_SIZE = 4)
+    add_parameters(BATCH_SIZE = 32)
 
 else:
     add_parameters(BATCH_SIZE = 32)
@@ -1409,7 +1410,16 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             gradients_penalty = None
 
     elif params['GP_MODE']=='none-guide':
-        gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
+
+        if params['SOFT_GP']:
+            alpha_fl = alpha.contiguous().view(alpha.size()[0],-1)
+            soft_factor = (alpha_fl-0.5).abs()*2.0
+            soft_factor = autograd.Variable(soft_factor)
+            gradients_penalty = (((gradients_fl*soft_factor).norm(2, dim=1) - 1.0) ** 2).mean()
+
+        else:
+            gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
+
         gradients_penalty = gradients_penalty * params['LAMBDA']
     
     else:
