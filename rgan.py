@@ -21,8 +21,8 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = True
-MULTI_RUN = 'b2-10'
+CLEAR_RUN = False
+MULTI_RUN = 'b2-11'
 GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -79,8 +79,8 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
-add_parameters(DELTA_T = 0.02)
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(DELTA_T = 0.1)
 
 add_parameters(SOFT_GP = True)
 add_parameters(SOFT_GP_FACTOR = 3)
@@ -1632,11 +1632,7 @@ while True:
             for p in netD.parameters():
                 p.requires_grad = True
 
-            if params['INTERPOLATES_MODE']=='auto':
-                # d_iter_num = params['CRITIC_ITERS']/2
-                d_iter_num = 1
-            elif params['INTERPOLATES_MODE']=='one':
-                d_iter_num = params['CRITIC_ITERS']
+            d_iter_num = params['CRITIC_ITERS']
 
             for iter_d in xrange(d_iter_num):
 
