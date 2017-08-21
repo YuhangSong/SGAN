@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b1-0'
+MULTI_RUN = 'h-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -45,9 +45,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_auto_interplots')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = 'scalar') # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
@@ -595,7 +595,6 @@ class Discriminator(nn.Module):
                 nn.Linear(params['DIM']*2, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], 1),
-                nn.LeakyReLU(0.001, inplace=True),
             )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
