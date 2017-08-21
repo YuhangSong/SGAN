@@ -21,8 +21,8 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-1'
-GPU = '1'
+MULTI_RUN = 'b1-0'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -73,7 +73,7 @@ else:
     print(unsupport)
 
 '''method settings'''
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GUIDE_MODE = 'norm') # norm, direction
 add_parameters(GP_GUIDE_FACTOR = 1.0)
@@ -864,18 +864,33 @@ def collect_samples(iteration,tabular=None):
         start_state = all_possible[ii:ii+1]
         
         if tabular is None:
+
             if params['REPRESENTATION']==chris_domain.IMAGE:
                 start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+            
             elif params['REPRESENTATION']==chris_domain.VECTOR:
                 start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
-            '''prediction'''
-            noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
-            prediction = netG(
-                noise_v = autograd.Variable(noise, volatile=True),
-                state_v = autograd.Variable(start_state_batch, volatile=True)
-            ).data.narrow(1,params['STATE_DEPTH'],1)
+            
+            if params['METHOD']=='deterministic-deep-net':
+                prediction = netT(
+                    state_v = autograd.Variable(start_state_batch)
+                ).narrow(1,(params['STATE_DEPTH']-1),1).data
+
+            elif params['METHOD']=='grl':
+                '''prediction'''
+                noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
+                prediction = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(start_state_batch, volatile=True)
+                ).data.narrow(1,params['STATE_DEPTH'],1)
+
+            else:
+                raise Exception('Unsupport')
+
         else:
+            
             prediction = get_tabular_samples(tabular,start_state[0].cpu().numpy())
+            
             if prediction is not None:
                 prediction = torch.cuda.FloatTensor(prediction)
 
@@ -1445,6 +1460,8 @@ elif params['METHOD']=='deterministic-deep-net':
         batch_size=1
     )
 
+    L1, AC = 2.0, 0.0
+
 elif params['METHOD']=='grl':
 
     netG = Generator().cuda()
@@ -1530,7 +1547,7 @@ while True:
     elif params['METHOD']=='deterministic-deep-net':
 
         '''get data set'''
-        state_prediction_gt = torch.Tensor(data.next()).cuda()
+        state_prediction_gt = data.next()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
@@ -1549,31 +1566,18 @@ while True:
         
         optimizerT.step()
 
-        print('[{}][{:<6}] T_cost:{:2.4f}'
+        if iteration % LOG_INTER == 5:
+            L1, AC = generate_image(iteration)
+
+        print('[{}][{:<6}] T_cost:{:2.4f} L1::{:2.4f} AC::{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
-                T_cost[0]
+                T_cost[0],
+                L1,
+                AC
             )
         )
-
-        dataset = data_fix_state.next()
-        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-        prediction = netT(
-            state_v = autograd.Variable(state)
-        ).narrow(1,(params['STATE_DEPTH']-1),1).data
-        try:
-            prediction_dic = torch.cat([prediction_dic,prediction],0)
-        except Exception as e:
-            prediction_dic = prediction
-        if prediction_dic.size()[0]>RESULT_SAMPLE_NUM:
-            prediction_dic = prediction_dic.narrow(0,prediction_dic.size()[0]-RESULT_SAMPLE_NUM,RESULT_SAMPLE_NUM)
-        if iteration % LOG_INTER == 5:
-            if prediction_dic.size()[0]>=RESULT_SAMPLE_NUM:
-                plot_convergence(
-                    images=prediction_dic,
-                    name='deterministic-deep-net'
-                )
 
     elif params['METHOD']=='grl':
 
