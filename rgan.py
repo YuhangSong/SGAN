@@ -21,8 +21,8 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-0'
-GPU = '0'
+MULTI_RUN = 'b2-3'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -45,9 +45,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_auto_interplots')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = 'scalar') # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
@@ -74,10 +74,10 @@ else:
 
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GUIDE_MODE = 'norm') # norm, direction
 add_parameters(GP_GUIDE_FACTOR = 1.0)
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
 add_parameters(STABLE_MSE = None) # None, 0.001
 
@@ -911,18 +911,39 @@ def collect_samples(iteration,tabular=None):
 
 def generate_image(iteration,tabular=None):
 
-    l1, accept_rate = collect_samples(iteration,tabular)
+    if params['REPRESENTATION']=='scalar':
 
-    logger.plot(
-        '-L1',
-        np.asarray([l1])
-    )
-    logger.plot(
-        '-AR',
-        np.asarray([accept_rate])
-    )
+        batch_size = (N_POINTS**2)
 
-    return l1, accept_rate
+        data_fix_state = dataset_iter(
+            fix_state=True,
+            batch_size=batch_size
+        )
+        dataset = data_fix_state.next()
+
+        generate_image_with_filter(
+            iteration=iteration,
+            dataset=dataset,
+            gen_basic=True,
+            filter_net=None
+        )
+
+        return 0.0, 0.0
+
+    else:
+
+        l1, accept_rate = collect_samples(iteration,tabular)
+
+        logger.plot(
+            '-L1',
+            np.asarray([l1])
+        )
+        logger.plot(
+            '-AR',
+            np.asarray([accept_rate])
+        )
+
+        return l1, accept_rate
 
 def plot_convergence(images,name):
     dis, accept_rate = get_transition_prob_distribution(images)
@@ -949,6 +970,10 @@ def plot_convergence(images,name):
 def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
 
     plt.clf()
+
+    state_prediction_gt = dataset
+    state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+    prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
     '''disc_map'''
     if params['REPRESENTATION']=='scalar':
@@ -1143,6 +1168,41 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             win=file_name,
             name=file_name+'_'+str(iteration))
 
+def get_state(fix_state=False):
+
+    if not fix_state:
+        cur_x = np.random.choice(range(params['GRID_SIZE']))
+        cur_y = np.random.choice(range(params['GRID_SIZE']))
+    else:
+        cur_x = FIX_STATE_TO[0]
+        cur_y = FIX_STATE_TO[1]
+
+    return cur_x,cur_y
+
+def transition(cur_x,cur_y,action):
+
+    next_x = cur_x
+    next_y = cur_y
+    if action==0:
+        next_x = cur_x + 1
+    elif action==1:
+        next_y = cur_y + 1
+    elif action==2:
+        next_x = cur_x - 1
+    elif action==3:
+        next_y = cur_y - 1
+    next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
+    next_y = np.clip(next_y,0,params['GRID_SIZE']-1)
+    return next_x,next_y
+
+def get_ob(x,y):
+
+    ob = [x,y]
+    ob = np.asarray(ob)
+    ob = np.expand_dims(ob,0)
+
+    return ob
+
 def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
     while True:
@@ -1151,12 +1211,20 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         for i in xrange(batch_size):
 
-            if fix_state==True:
-                print(unsupport)
+            if params['REPRESENTATION']=='scalar':
+                cur_x, cur_y = get_state(fix_state=fix_state)
+                action = np.random.choice(
+                    range(len(params['GRID_ACTION_DISTRIBUTION'])),
+                    p=params['GRID_ACTION_DISTRIBUTION']
+                )
+                next_x, next_y = transition(cur_x, cur_y, action)
+                ob = torch.cuda.FloatTensor(get_ob(cur_x,cur_y))
+                ob_next = torch.cuda.FloatTensor(get_ob(next_x,next_y))
 
-            domain.reset()
-            ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
-            ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
+            else:
+                domain.reset()
+                ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
+                ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
 
             data = torch.cat([ob,ob_next],0).unsqueeze(0)
 
