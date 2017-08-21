@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-1'
-GPU = '1'
+MULTI_RUN = 'b2-2'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -83,7 +83,7 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-add_parameters(DELTA_T = 0.1)
+add_parameters(DELTA_T = 0.01)
 add_parameters(STABLE_MSE = None) # None, 0.001
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
