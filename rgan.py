@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 
 CLEAR_RUN = False
-MULTI_RUN = 'b1-2'
+MULTI_RUN = 'w4-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -45,10 +45,10 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'gg_auto_interplots')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(GAME_MDOE = 'full') # same-start, full
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 20)
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(GRID_SIZE = 5)
 
 if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
@@ -57,11 +57,11 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -73,13 +73,13 @@ else:
     print(unsupport)
 
 '''method settings'''
-add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GUIDE_MODE = 'norm') # norm, direction
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.01)
-add_parameters(STABLE_MSE = None) # None, 0.001
+add_parameters(STABLE_MSE = 0.001) # None, 0.001
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
