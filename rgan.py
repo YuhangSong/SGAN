@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-5'
-GPU = '1'
+MULTI_RUN = 'b2-6'
+GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -77,13 +77,15 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
-add_parameters(SOFT_GP = True)
-
-add_parameters(DELTA_T = 0.1)
-add_parameters(STABLE_MSE = None) # None, 0.001
 add_parameters(GP_GUIDE_FACTOR = 1.0)
+
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(DELTA_T = 0.02)
+
+add_parameters(SOFT_GP = True)
+add_parameters(SOFT_GP_FACTOR = 3)
+
+add_parameters(STABLE_MSE = None) # None, 0.001
 
 '''model settings'''
 if params['REPRESENTATION']=='scalar':
@@ -180,7 +182,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
-LOG_INTER = 500
+LOG_INTER = 100
 
 if params['METHOD']=='tabular':
     RESULT_SAMPLE_NUM = 100
@@ -1333,6 +1335,10 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             prediction_gt = prediction_gt_delted
             alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
+            if params['SOFT_GP']:
+                '''solf function here'''
+                alpha = ((((alpha*2.0)-1.0)*params['SOFT_GP_FACTOR']).tanh()*0.5)+0.5
+
         else:
             return None, num_t_sum
 
@@ -1411,14 +1417,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
     elif params['GP_MODE']=='none-guide':
 
-        if params['SOFT_GP']:
-            alpha_fl = alpha.contiguous().view(alpha.size()[0],-1)
-            soft_factor = (alpha_fl-0.5).abs()*2.0
-            soft_factor = autograd.Variable(soft_factor)
-            gradients_penalty = (((gradients_fl*soft_factor).norm(2, dim=1) - 1.0) ** 2).mean()
-
-        else:
-            gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
+        gradients_penalty = ((gradients_fl.norm(2, dim=1) - 1.0) ** 2).mean()
 
         gradients_penalty = gradients_penalty * params['LAMBDA']
     
