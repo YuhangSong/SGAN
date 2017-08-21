@@ -24,6 +24,7 @@ import matplotlib.cm as cm
 CLEAR_RUN = False
 MULTI_RUN = 'h-1'
 GPU = '1'
+
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
