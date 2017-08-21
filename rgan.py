@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-2'
-GPU = '0'
+MULTI_RUN = 'b2-3'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -77,10 +77,7 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
-
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
 add_parameters(DELTA_T = 0.01)
@@ -110,7 +107,7 @@ else:
     print(unsupport)
 
 if params['INTERPOLATES_MODE']=='auto':
-    add_parameters(BATCH_SIZE = 8)
+    add_parameters(BATCH_SIZE = 4)
 
 else:
     add_parameters(BATCH_SIZE = 32)
@@ -1016,7 +1013,14 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
         disc_map = disc_map.reshape((len(x), len(y))).transpose()
         im = plt.imshow(disc_map, interpolation='bilinear', origin='lower',
                 cmap=cm.gray, extent=(0, 1.0, 0, 1.0))
-        plt.contour(x, y, disc_map)
+        levels = np.arange(-1.0, 1.0, 0.1)
+        
+        CS = plt.contour(x, y, disc_map, levels)
+
+        plt.clabel(CS, levels[1::2],  # label every second level
+           inline=1,
+           fmt='%1.1f',
+           fontsize=14)
 
         '''narrow to normal batch size'''
         state_prediction_gt = state_prediction_gt.narrow(0,0,RESULT_SAMPLE_NUM)
@@ -1110,7 +1114,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                     marker='s', 
                     alpha=F_out[ii]
                 )
-        gradient_penalty, num_t_mean = calc_gradient_penalty(
+        gradient_penalty, num_t_sum = calc_gradient_penalty(
             netD = netD,
             state = state,
             prediction = prediction,
@@ -1285,14 +1289,15 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
-        num_t_mean = num_t.float().mean()
 
+        num_t_sum = 0.0
         for b in range(num_t.size()[0]):
 
             if num_t[b]<1:
                 continue
             else:
                 t = num_t[b]
+                num_t_sum += t
 
             if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
                 state_b = state[b].unsqueeze(0).repeat(t,1,1)
@@ -1321,21 +1326,17 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                 prediction_delted = prediction_b
                 prediction_gt_delted = prediction_gt_b
 
-        # state = torch.cat([state,state,state_delted],0)
-        # prediction = torch.cat([prediction,prediction,prediction_delted],0)
-        # prediction_gt = torch.cat([prediction_gt,prediction_gt,prediction_gt_delted],0)
+        if num_t_sum > 0:
+            state = state_delted
+            prediction = prediction_delted
+            prediction_gt = prediction_gt_delted
+            alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
-        # alpha = torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(1.0)
-        # alpha = torch.cat([alpha,torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(0.0)],0)
-        # alpha = torch.cat([alpha,torch.rand(prediction_gt.size()[0]-params['BATCH_SIZE']*2).cuda()],0)
-
-        state = state_delted
-        prediction = prediction_delted
-        prediction_gt = prediction_gt_delted
-        alpha = torch.rand(prediction_gt.size()[0]).cuda()
+        else:
+            return None, num_t_sum
 
     else:
-        num_t_mean = 1.0
+        num_t_sum = 1.0
         alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
     while len(alpha.size())!=len(prediction_gt.size()):
@@ -1414,7 +1415,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     else:
         raise Exception('Unsupport')
     
-    return gradients_penalty, num_t_mean
+    return gradients_penalty, num_t_sum
 
 def restore_model():
     print('Trying load models....')
@@ -1686,7 +1687,7 @@ while True:
 
                 GP_cost = [0.0]
                 if params['GAN_MODE']=='wgan-grad-panish':
-                    gradient_penalty, num_t_mean = calc_gradient_penalty(
+                    gradient_penalty, num_t_sum = calc_gradient_penalty(
                         netD = netD,
                         state = state,
                         prediction = prediction,
@@ -1717,7 +1718,7 @@ while True:
                 logger.plot('GP_cost', GP_cost)
             logger.plot('D_cost', D_cost)
             logger.plot('W_dis', Wasserstein_D)
-            logger.plot('num_t_mean', [num_t_mean])
+            logger.plot('num_t_sum', [num_t_sum])
 
             ########################################################
             ################## (2) Control R #######################
@@ -1818,7 +1819,7 @@ while True:
                     iteration,
                     L1,
                     AC,
-                    num_t_mean,
+                    num_t_sum,
                     Wasserstein_D[0],
                     GP_cost[0],
                     D_cost[0],
