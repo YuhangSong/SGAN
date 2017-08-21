@@ -19,10 +19,11 @@ vis = visdom.Visdom()
 import time
 import math
 import domains.all_domains as chris_domain
+import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-0'
-GPU = '0'
+MULTI_RUN = 'b2-1'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -46,7 +47,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'simple_gg')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'full') # same-start, full
+add_parameters(GAME_MDOE = 'same-start') # same-start, full
 add_parameters(REPRESENTATION = 'scalar') # scalar, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
@@ -76,11 +77,11 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
 add_parameters(DELTA_T = 0.1)
 add_parameters(STABLE_MSE = None) # None, 0.001
@@ -155,7 +156,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'chris low dim net 4')
+add_parameters(AUX_INFO = 'chris low dim net 6')
 
 '''summary settings'''
 DSP = ''
@@ -995,6 +996,9 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
 
     '''disc_map'''
     if params['REPRESENTATION']=='scalar':
+
+        plt.title(MULTI_RUN)
+
         points = np.zeros((N_POINTS, N_POINTS, 2), dtype='float32')
         points[:, :, 0] = np.linspace(0, 1.0, N_POINTS)[:, None]
         points[:, :, 1] = np.linspace(0, 1.0, N_POINTS)[None, :]
@@ -1007,6 +1011,8 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                     ).cpu().data.numpy()
         x = y = np.linspace(0, 1.0, N_POINTS)
         disc_map = disc_map.reshape((len(x), len(y))).transpose()
+        im = plt.imshow(disc_map, interpolation='bilinear', origin='lower',
+                cmap=cm.gray, extent=(0, 1.0, 0, 1.0))
         plt.contour(x, y, disc_map)
 
         '''narrow to normal batch size'''
@@ -1101,7 +1107,13 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                     marker='s', 
                     alpha=F_out[ii]
                 )
-
+        gradient_penalty, num_t_mean = calc_gradient_penalty(
+            netD = netD,
+            state = state,
+            prediction = prediction,
+            prediction_gt = prediction_gt,
+            log=True
+        )
     else:
 
         if filter_net is None:
@@ -1261,7 +1273,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         yield dataset
 
-def calc_gradient_penalty(netD, state, prediction, prediction_gt):
+def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     
     '''get multiple interplots'''
     if params['INTERPOLATES_MODE']=='auto':
@@ -1269,13 +1281,13 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
-        num_t = (d_mean / params['DELTA_T']).round().int()
-        num_t_mean = num_t.float().mean() + 2
+        num_t = (d_mean / params['DELTA_T']).floor().int()
+        num_t_mean = num_t.float().mean()
 
         for b in range(num_t.size()[0]):
 
-            if num_t[b]<=1.0:
-                t = 1
+            if num_t[b]==0.0:
+                continue
             else:
                 t = num_t[b]
 
@@ -1306,13 +1318,18 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
                 prediction_delted = prediction_b
                 prediction_gt_delted = prediction_gt_b
 
-        state = torch.cat([state,state,state_delted],0)
-        prediction = torch.cat([prediction,prediction,prediction_delted],0)
-        prediction_gt = torch.cat([prediction_gt,prediction_gt,prediction_gt_delted],0)
+        # state = torch.cat([state,state,state_delted],0)
+        # prediction = torch.cat([prediction,prediction,prediction_delted],0)
+        # prediction_gt = torch.cat([prediction_gt,prediction_gt,prediction_gt_delted],0)
 
-        alpha = torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(1.0)
-        alpha = torch.cat([alpha,torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(0.0)],0)
-        alpha = torch.cat([alpha,torch.rand(prediction_gt.size()[0]-params['BATCH_SIZE']*2).cuda()],0)
+        # alpha = torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(1.0)
+        # alpha = torch.cat([alpha,torch.cuda.FloatTensor(params['BATCH_SIZE']).fill_(0.0)],0)
+        # alpha = torch.cat([alpha,torch.rand(prediction_gt.size()[0]-params['BATCH_SIZE']*2).cuda()],0)
+
+        state = state_delted
+        prediction = prediction_delted
+        prediction_gt = prediction_gt_delted
+        alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
     else:
         num_t_mean = 1.0
@@ -1341,6 +1358,15 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt):
         raise Exception('Unsupport')
 
     interpolates = (alpha * prediction_gt) + ((1 - alpha) * prediction)
+
+    if log:
+        plt.scatter(
+            interpolates.squeeze(1).cpu().numpy()[:, 0], 
+            interpolates.squeeze(1).cpu().numpy()[:, 1],
+            c='red', 
+            marker='+', 
+            alpha=0.1
+        )
 
     interpolates = autograd.Variable(interpolates, requires_grad=True)
 
@@ -1592,6 +1618,7 @@ while True:
             for p in netD.parameters():
                 p.requires_grad = True
 
+            # params['CRITIC_ITERS'] = 1
             for iter_d in xrange(params['CRITIC_ITERS']):
 
                 if params['GAN_MODE']=='wgan':
