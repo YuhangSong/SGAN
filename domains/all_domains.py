@@ -11,7 +11,7 @@ VECTOR = 1
 IMAGE = 2
 
 BLOCK_SIZE = 5
-ACCEPT_GATE = 0.1
+ACCEPT_GATE = 0.5
 
 class Walk1D(object):
 

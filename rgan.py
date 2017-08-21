@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = False
+CLEAR_RUN = True
 MULTI_RUN = 'h-0'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -56,7 +56,8 @@ if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
 
 elif params['DOMAIN']=='1Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
@@ -85,7 +86,7 @@ add_parameters(DELTA_T = 0.1)
 add_parameters(SOFT_GP = True)
 add_parameters(SOFT_GP_FACTOR = 3)
 
-add_parameters(STABLE_MSE = None) # None, 0.001
+add_parameters(STABLE_MSE = 0.0) # None
 
 '''model settings'''
 if params['REPRESENTATION']==chris_domain.SCALAR:
@@ -258,33 +259,28 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            if params['REPRESENTATION']==chris_domain.SCALAR:
-                deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
-                    nn.Sigmoid()
-                )
-            elif params['REPRESENTATION']==chris_domain.VECTOR:
-                deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
-                    nn.Sigmoid()
-                )
+
+            deconv_layer = nn.Sequential(
+                nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                nn.Sigmoid()
+            )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
@@ -812,12 +808,12 @@ class Corrector(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        torch.nn.init.xavier_uniform(
-            m.weight.data,
-            gain=1
-        )
-        m.bias.data.fill_(0.1)
+    # if classname.find('Linear') != -1:
+    #     torch.nn.init.xavier_uniform(
+    #         m.weight.data,
+    #         gain=1
+    #     )
+    #     m.bias.data.fill_(0.1)
     # elif classname.find('Conv3d') != -1:
     #     torch.nn.init.xavier_uniform(
     #         m.weight.data,
@@ -1521,11 +1517,11 @@ elif params['METHOD']=='grl':
     print netC
 
     if params['OPTIMIZER']=='Adam':
-        optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.5, 0.9))
+        optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.0, 0.9))
         optimizerC = optim.Adam(netC.parameters(), lr=1e-4, betas=(0.0, 0.9))
         optimizerG = optim.Adam(netG.parameters(), lr=1e-4, betas=(0.0, 0.9))
     elif params['OPTIMIZER']=='RMSprop':
-        optimizerD = optim.RMSprop(netD.parameters(), lr = (0.00005)*params['FASTEN_D'])
+        optimizerD = optim.RMSprop(netD.parameters(), lr = 0.00005)
         optimizerC = optim.RMSprop(netC.parameters(), lr = 0.00005)
         optimizerG = optim.RMSprop(netG.parameters(), lr = 0.00005)
 
@@ -1774,7 +1770,9 @@ while True:
             ).narrow(1,params['STATE_DEPTH'],1)
 
             if stabling_mse:
-
+                # print(state)
+                # print(prediction_gt)
+                # print(iiii)
                 S = mse_loss_model(prediction_v, autograd.Variable(prediction_gt))
                 S.backward()
                 S_cost = S.data.cpu().numpy()
@@ -1816,10 +1814,12 @@ while True:
         ############################
 
         if stabling_mse:
-            print('[{}][{:<6}] S_cost:{:2.4f}'
+            print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} S_cost:{:2.4f}'
                 .format(
                     MULTI_RUN,
                     iteration,
+                    L1,
+                    AC,
                     S_cost[0],
                 )
             )
@@ -1842,6 +1842,8 @@ while True:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
             torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
+            L1, AC = generate_image(iteration)
+
             if stabling_mse:
                 _, y = logger.get_plot('S_cost')
                 stable_range = 200
@@ -1852,9 +1854,7 @@ while True:
                         stabling_mse = False
                 except Exception as e:
                     pass
-            else:
-                pass
-                L1, AC = generate_image(iteration)
+                
 
     if iteration % LOG_INTER == 5:
         logger.flush()
