@@ -83,7 +83,7 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-add_parameters(DELTA_T = 0.1)
+add_parameters(DELTA_T = 0.01)
 add_parameters(STABLE_MSE = None) # None, 0.001
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
@@ -92,25 +92,28 @@ if params['REPRESENTATION']=='scalar':
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 0.1)
-    add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 5)
-    add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
-    add_parameters(BATCH_SIZE = 32)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
     print(unsupport)
+
+if params['INTERPOLATES_MODE']=='auto':
+    add_parameters(BATCH_SIZE = 8)
+
+else:
+    add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 3)
@@ -1281,12 +1284,12 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
-        num_t = (d_mean / params['DELTA_T']).floor().int()
+        num_t = (d_mean / params['DELTA_T']).floor().int() - 1
         num_t_mean = num_t.float().mean()
 
         for b in range(num_t.size()[0]):
 
-            if num_t[b]==0.0:
+            if num_t[b]<1:
                 continue
             else:
                 t = num_t[b]
