@@ -21,9 +21,9 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = False
-MULTI_RUN = 'b2-9'
-GPU = '0'
+CLEAR_RUN = True
+MULTI_RUN = 'b2-10'
+GPU = '1'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU
@@ -1339,16 +1339,16 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             prediction_gt = prediction_gt_delted
             alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
-            if params['SOFT_GP']:
-                '''solf function here'''
-                alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
-
         else:
             return None, num_t_sum
 
     else:
         num_t_sum = 1.0
         alpha = torch.rand(prediction_gt.size()[0]).cuda()
+
+    if params['SOFT_GP']:
+        '''solf function here'''
+        alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
 
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
