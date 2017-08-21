@@ -6,8 +6,10 @@ import itertools
 import numpy as np
 import torch
 
-IMAGE = 0
+SCALAR = 0
 VECTOR = 1
+IMAGE = 2
+
 BLOCK_SIZE = 5
 ACCEPT_GATE = 0.1
 
@@ -118,7 +120,6 @@ class Walk1D(object):
             else:
                 return 'bad state'
 
-
 class BitFlip1D(object):
 
     def __init__(self, length, mode):
@@ -172,7 +173,7 @@ class BitFlip1D(object):
 
 class Walk2D(object):
 
-    def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap):
+    def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap, fix_state=False):
         self.UP, self.DOWN, self.LEFT, self.RIGHT = 0, 1, 2, 3
         self.action_dic = [self.UP, self.DOWN, self.LEFT, self.RIGHT]
         assert sum(prob_dirs) == 1
@@ -196,16 +197,44 @@ class Walk2D(object):
                                                  1: visualizer.BLUE,
                                                  2: visualizer.BLACK})
         self.cleaner_function = clean_entry_012_vec
+        self.fix_state = fix_state
+        self.fix_state_to = (self.w/2, self.h/2)
+
+    def set_fix_state(self,fix_state):
+        self.fix_state = fix_state
 
     def get_vector_size(self):
         return self.h * self.w
 
     def get_all_possible_start_states(self):
-        return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
+
+        if self.fix_state:
+            return [self.get_state(self.fix_state_to)]
+
+        else:
+            return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
     def state_vector_to_position(self, state_vector):
 
-        if self.mode==IMAGE:
+        if self.mode==SCALAR:
+
+            agent_count = 0
+            for x in range(self.w):
+                for y in range(self.h):
+                    if np.abs(float(x)/self.w-state_vector[0])<(1.0/self.w*ACCEPT_GATE) and np.abs(float(y)/self.h-state_vector[1])<(1.0/self.h*ACCEPT_GATE):
+                        pos = (x,y)
+                        agent_count += 1
+
+            if agent_count==1:
+                return pos
+
+            else:
+                return 'bad state'
+
+        elif self.mode==VECTOR:
+            raise Exception('error')
+
+        elif self.mode==IMAGE:
 
             '''detect agent opsition from image'''
 
@@ -230,52 +259,23 @@ class Walk2D(object):
             else:
                 return 'bad state'
 
-        elif self.mode==VECTOR:
-            state_2d = np.reshape(state_vector, [self.h, self.w])
-            for y in range(state_2d.shape[0]):
-                for x in range(state_2d.shape[1]):
-                    if state_2d[y, x] == 1:
-                        return (x, y)
-            raise Exception('No agent found in vector')
         else:
             raise Exception('Not a valid mode')
 
     def get_transition_probs(self, state_vector=None, state_pos=None):
 
-        '''
-        Yuhang: since I donot know your logic here, I thing using
-        state_vector to detect state position is a waste of compution.
-        So I just add a parameter of state_pos
-        '''
-
-        if self.mode==VECTOR:
-
-            '''
-            Yuhang: I have difficulty understanding the logicol here,
-            I will leave these code here and implement the evaluation 
-            of image in the next 'elif' block. If you wish, you can 
-            integrate these two parts of the code.
-            '''
-            state_pos = self.state_vector_to_position(state_vector)
-            all_possible = self.get_all_possible_start_states()
-            prob_dict = {tuple(state): 0.0 for state in all_possible}
-            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.UP)))] += 0.8
-            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.LEFT)))] += 0.1
-            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.RIGHT)))] += 0.1
-            prob_dict[tuple(self.get_state(self.update_state(state_pos, self.DOWN)))] += 0.0
-            return prob_dict
-
-        elif self.mode==IMAGE:
-
-            prob_dict = {}
-            for action_i in range(len(self.action_dic)):
-                prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
-            return prob_dict
+        prob_dict = {}
+        for action_i in range(len(self.action_dic)):
+            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
+        return prob_dict
 
 
     def reset(self):
-        self.x_pos, self.y_pos = choice(self.non_obstacle_squares)
+        if not self.fix_state:
+            self.x_pos, self.y_pos = choice(self.non_obstacle_squares)
 
+        else:
+            self.x_pos, self.y_pos = self.fix_state_to
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
@@ -290,10 +290,18 @@ class Walk2D(object):
         array[y_pos, x_pos] = 1
         for obs_x, obs_y in self.obstacle_pos_list:
             array[obs_y, obs_x] = 2
-        if self.mode == IMAGE:
-            return self.visualizer.make_screen(array)
-        else:
+
+        if self.mode == SCALAR:
+            return np.array([float(x_pos)/float(self.w),float(y_pos)/float(self.h)])
+
+        elif self.mode == VECTOR:
             return np.reshape(array, [-1])
+
+        elif self.mode == IMAGE:
+            return self.visualizer.make_screen(array)
+        
+        else:
+            print(sss)
 
     def update_state(self, (x, y), action):
         (delta_x, delta_y) = self.action_delta_mapping[action]
@@ -312,7 +320,6 @@ class Walk2D(object):
         action = np.random.choice([self.UP, self.DOWN, self.LEFT, self.RIGHT], p=self.prob_dirs)
         self.x_pos, self.y_pos = self.update_state((self.x_pos, self.y_pos), action)
         return self.get_state((self.x_pos, self.y_pos))
-
 
 def clean_entry_01(entry):
     if np.abs(entry - 0) <= ACCEPT_GATE:
@@ -345,9 +352,6 @@ def determine_transition(domain, sample):
 def l1_distance(dist1, dist2):
     l1 = 0.0
     combined_keyset = set(dist1.keys()).union(set(dist2.keys()))
-    print(dist1)
-    print(dist2)
-    print('----------------------------------------------')
     for key in combined_keyset:
         l1 += np.abs(dist1.get(key, 0) - dist2.get(key, 0))
     return l1
@@ -355,6 +359,7 @@ def l1_distance(dist1, dist2):
 def evaluate_domain(domain, s1_state, s2_samples):
 
     s1_pos = domain.state_vector_to_position(s1_state)
+
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
     )
@@ -376,8 +381,12 @@ def evaluate_domain(domain, s1_state, s2_samples):
 
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
-
-        return l1_distance(true_distribution, sample_distribution), good_count / float(good_count + bad_count)
+        print('----------------------------------------------')
+        print('True: '+str(true_distribution))
+        print('Sample: '+str(sample_distribution))
+        L1 = l1_distance(true_distribution, sample_distribution)
+        AC = good_count / float(good_count + bad_count)
+        return L1, AC
     else:
 
         return 2.0, 0.0

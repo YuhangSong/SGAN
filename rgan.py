@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-6'
+MULTI_RUN = 'b2-7'
 GPU = '0'
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,8 +47,8 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'simple_gg')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(GAME_MDOE = 'same-start') # same-start, full
-add_parameters(REPRESENTATION = 'scalar') # scalar, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(FIX_STATE = True)
+add_parameters(REPRESENTATION = chris_domain.SCALAR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -83,12 +83,12 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.02)
 
 add_parameters(SOFT_GP = True)
-add_parameters(SOFT_GP_FACTOR = 3)
+add_parameters(SOFT_GP_FACTOR = 4)
 
 add_parameters(STABLE_MSE = None) # None, 0.001
 
 '''model settings'''
-if params['REPRESENTATION']=='scalar':
+if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 0.1)
@@ -127,17 +127,17 @@ add_parameters(FEATURE = 3)
 if params['DOMAIN']=='1Dflip':
     domain = chris_domain.BitFlip1D(
         length=params['GRID_SIZE'],
-        mode=params['REPRESENTATION']
+        mode=params['REPRESENTATION'],
+        fix_state=params['FIX_STATE']
     )
-    FIX_STATE_TO = [params['GRID_FOREGROUND']]*(params['GRID_SIZE']/2)+[params['GRID_BACKGROUND']]*(params['GRID_SIZE']-params['GRID_SIZE']/2)
 
 elif params['DOMAIN']=='1Dgrid':
     domain = chris_domain.Walk1D(
         length=params['GRID_SIZE'],
         prob_left=params['GRID_ACTION_DISTRIBUTION'][0],
-        mode=params['REPRESENTATION']
+        mode=params['REPRESENTATION'],
+        fix_state=params['FIX_STATE']
     )
-    FIX_STATE_TO = [params['GRID_SIZE']/2,0]
 
 elif params['DOMAIN']=='2Dgrid':
     domain = chris_domain.Walk2D(
@@ -146,9 +146,9 @@ elif params['DOMAIN']=='2Dgrid':
         prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
         obstacle_pos_list=params['OBSTACLE_POS_LIST'],
         mode=params['REPRESENTATION'],
-        should_wrap=True
+        should_wrap=True,
+        fix_state=params['FIX_STATE']
     )
-    FIX_STATE_TO = [params['GRID_SIZE']/2,params['GRID_SIZE']/2]
 
 else:
     print(unsupport)
@@ -188,7 +188,7 @@ if params['METHOD']=='tabular':
     RESULT_SAMPLE_NUM = 100
     LOG_INTER = 20000
 
-if params['REPRESENTATION']=='scalar':
+if params['REPRESENTATION']==chris_domain.SCALAR:
     if params['DOMAIN']=='2Dgrid':
         DESCRIBE_DIM = 2
 
@@ -254,7 +254,7 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
@@ -275,7 +275,7 @@ class Generator(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            if params['REPRESENTATION']=='scalar':
+            if params['REPRESENTATION']==chris_domain.SCALAR:
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
                     nn.Sigmoid()
@@ -383,7 +383,7 @@ class Generator(nn.Module):
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             state_v = state_v.squeeze(1)
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*D*F*H*W to N*F*D*H*W
@@ -402,7 +402,7 @@ class Generator(nn.Module):
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
             prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
@@ -418,7 +418,7 @@ class Transitor(nn.Module):
     def __init__(self):
         super(Transitor, self).__init__()
 
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
@@ -440,7 +440,7 @@ class Transitor(nn.Module):
                 nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
             )
-            if params['REPRESENTATION']=='scalar':
+            if params['REPRESENTATION']==chris_domain.SCALAR:
                 deconv_layer = nn.Sequential(
                     nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
                 )
@@ -546,7 +546,7 @@ class Transitor(nn.Module):
     def forward(self, state_v):
 
         '''prepare'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             state_v = state_v.squeeze(1)
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*D*F*H*W to N*F*D*H*W
@@ -565,7 +565,7 @@ class Transitor(nn.Module):
         x = self.deconv_layer(x)
 
         '''decompose'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
             prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
             x = torch.cat([stater_v,prediction_v],1)
@@ -581,7 +581,7 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
 
             conv_layer_state = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
@@ -653,7 +653,7 @@ class Discriminator(nn.Module):
 
         if params['GAN_MODE']=='wgan-grad-panish':
 
-            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 self.conv_layer_state = conv_layer_state
                 self.squeeze_layer_state = squeeze_layer_state
                 self.conv_layer_prediction = conv_layer_prediction
@@ -670,7 +670,7 @@ class Discriminator(nn.Module):
 
         else:
 
-            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
                 self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
                 self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
@@ -688,7 +688,7 @@ class Discriminator(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
 
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
@@ -723,7 +723,7 @@ class Corrector(nn.Module):
     def __init__(self):
         super(Corrector, self).__init__()
 
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
 
             conv_layer = nn.Sequential(
                 nn.Linear(2*DESCRIBE_DIM, params['DIM']),
@@ -791,7 +791,7 @@ class Corrector(nn.Module):
     def forward(self, state_v, prediction_v):
 
         '''prepare'''
-        if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             state_v = state_v.squeeze(1)
             prediction_v = prediction_v.squeeze(1)
             x = torch.cat([state_v,prediction_v],1)
@@ -830,17 +830,29 @@ def weights_init(m):
     #     )
 
 def chris2song(x):
-    if params['REPRESENTATION']==chris_domain.IMAGE:
-        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
-    elif params['REPRESENTATION']==chris_domain.VECTOR:
+
+    if (params['REPRESENTATION']==chris_domain.SCALAR) or (params['REPRESENTATION']==chris_domain.VECTOR):
         x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).float()
+
+    elif params['REPRESENTATION']==chris_domain.IMAGE:
+        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+
+    else:
+        raise Exception('ss')
+    
     return x
 
 def song2chris(x):
-    if params['REPRESENTATION']==chris_domain.IMAGE:
-        x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
-    elif params['REPRESENTATION']==chris_domain.VECTOR:
+
+    if (params['REPRESENTATION']==chris_domain.SCALAR) or (params['REPRESENTATION']==chris_domain.VECTOR):
         x = x.squeeze(1).cpu().numpy()
+
+    elif params['REPRESENTATION']==chris_domain.IMAGE:
+        x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+
+    else:
+        raise Exception('ss')
+
     return x
 
 def get_tabular_samples(tabular_dic,start_state):
@@ -873,11 +885,14 @@ def collect_samples(iteration,tabular=None):
         
         if tabular is None:
 
-            if params['REPRESENTATION']==chris_domain.IMAGE:
-                start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
-            
-            elif params['REPRESENTATION']==chris_domain.VECTOR:
+            if (params['REPRESENTATION']==chris_domain.SCALAR) or (params['REPRESENTATION']==chris_domain.VECTOR):
                 start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
+
+            elif params['REPRESENTATION']==chris_domain.IMAGE:
+                start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+
+            else:
+                raise Exception('ss')
             
             if params['METHOD']=='deterministic-deep-net':
                 prediction = netT(
@@ -933,15 +948,17 @@ def collect_samples(iteration,tabular=None):
 
 def generate_image(iteration,tabular=None):
 
-    if params['REPRESENTATION']=='scalar':
+    if params['REPRESENTATION']==chris_domain.SCALAR:
 
         batch_size = (N_POINTS**2)
 
+        domain.set_fix_state(True)
         data_fix_state = dataset_iter(
             fix_state=True,
             batch_size=batch_size
         )
         dataset = data_fix_state.next()
+        domain.set_fix_state(params['FIX_STATE'])
 
         generate_image_with_filter(
             iteration=iteration,
@@ -950,22 +967,18 @@ def generate_image(iteration,tabular=None):
             filter_net=None
         )
 
-        return 0.0, 0.0
+    l1, accept_rate = collect_samples(iteration,tabular)
 
-    else:
+    logger.plot(
+        '-L1',
+        np.asarray([l1])
+    )
+    logger.plot(
+        '-AR',
+        np.asarray([accept_rate])
+    )
 
-        l1, accept_rate = collect_samples(iteration,tabular)
-
-        logger.plot(
-            '-L1',
-            np.asarray([l1])
-        )
-        logger.plot(
-            '-AR',
-            np.asarray([accept_rate])
-        )
-
-        return l1, accept_rate
+    return l1, accept_rate
 
 def plot_convergence(images,name):
     dis, accept_rate = get_transition_prob_distribution(images)
@@ -998,7 +1011,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
     '''disc_map'''
-    if params['REPRESENTATION']=='scalar':
+    if params['REPRESENTATION']==chris_domain.SCALAR:
 
         plt.title(MULTI_RUN+'@'+str(iteration))
 
@@ -1033,7 +1046,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
     prediction_gt_mean = prediction_gt.mean(0,keepdim=True)
 
     '''prediction_gt'''
-    if params['REPRESENTATION']=='scalar':
+    if params['REPRESENTATION']==chris_domain.SCALAR:
         plt.scatter(
             prediction_gt.squeeze(1).cpu().numpy()[:, 0], 
             prediction_gt.squeeze(1).cpu().numpy()[:, 1],
@@ -1053,7 +1066,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
 
     '''prediction_gt_r'''
     if params['RUINER_MODE']!='none-r':
-        if params['REPRESENTATION']=='scalar':
+        if params['REPRESENTATION']==chris_domain.SCALAR:
             noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
             prediction_gt_r = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
@@ -1099,7 +1112,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
             return
         F_out = (F_out - torch.min(F_out)) / normal_f
 
-    if params['REPRESENTATION']=='scalar':
+    if params['REPRESENTATION']==chris_domain.SCALAR:
         plt.scatter(
             prediction.squeeze(1).cpu().numpy()[:, 0], 
             prediction.squeeze(1).cpu().numpy()[:, 1], 
@@ -1198,7 +1211,7 @@ def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None
                 name='prediction-filtered-by-'+str(filter_net.__class__.__name__)
             )
 
-    if params['REPRESENTATION']=='scalar':
+    if params['REPRESENTATION']==chris_domain.SCALAR:
         if filter_net is None:
             file_name = ''
         else:
@@ -1252,20 +1265,9 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         for i in xrange(batch_size):
 
-            if params['REPRESENTATION']=='scalar':
-                cur_x, cur_y = get_state(fix_state=fix_state)
-                action = np.random.choice(
-                    range(len(params['GRID_ACTION_DISTRIBUTION'])),
-                    p=params['GRID_ACTION_DISTRIBUTION']
-                )
-                next_x, next_y = transition(cur_x, cur_y, action)
-                ob = torch.cuda.FloatTensor(get_ob(cur_x,cur_y))
-                ob_next = torch.cuda.FloatTensor(get_ob(next_x,next_y))
-
-            else:
-                domain.reset()
-                ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
-                ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
+            domain.reset()
+            ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
+            ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
 
             data = torch.cat([ob,ob_next],0).unsqueeze(0)
 
@@ -1274,6 +1276,8 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             except Exception as e:
                 dataset = data
 
+        if params['REPRESENTATION']==chris_domain.SCALAR:
+            dataset = dataset.float()
         if params['REPRESENTATION']==chris_domain.VECTOR:
             dataset = dataset.float()
         elif params['REPRESENTATION']==chris_domain.IMAGE:
@@ -1302,7 +1306,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                 t = num_t[b]
                 num_t_sum += t
 
-            if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 state_b = state[b].unsqueeze(0).repeat(t,1,1)
                 prediction_b = prediction[b].unsqueeze(0).repeat(t,1,1)
                 prediction_gt_b = prediction_gt[b].unsqueeze(0).repeat(t,1,1)
@@ -1337,7 +1341,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
             if params['SOFT_GP']:
                 '''solf function here'''
-                alpha = ((((alpha*2.0)-1.0)*params['SOFT_GP_FACTOR']).tanh()*0.5)+0.5
+                alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
 
         else:
             return None, num_t_sum
@@ -1349,7 +1353,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
 
-    if params['REPRESENTATION']=='scalar' or params['REPRESENTATION']==chris_domain.VECTOR:
+    if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
         alpha = alpha.repeat(
             1,
             prediction_gt.size()[1],
@@ -1368,7 +1372,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     else:
         raise Exception('Unsupport')
 
-    interpolates = (alpha * prediction_gt) + ((1 - alpha) * prediction)
+    interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
 
     if log:
         plt.scatter(
@@ -1540,10 +1544,7 @@ elif params['METHOD']=='grl':
     else:
         stabling_mse = False
 
-if params['GAME_MDOE']=='same-start':
-    data = dataset_iter(fix_state=True)
-elif params['GAME_MDOE']=='full':
-    data = dataset_iter(fix_state=False)
+data = dataset_iter()
 
 logger = lib.plot.logger(LOGDIR,DSP,params_str,MULTI_RUN)
 iteration = logger.restore()
@@ -1631,8 +1632,13 @@ while True:
             for p in netD.parameters():
                 p.requires_grad = True
 
-            # params['CRITIC_ITERS'] = 1
-            for iter_d in xrange(params['CRITIC_ITERS']):
+            if params['INTERPOLATES_MODE']=='auto':
+                # d_iter_num = params['CRITIC_ITERS']/2
+                d_iter_num = 1
+            elif params['INTERPOLATES_MODE']=='one':
+                d_iter_num = params['CRITIC_ITERS']
+
+            for iter_d in xrange(d_iter_num):
 
                 if params['GAN_MODE']=='wgan':
                     '''
