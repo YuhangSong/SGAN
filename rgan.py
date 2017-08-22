@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-3'
-GPU = '3'
+MULTI_RUN = 'h-0'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -50,7 +50,7 @@ add_parameters(EXP = 'simple_gg')
 add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 10)
+add_parameters(GRID_SIZE = 20)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -183,14 +183,13 @@ with open(LOGDIR+"Settings.txt","a") as f:
 N_POINTS = 128
 RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
-LOG_INTER = 1000
+TrainTo   = 100000
+LOG_INTER =   1000
 if params['DOMAIN']=='1Dflip':
     if params['GRID_SIZE']>5:
         LOG_INTER = 10000
-
-if params['METHOD']=='tabular':
-    RESULT_SAMPLE_NUM = 100
-    LOG_INTER = 20000
+    if params['GRID_SIZE']>10:
+        LOG_INTER = TrainTo
 
 if params['REPRESENTATION']==chris_domain.SCALAR:
     if params['DOMAIN']=='2Dgrid':
@@ -1842,7 +1841,12 @@ while True:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
             torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
-            L1, AC = generate_image(iteration)
+
+            if LOG_INTER==TrainTo:
+                if iteration>=TrainTo:
+                    L1, AC = generate_image(iteration)
+            else:
+                L1, AC = generate_image(iteration)
 
             if stabling_mse:
                 _, y = logger.get_plot('S_cost')
