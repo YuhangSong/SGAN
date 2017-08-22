@@ -184,6 +184,9 @@ N_POINTS = 128
 RESULT_SAMPLE_NUM = 1000
 FILTER_RATE = 0.5
 LOG_INTER = 1000
+if params['DOMAIN']=='1Dflip':
+    if params['GRID_SIZE']>5:
+        LOG_INTER = 10000
 
 if params['METHOD']=='tabular':
     RESULT_SAMPLE_NUM = 100
