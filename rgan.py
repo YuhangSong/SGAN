@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-1'
-GPU = '1'
+MULTI_RUN = 'w4-2'
+GPU = '2'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,14 +47,15 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'simple_gg')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 20)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0,0,1,0,0])
 
 elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
@@ -127,6 +128,7 @@ if params['DOMAIN']=='1Dflip':
     domain = chris_domain.BitFlip1D(
         length=params['GRID_SIZE'],
         mode=params['REPRESENTATION'],
+        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
         fix_state=params['FIX_STATE']
     )
 

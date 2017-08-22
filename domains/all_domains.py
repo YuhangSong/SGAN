@@ -63,7 +63,6 @@ class Walk1D(object):
         new_state = np.clip(state+delta, 0, self.n-1)
         return new_state
 
-
     def reset(self):
         self.state = np.random.randint(0, self.n)
 
@@ -117,36 +116,47 @@ class Walk1D(object):
 
 class BitFlip1D(object):
 
-    def __init__(self, length, mode):
+    def __init__(self, length, mode, prob_dirs, fix_state=False):
         assert mode in [IMAGE, VECTOR]
         self.mode = mode
+        self.fix_state = fix_state
         self.n = length
         self.state = np.random.randint(0, 2, size=(1, self.n))
         self.visualizer = visualizer.Visualizer(BLOCK_SIZE, 1, self.n,
                                                 {0: visualizer.WHITE,
                                                  1: visualizer.BLUE})
         self.cleaner_function = clean_entry_01_vec
+        self.action_dic = range(self.n)
+        self.prob_dirs = prob_dirs
+        self.fix_state = fix_state
+        self.fix_state_to = np.array([1.0]*(self.n/2)+[0.0]*(self.n-self.n/2))
+
+    def set_fix_state(self,fix_state):
+        self.fix_state = fix_state
 
     def get_vector_size(self):
         return self.n
 
     def get_all_possible_start_states(self):
-        return [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
+        if self.fix_state:
+            return [self.get_state(self.fix_state_to)]
+        else:
+            return [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
 
-    def get_transition_probs(self, state_vec):
-        state_internal_repr = np.reshape(state_vec, [1, self.n])
-        possible_states = self.get_all_possible_start_states()
-        prob_dict = {tuple(state): 0. for state in possible_states}
-        for i in range(self.n):
-            prob_dict[tuple(self.get_state(self.update_state(state_internal_repr, i)))] = 1./self.n
+    def get_transition_probs(self, state_pos):
+        prob_dict = {}
+        for action_i in range(len(self.action_dic)):
+            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
         return prob_dict
 
     def set_state(self, state):
         self.state = state
 
     def reset(self):
-        self.state = np.random.randint(0, 2, size=(1, self.n))
-
+        if not self.fix_state:
+            self.state = np.random.randint(0, 2, size=(self.n))
+        else:
+            self.state = self.fix_state_to
 
     def get_state(self, state=None):
         if state is None:
@@ -154,17 +164,32 @@ class BitFlip1D(object):
         if self.mode == IMAGE:
             return self.visualizer.make_screen(state)
         else:
-            return state.copy()[0, :]
+            return state.copy()
 
-    def update_state(self, state, bit_to_flip):
+    def update_state(self, state, action):
         state = state.copy()
-        state[0, bit_to_flip] = 1 - state[0, bit_to_flip]
+        state[action] = 1 - state[action]
         return state
 
     def update(self):
-        bit_to_flip = np.random.randint(0, self.n)
-        self.state = self.get_state(self.update_state(self.state, bit_to_flip))
+        action = np.random.choice(self.action_dic, p=self.prob_dirs)
+        self.state = self.get_state(self.update_state(self.state, action))
         return self.state
+
+    def state_vector_to_position(self, state_vector):
+
+        for i in range(np.shape(state_vector)[0]):
+
+            if np.abs(state_vector[i]-0.0)<=ACCEPT_GATE:
+                state_vector[i] = 0.0
+            elif np.abs(state_vector[i]-1.0)<=ACCEPT_GATE:
+                state_vector[i] = 1.0
+            else:
+                return 'bad state'
+
+        return state_vector
+
+
 
 class Walk2D(object):
 
@@ -263,7 +288,6 @@ class Walk2D(object):
         for action_i in range(len(self.action_dic)):
             prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
         return prob_dict
-
 
     def reset(self):
         if not self.fix_state:
