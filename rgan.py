@@ -21,9 +21,9 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = False
-MULTI_RUN = 'b2-0'
-GPU = '0'
+CLEAR_RUN = True
+MULTI_RUN = 'b2-1'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -100,7 +100,7 @@ add_parameters(SOFT_GP_FACTOR = 3)
 if params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(STABLE_MSE = None) # None
 elif params['REPRESENTATION']==chris_domain.IMAGE:
-    add_parameters(STABLE_MSE = 0.001) # None
+    add_parameters(STABLE_MSE = None) # None
 
 '''model settings'''
 if params['REPRESENTATION']==chris_domain.SCALAR:
@@ -171,7 +171,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'no bn on vector and scalar domain')
+add_parameters(AUX_INFO = 'fix init net')
 
 '''summary settings'''
 DSP = ''
@@ -384,8 +384,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
                     # 64*12*12
                     nn.Conv2d(
@@ -394,8 +395,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(128),
                     nn.LeakyReLU(0.001),
                     # 128*6*6
                     nn.Conv2d(
@@ -404,8 +406,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(256),
                     nn.LeakyReLU(0.001),
                     # 256*3*3
                 )
@@ -433,8 +436,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(128),
                     nn.LeakyReLU(0.001),
                     # 128*6*6
                     nn.ConvTranspose2d(
@@ -443,8 +447,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
                     # 64*12*12
                     nn.ConvTranspose2d(
@@ -453,7 +458,7 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True,
+                        bias=False,
                         output_padding=(1,1)
                     ),
                     nn.Sigmoid()
@@ -467,8 +472,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(128),
                     nn.LeakyReLU(0.001),
                     # 128*6*6
                     nn.ConvTranspose2d(
@@ -477,8 +483,9 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
+                    nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
                     # 64*12*12
                     nn.ConvTranspose2d(
@@ -487,7 +494,7 @@ class Generator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True,
+                        bias=False,
                         output_padding=(1,1)
                     ),
                     nn.Sigmoid()
@@ -788,7 +795,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*12*12
@@ -798,7 +805,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*6*6
@@ -808,7 +815,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 256*3*3
@@ -821,7 +828,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*12*12
@@ -831,7 +838,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*6*6
@@ -841,7 +848,7 @@ class Discriminator(nn.Module):
                         kernel_size=(4,4),
                         stride=(2,2),
                         padding=(1,1),
-                        bias=True
+                        bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 256*3*3
@@ -996,12 +1003,18 @@ class Corrector(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if (classname.find('Linear') != -1) or (classname.find('Conv2d') != -1) or (classname.find('ConvTranspose2d') != -1):
+    if (classname.find('Linear') != -1):
         torch.nn.init.xavier_uniform(
             m.weight.data,
             gain=1
         )
         m.bias.data.fill_(0.1)
+
+    elif (classname.find('Conv2d') != -1) or (classname.find('ConvTranspose2d') != -1):
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
 
 def chris2song(x):
 
@@ -1482,6 +1495,8 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             else:
                 t = num_t[b]
                 num_t_sum += t
+                # if num_t_sum > params['BATCH_SIZE']*2:
+                #     break
 
             if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 state_b = state[b].unsqueeze(0).repeat(t,1,1)
