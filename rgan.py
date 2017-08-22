@@ -97,7 +97,7 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
 add_parameters(SOFT_GP = False)
 add_parameters(SOFT_GP_FACTOR = 3)
 
-add_parameters(STABLE_MSE = None) # None
+add_parameters(STABLE_MSE = 0.01) # None
 
 '''model settings'''
 if params['REPRESENTATION']==chris_domain.SCALAR:
@@ -373,116 +373,156 @@ class Generator(nn.Module):
                 )
 
             elif params['DOMAIN']=='2Dgrid':
-                conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*25*25
-                    nn.Conv3d(
+                conv_layer_state = nn.Sequential(
+                    # params['FEATURE']*25*25
+                    nn.Conv2d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001),
-                    # 64*1*12*12
-                    nn.Conv3d(
+                    # 64*12*12
+                    nn.Conv2d(
                         in_channels=64,
                         out_channels=128,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001),
-                    # 128*1*6*6
-                    nn.Conv3d(
+                    # 128*6*6
+                    nn.Conv2d(
                         in_channels=128,
                         out_channels=256,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001),
-                    # 256*1*3*3
+                    # 256*3*3
                 )
-                squeeze_layer = nn.Sequential(
-                    nn.Linear(256*1*3*3, params['DIM']),
+                squeeze_layer_state = nn.Sequential(
+                    nn.Linear(256*3*3, params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 cat_layer = nn.Sequential(
-                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']*2),
                     nn.LeakyReLU(0.001),
                 )
-                unsqueeze_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 256*1*3*3),
+                unsqueeze_layer_state = nn.Sequential(
+                    nn.Linear(params['DIM'], 256*3*3),
                     nn.LeakyReLU(0.001),
                 )
-                deconv_layer = nn.Sequential(
-                    # 256*1*3*3
-                    nn.ConvTranspose3d(
+                unsqueeze_layer_prediction = nn.Sequential(
+                    nn.Linear(params['DIM'], 256*3*3),
+                    nn.LeakyReLU(0.001),
+                )
+                deconv_layer_state = nn.Sequential(
+                    # 256*3*3
+                    nn.ConvTranspose2d(
                         in_channels=256,
                         out_channels=128,
-                        kernel_size=(2,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001),
-                    # 128*2*6*6
-                    nn.ConvTranspose3d(
+                    # 128*6*6
+                    nn.ConvTranspose2d(
                         in_channels=128,
                         out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001),
-                    # 64*2*12*12
-                    nn.ConvTranspose3d(
+                    # 64*12*12
+                    nn.ConvTranspose2d(
                         in_channels=64,
                         out_channels=params['FEATURE'],
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True,
-                        output_padding=(0,1,1)
+                        output_padding=(1,1)
                     ),
                     nn.Sigmoid()
-                    # params['FEATURE']*2*25*25
+                    # params['FEATURE']*25*25
+                )
+                deconv_layer_prediction = nn.Sequential(
+                    # 256*3*3
+                    nn.ConvTranspose2d(
+                        in_channels=256,
+                        out_channels=128,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 128*6*6
+                    nn.ConvTranspose2d(
+                        in_channels=128,
+                        out_channels=64,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 64*12*12
+                    nn.ConvTranspose2d(
+                        in_channels=64,
+                        out_channels=params['FEATURE'],
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True,
+                        output_padding=(1,1)
+                    ),
+                    nn.Sigmoid()
+                    # params['FEATURE']*25*25
                 )
 
             else:
                 raise Exception('sss')
 
-        self.conv_layer = nn.DataParallel(conv_layer,GPU)
-        self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
+        self.conv_layer_state = nn.DataParallel(conv_layer_state,GPU)
+        self.squeeze_layer_state = nn.DataParallel(squeeze_layer_state,GPU)
         self.cat_layer = nn.DataParallel(cat_layer,GPU)
-        self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
-        self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
+        self.unsqueeze_layer_state = nn.DataParallel(unsqueeze_layer_state,GPU)
+        self.unsqueeze_layer_prediction = nn.DataParallel(unsqueeze_layer_prediction,GPU)
+        self.deconv_layer_state = torch.nn.DataParallel(deconv_layer_state,GPU)
+        self.deconv_layer_prediction = torch.nn.DataParallel(deconv_layer_prediction,GPU)
         
 
     def forward(self, noise_v, state_v):
 
-        '''prepare'''
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-            state_v = state_v.squeeze(1)
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            # N*D*F*H*W to N*F*D*H*W
-            state_v = state_v.permute(0,2,1,3,4)
+        state_v = state_v.squeeze(1)
 
         '''forward'''
-        x = self.conv_layer(state_v)
+        x = self.conv_layer_state(state_v)
         if params['REPRESENTATION']==chris_domain.IMAGE:
             temp = x.size()
             x = x.view(x.size()[0], -1)
-        x = self.squeeze_layer(x)
+        x = self.squeeze_layer_state(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
-        x = self.unsqueeze_layer(x)
+        state_r_v = x.narrow(1,0,params['DIM'])
+        prediction_v = x.narrow(1,params['DIM'],params['DIM'])
+        state_r_v = self.unsqueeze_layer_state(state_r_v)
+        prediction_v = self.unsqueeze_layer_prediction(prediction_v)
         if params['REPRESENTATION']==chris_domain.IMAGE:
-            x = x.view(temp)
-        x = self.deconv_layer(x)
+            state_r_v = state_r_v.view(temp)
+            prediction_v = prediction_v.view(temp)
+        state_r_v = self.deconv_layer_state(state_r_v)
+        prediction_v = self.deconv_layer_state(prediction_v)
 
         '''decompose'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -491,8 +531,8 @@ class Generator(nn.Module):
             x = torch.cat([stater_v,prediction_v],1)
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
-            # N*F*D*H*W to N*D*F*H*W
-            x = x.permute(0,2,1,3,4)
+            # N*D*F*H*W
+            x=torch.cat([state_v.unsqueeze(1),prediction_v.unsqueeze(1)],1)
 
         return x
 
@@ -724,7 +764,11 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                     # 256*1*2*3
                 )
-                squeeze_layer = nn.Sequential(
+                squeeze_layer_state = nn.Sequential(
+                    nn.Linear(256*1*2*3, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+                squeeze_layer_prediction = nn.Sequential(
                     nn.Linear(256*1*2*3, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
@@ -733,44 +777,83 @@ class Discriminator(nn.Module):
                 )
 
             elif params['DOMAIN']=='2Dgrid':
-                conv_layer = nn.Sequential(
-                    # params['FEATURE']*2*25*25
-                    nn.Conv3d(
+                conv_layer_state = nn.Sequential(
+                    # params['FEATURE']*25*25
+                    nn.Conv2d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(2,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*12*12
-                    nn.Conv3d(
+                    # 64*12*12
+                    nn.Conv2d(
                         in_channels=64,
                         out_channels=128,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 128*1*6*6
-                    nn.Conv3d(
+                    # 128*6*6
+                    nn.Conv2d(
                         in_channels=128,
                         out_channels=256,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=True
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 256*1*3*3
+                    # 256*3*3
                 )
-                squeeze_layer = nn.Sequential(
-                    nn.Linear(256*1*3*3, params['DIM']),
+                conv_layer_prediction = nn.Sequential(
+                    # params['FEATURE']*25*25
+                    nn.Conv2d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 64*12*12
+                    nn.Conv2d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 128*6*6
+                    nn.Conv2d(
+                        in_channels=128,
+                        out_channels=256,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=True
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 256*3*3
+                )
+                squeeze_layer_state = nn.Sequential(
+                    nn.Linear(256*3*3, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+                squeeze_layer_prediction= nn.Sequential(
+                    nn.Linear(256*3*3, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
+                    nn.Linear(params['DIM']*2, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
                     nn.Linear(params['DIM'], 1),
                 )
 
@@ -779,68 +862,40 @@ class Discriminator(nn.Module):
 
         if params['GAN_MODE']=='wgan-grad-panish':
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = conv_layer_state
-                self.squeeze_layer_state = squeeze_layer_state
-                self.conv_layer_prediction = conv_layer_prediction
-                self.squeeze_layer_prediction = squeeze_layer_prediction
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = conv_layer
-                self.squeeze_layer = squeeze_layer
-
-            else:
-                raise Exception('Unsupport')
+            self.conv_layer_state = conv_layer_state
+            self.squeeze_layer_state = squeeze_layer_state
+            self.conv_layer_prediction = conv_layer_prediction
+            self.squeeze_layer_prediction = squeeze_layer_prediction
 
             self.final_layer = final_layer
 
         else:
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
-                self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
-                self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
-                self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-                self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-
-            else:
-                raise Exception('Unsupport')
+            self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
+            self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
+            self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
+            self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
 
             self.final_layer = torch.nn.DataParallel(final_layer,GPU)
 
     def forward(self, state_v, prediction_v):
 
-        '''prepare'''
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+        state_v = state_v.squeeze(1)
+        prediction_v = prediction_v.squeeze(1)
 
-            state_v = state_v.squeeze(1)
-            prediction_v = prediction_v.squeeze(1)
+        state_v = self.conv_layer_state(state_v)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            state_v = state_v.view(state_v.size()[0],-1)
+        state_v = self.squeeze_layer_state(state_v)
 
-            state_v = self.conv_layer_state(state_v)
-            state_v = self.squeeze_layer_state(state_v)
+        prediction_v = self.conv_layer_prediction(prediction_v)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            prediction_v = prediction_v.view(prediction_v.size()[0],-1)
+        prediction_v = self.squeeze_layer_prediction(prediction_v)
 
-            prediction_v = self.conv_layer_prediction(prediction_v)
-            prediction_v = self.squeeze_layer_prediction(prediction_v)
-
-            x = torch.cat([state_v,prediction_v],1)
-            x = self.final_layer(x)
-            x = x.view(-1)
-
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            x = torch.cat([state_v,prediction_v],1)
-            # N*D*F*H*W to N*F*D*H*W
-            x = x.permute(0,2,1,3,4)
-
-            '''forward'''
-            x = self.conv_layer(x)
-            if params['REPRESENTATION']==chris_domain.IMAGE:
-                x = x.view(x.size()[0], -1)
-            x = self.squeeze_layer(x)
-            x = self.final_layer(x)
-            x = x.view(-1)
+        x = torch.cat([state_v,prediction_v],1)
+        x = self.final_layer(x)
+        x = x.view(-1)
 
         return x
 
@@ -938,7 +993,7 @@ class Corrector(nn.Module):
 
 def weights_init(m):
     classname = m.__class__.__name__
-    if (classname.find('Linear') != -1) or (classname.find('Conv3d') != -1) or (classname.find('ConvTranspose3d') != -1):
+    if (classname.find('Linear') != -1) or (classname.find('Conv2d') != -1) or (classname.find('ConvTranspose2d') != -1):
         torch.nn.init.xavier_uniform(
             m.weight.data,
             gain=1
@@ -1409,7 +1464,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     if params['INTERPOLATES_MODE']=='auto':
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
-        max_norm = (prediction_gt_fl.size()[1])**0.5      
+        max_norm = (prediction_gt_fl.size()[1])**0.5
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
 
