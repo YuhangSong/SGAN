@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'b2-1'
+MULTI_RUN = 'h-3'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -50,7 +50,7 @@ add_parameters(EXP = 'simple_gg')
 add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 10)
+add_parameters(GRID_SIZE = 20)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
