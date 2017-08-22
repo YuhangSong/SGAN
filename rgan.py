@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-7'
-GPU = '1'
+MULTI_RUN = 'b2-0'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -91,13 +91,16 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 if params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(DELTA_T = 0.1)
 elif params['REPRESENTATION']==chris_domain.IMAGE:
-    add_parameters(DELTA_T = 0.1)
+    add_parameters(DELTA_T = 0.01)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
 add_parameters(SOFT_GP_FACTOR = 3)
 
-add_parameters(STABLE_MSE = 0.01) # None
+if params['REPRESENTATION']==chris_domain.VECTOR:
+    add_parameters(STABLE_MSE = None) # None
+elif params['REPRESENTATION']==chris_domain.IMAGE:
+    add_parameters(STABLE_MSE = 0.001) # None
 
 '''model settings'''
 if params['REPRESENTATION']==chris_domain.SCALAR:
