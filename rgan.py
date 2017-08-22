@@ -112,7 +112,7 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
-    print(unsupport)
+    raise Exception('Unsupport')
 
 add_parameters(BATCH_SIZE = 32)
 
