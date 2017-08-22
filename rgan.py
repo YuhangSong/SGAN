@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-5'
-GPU = '1'
+MULTI_RUN = 'b2-6'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -1415,6 +1415,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
+
+        if num_t.max() < 1:
+            num_t.fill_(1)
 
         num_t_sum = 0.0
         for b in range(num_t.size()[0]):
