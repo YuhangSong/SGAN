@@ -80,17 +80,16 @@ class Walk1D(object):
             agent_channel_should_be = [255,0,0]
 
             agent_count = 0
-            for x in range(self.w):
-                for y in range(self.h):
-                    valid_on_channel = True
-                    for c in range(3):
-                        pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
-                            valid_on_channel = False
-                            break
-                    if valid_on_channel:
-                        pos = (x,y)
-                        agent_count += 1
+            for x in range(self.n):
+                valid_on_channel = True
+                for c in range(3):
+                    pixel_value_mean_on_channel = np.mean(state_vector[:,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
+                    if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
+                        valid_on_channel = False
+                        break
+                if valid_on_channel:
+                    pos = x
+                    agent_count += 1
 
             if agent_count==1:
                 return pos
@@ -382,6 +381,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
     )
+
     bad_count = 0
     good_count = 0
     sample_distribution = {}
