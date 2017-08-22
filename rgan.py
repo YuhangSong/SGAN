@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-4'
-GPU = '0'
+MULTI_RUN = 'h-5'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -84,7 +84,10 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.1)
+if params['REPRESENTATION']==chris_domain.VECTOR:
+    add_parameters(DELTA_T = 0.1)
+elif params['REPRESENTATION']==chris_domain.IMAGE:
+    add_parameters(DELTA_T = 0.01)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
