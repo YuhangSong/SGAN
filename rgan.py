@@ -47,7 +47,7 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'simple_gg')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
@@ -295,7 +295,6 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    nn.BatchNorm1d(64),
                     nn.LeakyReLU(0.001),
                     # 64*1*2*12
                     nn.Conv3d(
@@ -306,7 +305,6 @@ class Generator(nn.Module):
                         padding=(0,0,1),
                         bias=False
                     ),
-                    nn.BatchNorm1d(128),
                     nn.LeakyReLU(0.001),
                     # 128*1*2*6
                     nn.Conv3d(
@@ -317,7 +315,6 @@ class Generator(nn.Module):
                         padding=(0,0,1),
                         bias=False
                     ),
-                    nn.BatchNorm1d(256),
                     nn.LeakyReLU(0.001),
                     # 256*1*2*3
                 )
@@ -343,7 +340,6 @@ class Generator(nn.Module):
                         padding=(0,0,1),
                         bias=False
                     ),
-                    nn.BatchNorm1d(128),
                     nn.LeakyReLU(0.001),
                     # 128*2*2*6
                     nn.ConvTranspose3d(
@@ -354,7 +350,6 @@ class Generator(nn.Module):
                         padding=(0,0,1),
                         bias=False
                     ),
-                    nn.BatchNorm1d(64),
                     nn.LeakyReLU(0.001),
                     # 64*2*2*12
                     nn.ConvTranspose3d(
