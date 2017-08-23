@@ -413,7 +413,6 @@ class Generator(nn.Module):
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
-                        output_padding=(0,1,1)
                     ),
                     nn.LeakyReLU(0.001),
                     # 128*2*6*6
