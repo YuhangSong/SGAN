@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-2'
+MULTI_RUN = 'spc-0'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -62,11 +62,11 @@ elif params['DOMAIN']=='1Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -1525,7 +1525,11 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
 
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
+        print(gradients_direction_gt_fl)
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
+        print(gradients_direction_gt_fl)
+        print(gradients_fl)
+        print(s)
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
