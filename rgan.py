@@ -1556,6 +1556,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                     gradients_fl,
                     b
                 )
+                if gradients_fl is None:
+                    print('No valid batch, return')
+                    return None, 0
                 print('Remove batch: '+str(original_size-gradients_direction_gt_fl.size()[0]-1))
             else:
                 b += 1
