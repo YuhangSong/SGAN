@@ -84,7 +84,7 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.01)
+add_parameters(DELTA_T = 0.03)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
