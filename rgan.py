@@ -161,7 +161,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'add bn on all image G')
+add_parameters(AUX_INFO = 'add ln1D in D')
 
 '''summary settings'''
 DSP = ''
@@ -207,6 +207,19 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 ############################### Definition Start ###############################
+
+class LayerNorm1D(nn.Module):
+
+    def __init__(self, features, eps=1e-6):
+        super(LayerNorm1D, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features))
+        self.beta = nn.Parameter(torch.zeros(features))
+        self.eps = eps
+
+    def forward(self, x):
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 def vector2image(x):
     block_size = chris_domain.BLOCK_SIZE*3
@@ -612,6 +625,7 @@ class Discriminator(nn.Module):
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(128*1*2*2, params['DIM']),
+                LayerNorm1D(params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
