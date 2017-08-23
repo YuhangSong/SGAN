@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-7'
-GPU = '1'
+MULTI_RUN = 'h-20'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -294,6 +294,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
+                nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.001),
                 # 64*1*5*5
                 nn.Conv3d(
@@ -304,6 +305,7 @@ class Generator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
+                nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.001),
                 # 128*1*2*2
             )
@@ -330,6 +332,7 @@ class Generator(nn.Module):
                     bias=False,
                     output_padding=(0,1,1)
                 ),
+                nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.001),
                 # 64*2*5*5
                 nn.ConvTranspose3d(
@@ -1426,6 +1429,8 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
         if params['GP_MODE']=='use-guide':
             gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
+        elif params['GP_MODE']=='pure-guide':
+            gradients_penalty = gradients_penalty * params['LAMBDA']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
