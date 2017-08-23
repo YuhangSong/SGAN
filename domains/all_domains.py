@@ -404,7 +404,6 @@ def evaluate_domain(domain, s1_state, s2_samples):
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
     )
-    print(true_distribution)
     bad_count = 0
     good_count = 0
     sample_distribution = {}
@@ -419,12 +418,14 @@ def evaluate_domain(domain, s1_state, s2_samples):
             except Exception as e:
                 sample_distribution[str(s2_sample_pos)] = 1
 
+    print('True: '+str(true_distribution))
+
+
     if good_count>0.0:
 
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
         print('----------------------------------------------')
-        print('True: '+str(true_distribution))
         print('Sample: '+str(sample_distribution))
         L1 = l1_distance(true_distribution, sample_distribution)
         AC = good_count / float(good_count + bad_count)

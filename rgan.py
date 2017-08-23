@@ -159,7 +159,7 @@ elif params['DOMAIN']=='2Dgrid':
         prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
         obstacle_pos_list=params['OBSTACLE_POS_LIST'],
         mode=params['REPRESENTATION'],
-        should_wrap=True,
+        should_wrap=False,
         fix_state=params['FIX_STATE']
     )
 
