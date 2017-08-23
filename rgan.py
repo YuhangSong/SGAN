@@ -1543,7 +1543,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
             return x
 
-        original_size = gradients_direction_gt_fl.size([0])
+        original_size = gradients_direction_gt_fl.size()[0]
 
         b = 0
         while true:
