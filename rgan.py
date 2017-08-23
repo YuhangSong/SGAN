@@ -218,9 +218,31 @@ class LayerNorm1D(nn.Module):
         self.eps = eps
 
     def forward(self, x):
-        
+
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+
+class LayerNorm3D(nn.Module):
+
+    def __init__(self, features, eps=1e-6):
+
+        super(LayerNorm3D, self).__init__()
+        self.gamma = nn.Parameter(torch.ones(features)).cuda().view(features,1,1,1)
+        self.beta = nn.Parameter(torch.zeros(features)).cuda().view(features,1,1,1)
+        self.eps = eps
+        self.first_flow = True
+
+    def forward(self, x):
+        
+        if self.first_flow:
+            self.gamma = self.gamma.expand(x.size()[1:len(x.size())])
+            self.beta = self.beta.expand(x.size()[1:len(x.size())])
+            self.first_flow = False
+
+        mean = x.mean(-1, keepdim=True)
+        std = x.std(-1, keepdim=True)
+
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 def vector2image(x):
@@ -612,6 +634,7 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
+                LayerNorm3D(64),
                 nn.LeakyReLU(0.001, inplace=True),
                 # 64*1*5*5
                 nn.Conv3d(
@@ -622,6 +645,7 @@ class Discriminator(nn.Module):
                     padding=(0,1,1),
                     bias=False
                 ),
+                LayerNorm3D(128),
                 nn.LeakyReLU(0.001, inplace=True),
                 # 128*1*2*2
             )
