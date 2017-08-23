@@ -1527,17 +1527,26 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
 
         def torch_remove_at_batch(x,index):
+
+            if x.size()[0]==1:
+                return None
+
             if index==0:
                 x = x[index+1:-1]
             elif index==(x.size()[0]-1):
                 x[0:index]
             else:
                 x = torch.cat(
-                    [x[0:index],x[index+1:-1]],
+                    [x[0:index],x[index+1:x.size()[0]]],
                     0
                 )
 
-        for b in range(gradients_direction_gt_fl.size()[0]):
+            return x
+
+        original_size = gradients_direction_gt_fl.size([0])
+
+        b = 0
+        while true:
             if gradients_direction_gt_fl[b].max() < 0.01:
                 gradients_direction_gt_fl = torch_remove_at_batch(
                     gradients_direction_gt_fl,
@@ -1547,7 +1556,11 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                     gradients_fl,
                     b
                 )
-                print('Remove batch: '+str(b))
+                print('Remove batch: '+str(original_size-gradients_direction_gt_fl.size()[0]-1))
+            else:
+                b += 1
+                if b>=gradients_direction_gt_fl.size()[0]:
+                    break
 
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
