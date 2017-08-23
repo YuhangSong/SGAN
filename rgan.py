@@ -161,7 +161,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'no bn on vector and scalar domain')
+add_parameters(AUX_INFO = 'add bn on all image G')
 
 '''summary settings'''
 DSP = ''
