@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-20'
+MULTI_RUN = 'no ln in D'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -48,9 +48,9 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 2)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -148,7 +148,7 @@ elif params['DOMAIN']=='2Dgrid':
         prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
         obstacle_pos_list=params['OBSTACLE_POS_LIST'],
         mode=params['REPRESENTATION'],
-        should_wrap=True,
+        should_wrap=False,
         fix_state=params['FIX_STATE']
     )
 
@@ -161,7 +161,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'remove ln 3D in D')
+add_parameters(AUX_INFO = 'no ln in D')
 
 '''summary settings'''
 DSP = ''
@@ -316,72 +316,164 @@ class Generator(nn.Module):
             )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
+
+            if params['GRID_SIZE']==2:
            
-            conv_layer = nn.Sequential(
-                # params['FEATURE']*1*10*10
-                nn.Conv3d(
-                    in_channels=params['FEATURE'],
-                    out_channels=64,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.001),
-                # 64*1*5*5
-                nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(128),
-                nn.LeakyReLU(0.001),
-                # 128*1*2*2
-            )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*2*2, params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.001),
-            )
-            cat_layer = nn.Sequential(
-                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
-                nn.LeakyReLU(0.001),
-            )
-            unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 128*1*2*2),
-                nn.BatchNorm1d(128*1*2*2),
-                nn.LeakyReLU(0.001),
-            )
-            deconv_layer = nn.Sequential(
-                # 128*1*2*2
-                nn.ConvTranspose3d(
-                    in_channels=128,
-                    out_channels=64,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False,
-                    output_padding=(0,1,1)
-                ),
-                nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.001),
-                # 64*2*5*5
-                nn.ConvTranspose3d(
-                    in_channels=64,
-                    out_channels=params['FEATURE'],
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False,
-                ),
-                nn.Sigmoid()
-                # params['FEATURE']*2*10*10
-            )
+                conv_layer = nn.Sequential(
+                    # params['FEATURE']*1*10*10
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm3d(64),
+                    nn.LeakyReLU(0.001),
+                    # 64*1*5*5
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm3d(128),
+                    nn.LeakyReLU(0.001),
+                    # 128*1*2*2
+                )
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*2*2, params['DIM']),
+                    nn.BatchNorm1d(params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.BatchNorm1d(params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                unsqueeze_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 128*1*2*2),
+                    nn.BatchNorm1d(128*1*2*2),
+                    nn.LeakyReLU(0.001),
+                )
+                deconv_layer = nn.Sequential(
+                    # 128*1*2*2
+                    nn.ConvTranspose3d(
+                        in_channels=128,
+                        out_channels=64,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                        output_padding=(0,1,1)
+                    ),
+                    nn.BatchNorm3d(64),
+                    nn.LeakyReLU(0.001),
+                    # 64*2*5*5
+                    nn.ConvTranspose3d(
+                        in_channels=64,
+                        out_channels=params['FEATURE'],
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.Sigmoid()
+                    # params['FEATURE']*2*10*10
+                )
+
+            elif params['GRID_SIZE']==5:
+
+                conv_layer = nn.Sequential(
+                    # params['FEATURE']*1*25*25
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm3d(64),
+                    nn.LeakyReLU(0.001),
+                    # 64*1*12*12
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm3d(128),
+                    nn.LeakyReLU(0.001),
+                    # 128*1*6*6
+                    nn.Conv3d(
+                        in_channels=128,
+                        out_channels=256,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm3d(256),
+                    nn.LeakyReLU(0.001),
+                    # 256*1*3*3
+                )
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(256*1*3*3, params['DIM']),
+                    nn.BatchNorm1d(params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.BatchNorm1d(params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                unsqueeze_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 256*1*3*3),
+                    nn.BatchNorm1d(256*1*3*3),
+                    nn.LeakyReLU(0.001),
+                )
+                deconv_layer = nn.Sequential(
+                    # 256*1*3*3
+                    nn.ConvTranspose3d(
+                        in_channels=256,
+                        out_channels=128,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.BatchNorm3d(128),
+                    nn.LeakyReLU(0.001),
+                    # 128*2*6*6
+                    nn.ConvTranspose3d(
+                        in_channels=128,
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.BatchNorm3d(64),
+                    nn.LeakyReLU(0.001),
+                    # 64*2*12*12
+                    nn.ConvTranspose3d(
+                        in_channels=64,
+                        out_channels=params['FEATURE'],
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                        output_padding=(0,1,1)
+                    ),
+                    nn.Sigmoid()
+                    # params['FEATURE']*2*25*25
+                )
 
         else:
             raise Exception('representation unsupport!')
@@ -619,40 +711,91 @@ class Discriminator(nn.Module):
             )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
+
+            if params['GRID_SIZE']==2:
             
-            conv_layer = nn.Sequential(
-                # params['FEATURE']*2*10*10
-                nn.Conv3d(
-                    in_channels=params['FEATURE'],
-                    out_channels=64,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.001, inplace=True),
-                # 64*1*5*5
-                nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.001, inplace=True),
-                # 128*1*2*2
-            )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*2*2, params['DIM']),
-                LayerNorm1D(params['DIM']),
-                nn.LeakyReLU(0.001, inplace=True),
-            )
-            final_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 1),
-            )
+                conv_layer = nn.Sequential(
+                    # params['FEATURE']*2*10*10
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 64*1*5*5
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 128*1*2*2
+                )
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*2*2, params['DIM']),
+                    LayerNorm1D(params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+                final_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 1),
+                )
+
+            elif params['GRID_SIZE']==5:
+
+                conv_layer = nn.Sequential(
+                    # params['FEATURE']*2*25*25
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 64*1*12*12
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 128*1*6*6
+                    nn.Conv3d(
+                        in_channels=128,
+                        out_channels=256,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 256*1*3*3
+                )
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(256*1*3*3, params['DIM']),
+                    # LayerNorm1D(params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+                final_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 1),
+                )
+
+            else:
+
+                raise Exception('unsupport')
 
         else:
+
             raise Exception('Unsupport')
 
         if params['GAN_MODE']=='wgan-grad-panish':
