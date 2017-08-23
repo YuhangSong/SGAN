@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-10'
-GPU = '0'
+MULTI_RUN = 'h-11'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'simple_gg')
+add_parameters(EXP = 'gg_help')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -62,8 +62,8 @@ elif params['DOMAIN']=='1Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [])
@@ -71,8 +71,8 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
 else:
     print(unsupport)
@@ -80,10 +80,10 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.1)
 
 '''this may not be a good way'''
@@ -1415,6 +1415,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
+
+        if num_t.max() < 1:
+            num_t.fill_(1)
 
         num_t_sum = 0.0
         for b in range(num_t.size()[0]):
