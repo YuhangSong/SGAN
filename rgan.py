@@ -1546,7 +1546,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         original_size = gradients_direction_gt_fl.size()[0]
 
         b = 0
-        while true:
+        while True:
             if gradients_direction_gt_fl[b].max() < 0.01:
                 gradients_direction_gt_fl = torch_remove_at_batch(
                     gradients_direction_gt_fl,
