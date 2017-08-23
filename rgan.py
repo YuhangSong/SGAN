@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-3-fixing'
-GPU = '1'
+MULTI_RUN = 'spc-4'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -80,10 +80,10 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.1)
 
 '''this may not be a good way'''
@@ -1562,7 +1562,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             else:
                 b += 1
                 if b>=gradients_direction_gt_fl.size()[0]:
-                    print('Filter batch to: ' + str(gradients_direction_gt_fl.size()[0]))
+                    # print('Filter batch to: ' + str(gradients_direction_gt_fl.size()[0]))
                     break
 
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
