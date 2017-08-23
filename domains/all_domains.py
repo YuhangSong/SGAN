@@ -188,8 +188,6 @@ class BitFlip1D(object):
 
         return state_vector
 
-
-
 class Walk2D(object):
 
     def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap, fix_state=False):
