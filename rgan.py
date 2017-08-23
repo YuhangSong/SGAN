@@ -1542,6 +1542,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                     gradients_fl,
                     b
                 )
+                print('Remove batch: '+str(b))
 
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
