@@ -1532,7 +1532,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                 return None
 
             if index==0:
-                x = x[index+1:-1]
+                x = x[index+1:x.size()[0]]
             elif index==(x.size()[0]-1):
                 x[0:index]
             else:
