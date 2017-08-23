@@ -1259,6 +1259,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
+        # print(d_mean)
+        # print(prediction_gt[0:4,0,1,:,:])
+        # print(s)
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
 
         num_t_sum = 0.0
@@ -1337,6 +1340,11 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         raise Exception('Unsupport')
 
     interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
+
+    # print(prediction_gt[0:1,0,1,:,:])
+    # print(prediction[0:1,0,1,:,:])
+    # print(interpolates[0:1,0,1,:,:])
+    # print(s)
 
     if log:
         plt.scatter(
