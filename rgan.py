@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 2)
 
@@ -311,14 +311,17 @@ class Generator(nn.Module):
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(128*1*2*2, params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], 128*1*2*2),
+                nn.BatchNorm1d(128*1*2*2),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
