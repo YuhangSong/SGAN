@@ -87,7 +87,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(DELTA_T = 0.09132)
 
 '''this may not be a good way'''
-add_parameters(SOFT_GP = False)
+add_parameters(SOFT_GP = True)
 add_parameters(SOFT_GP_FACTOR = 3)
 
 add_parameters(STABLE_MSE = None) # None
@@ -1316,7 +1316,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     if params['SOFT_GP']:
         '''solf function here'''
         alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
-
+        
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
 
@@ -1344,7 +1344,6 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     # print(prediction_gt[0:1,0,1,:,:])
     # print(prediction[0:1,0,1,:,:])
     # print(interpolates[0:1,0,1,:,:])
-    # print(s)
 
     if log:
         plt.scatter(
@@ -1369,6 +1368,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                     create_graph=True,
                     retain_graph=True,
                     only_inputs=True)[0]
+
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
 

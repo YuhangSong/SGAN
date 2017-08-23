@@ -40,8 +40,16 @@ class Walk1D(object):
     def get_transition_probs(self, state_pos):
 
         prob_dict = {}
+
         for action_i in range(len(self.action_dic)):
-            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
+
+            key = str(self.update_state(state_pos, self.action_dic[action_i]))
+
+            if prob_dict.has_key(key):
+                prob_dict[key] += self.prob_dirs[action_i]
+            else:
+                prob_dict[key] = self.prob_dirs[action_i]
+
         return prob_dict
 
 
@@ -143,9 +151,18 @@ class BitFlip1D(object):
             return [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
 
     def get_transition_probs(self, state_pos):
+
         prob_dict = {}
+
         for action_i in range(len(self.action_dic)):
-            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
+
+            key = str(self.update_state(state_pos, self.action_dic[action_i]))
+
+            if prob_dict.has_key(key):
+                prob_dict[key] += self.prob_dirs[action_i]
+            else:
+                prob_dict[key] = self.prob_dirs[action_i]
+            
         return prob_dict
 
     def set_state(self, state):
@@ -282,8 +299,16 @@ class Walk2D(object):
     def get_transition_probs(self, state_vector=None, state_pos=None):
 
         prob_dict = {}
+
         for action_i in range(len(self.action_dic)):
-            prob_dict[str(self.update_state(state_pos, self.action_dic[action_i]))] = self.prob_dirs[action_i]
+
+            key = str(self.update_state(state_pos, self.action_dic[action_i]))
+
+            if prob_dict.has_key(key):
+                prob_dict[key] += self.prob_dirs[action_i]
+            else:
+                prob_dict[key] = self.prob_dirs[action_i]
+
         return prob_dict
 
     def reset(self):
@@ -379,7 +404,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
     )
-
+    print(true_distribution)
     bad_count = 0
     good_count = 0
     sample_distribution = {}
