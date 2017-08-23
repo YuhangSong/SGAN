@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-4'
-GPU = '0'
+MULTI_RUN = 'h-11'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -80,7 +80,7 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'use-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'one') # auto, one
@@ -1462,7 +1462,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
             return None, num_t_sum
 
     else:
-        num_t_sum = 1.0
+        num_t_sum = params['BATCH_SIZE']
         alpha = torch.rand(prediction_gt.size()[0]).cuda()
 
     if params['SOFT_GP']:
