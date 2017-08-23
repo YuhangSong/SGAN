@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-19'
-GPU = '1'
+MULTI_RUN = 'w4-10'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
@@ -62,11 +62,11 @@ elif params['DOMAIN']=='1Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
-
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
+
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -1392,6 +1392,11 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = dataset.permute(0,1,4,2,3)
             dataset = dataset.float()
             dataset = dataset / 255.0
+
+        # print(dataset[0,1,1,:,:])
+        # print(dataset[1,1,1,:,:])
+        # print(dataset[2,1,1,:,:])
+        # print(iiii)
 
         yield dataset
 
