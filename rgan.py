@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = True
-MULTI_RUN = '3d ln in D'
+MULTI_RUN = 'test 3d ln'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = True)
+add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 2)
 
@@ -172,7 +172,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '3d ln in D')
+add_parameters(AUX_INFO = 'test 3d ln')
 
 '''summary settings'''
 DSP = ''
@@ -219,40 +219,55 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 
 ############################### Definition Start ###############################
 
-class LayerNorm1D(nn.Module):
+class LayerNorm(nn.Module):
 
-    def __init__(self, features, eps=1e-6):
+    def __init__(self, features, depth=None, height=None, width=None, eps=1e-6):
 
-        super(LayerNorm1D, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(features))
-        self.beta = nn.Parameter(torch.zeros(features))
-        self.eps = eps
+        super(LayerNorm, self).__init__()
 
-    def forward(self, x):
+        if depth is None and height is None:
 
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                )).cuda()
 
-class LayerNorm3D(nn.Module):
-
-    def __init__(self, features, depth, height, width, eps=1e-6):
-
-        super(LayerNorm3D, self).__init__()
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                )).cuda()
         
-        self.gamma = nn.Parameter(torch.ones(
-                features,
-                depth,
-                height,
-                width
-            )).cuda()
+        elif depth is None and height is not None:
 
-        self.beta = nn.Parameter(torch.zeros(
-                features,
-                depth,
-                height,
-                width
-            )).cuda()
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                    height,
+                    width
+                )).cuda()
+
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                    height,
+                    width
+                )).cuda()
+
+        elif depth is not None and height is not None:
+
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                    depth,
+                    height,
+                    width
+                )).cuda()
+
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                    depth,
+                    height,
+                    width
+                )).cuda()
+
+        else:
+
+            raise Exception('unsupport')
 
         self.eps = eps
 
@@ -747,7 +762,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm3D(64,1,5,5),
+                    LayerNorm(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -758,13 +773,13 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm3D(128,1,2,2),
+                    LayerNorm(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(128*1*2*2, params['DIM']),
-                    LayerNorm1D(params['DIM']),
+                    LayerNorm(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
