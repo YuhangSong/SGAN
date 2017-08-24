@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-test-nc'
+MULTI_RUN = 'spc-0'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -48,9 +48,9 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = True)
+add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5)
+add_parameters(GRID_SIZE = 2)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -582,23 +582,23 @@ class Transitor(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True), 
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
                 nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.2, inplace=True),
             )
             if params['REPRESENTATION']==chris_domain.SCALAR:
                 deconv_layer = nn.Sequential(
