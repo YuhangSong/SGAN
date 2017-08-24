@@ -84,7 +84,18 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.09132)
+
+if params['REPRESENTATION']==chris_domain.VECTOR:
+    add_parameters(DELTA_T = 0.1)
+elif params['REPRESENTATION']==chris_domain.IMAGE:
+    if params['GRID_SIZE']==2:
+        add_parameters(DELTA_T = 0.09132)
+    elif params['GRID_SIZE']==5:
+        add_parameters(DELTA_T = 0.0365324)
+    else:
+        raise Exception('unsupport')
+else:
+    raise Exception('unsupport')
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
