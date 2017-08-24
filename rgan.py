@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-1'
+MULTI_RUN = 'spc-3'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -179,9 +179,9 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(LayerNorm=False)
+add_parameters(LayerNorm=True)
 
-add_parameters(AUX_INFO = 'spc-test-nc')
+add_parameters(AUX_INFO = '')
 
 '''summary settings'''
 DSP = ''
@@ -410,16 +410,16 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 128*1*2*2),
-                    nn.BatchNorm1d(128*1*2*2),
+                    nn.Linear(params['DIM'], 128*2*2*2),
+                    nn.BatchNorm1d(128*2*2*2),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
-                    # 128*1*2*2
+                    # 128*2*2*2
                     nn.ConvTranspose3d(
                         in_channels=128,
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -558,7 +558,12 @@ class Generator(nn.Module):
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
         if params['REPRESENTATION']==chris_domain.IMAGE:
-            x = x.view(temp)
+            if params['GRID_SIZE']==2:
+                x = x.view(x.size()[0],128,2,2,2)
+            elif params['GRID_SIZE']==5:
+                raise Exception('s')
+            else:
+                raise Exception('s')
         x = self.deconv_layer(x)
 
         '''decompose'''
@@ -774,28 +779,28 @@ class Discriminator(nn.Module):
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(2,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False
-                    ),
-                    LayerNorm(64,1,5,5),
-                    nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*5*5
-                    nn.Conv3d(
-                        in_channels=64,
-                        out_channels=128,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(128,1,2,2),
+                    LayerNorm(64,2,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 128*1*2*2
+                    # 64*2*5*5
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False
+                    ),
+                    LayerNorm(128,2,2,2),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 128*2*2*2
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(128*1*2*2, params['DIM']),
+                    nn.Linear(128*2*2*2, params['DIM']),
                     LayerNorm(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
