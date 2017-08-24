@@ -766,7 +766,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(64,1,5,5),
+                    # LayerNorm(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -777,7 +777,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(128,1,2,2),
+                    # LayerNorm(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
@@ -802,7 +802,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(64,1,12,12),
+                    # LayerNorm(64,1,12,12),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (64,1,12,12)
                     nn.Conv3d(
@@ -813,7 +813,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(128,1,6,6),
+                    # LayerNorm(128,1,6,6),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (128,1,6,6)
                     nn.Conv3d(
@@ -824,7 +824,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(256,1,3,3),
+                    # LayerNorm(256,1,3,3),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (256,1,3,3)
                 )
