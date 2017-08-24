@@ -21,7 +21,7 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = False
+CLEAR_RUN = True
 MULTI_RUN = '3d ln in D'
 GPU = '1'
 
