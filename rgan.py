@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-2'
+MULTI_RUN = 'spc-10'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -80,11 +80,11 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
@@ -124,7 +124,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.IMAGE:
-    add_parameters(DIM = 512)
+    add_parameters(DIM = 128)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
     add_parameters(TARGET_W_DISTANCE = 0.1)
@@ -179,7 +179,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(LayerNorm=True)
+add_parameters(LayerNorm=False)
 
 add_parameters(AUX_INFO = '')
 
@@ -774,38 +774,59 @@ class Discriminator(nn.Module):
 
             if params['GRID_SIZE']==2:
             
-                conv_layer = nn.Sequential(
-                    # params['FEATURE']*2*10*10
-                    nn.Conv3d(
+                conv_layer_state = nn.Sequential(
+                    # params['FEATURE']*10*10
+                    nn.Conv2d(
                         in_channels=params['FEATURE'],
+                        out_channels=32,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 32*5*5
+                    nn.Conv2d(
+                        in_channels=32,
                         out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=False
                     ),
-                    LayerNorm(64,2,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*2*5*5
-                    nn.Conv3d(
-                        in_channels=64,
-                        out_channels=128,
-                        kernel_size=(2,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                    # 64*2*2
+                )
+                conv_layer_prediction = nn.Sequential(
+                    # params['FEATURE']*10*10
+                    nn.Conv2d(
+                        in_channels=params['FEATURE'],
+                        out_channels=32,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=False
                     ),
-                    LayerNorm(128,2,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 128*2*2*2
+                    # 32*5*5
+                    nn.Conv2d(
+                        in_channels=32,
+                        out_channels=64,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=False
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 64*2*2
                 )
-                squeeze_layer = nn.Sequential(
-                    nn.Linear(128*2*2*2, params['DIM']),
-                    LayerNorm(params['DIM']),
+                squeeze_layer_state = nn.Sequential(
+                    nn.Linear(64*2*2, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
-                final_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 1),
+                squeeze_layer_prediction = nn.Sequential(
+                    nn.Linear(64*2*2, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
 
             elif params['GRID_SIZE']==5:
@@ -863,70 +884,36 @@ class Discriminator(nn.Module):
 
             raise Exception('Unsupport')
 
-        if params['GAN_MODE']=='wgan-grad-panish':
+        final_layer = nn.Sequential(
+                    nn.Linear(params['DIM']*2, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    nn.Linear(params['DIM'], 1),
+                )
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = conv_layer_state
-                self.squeeze_layer_state = squeeze_layer_state
-                self.conv_layer_prediction = conv_layer_prediction
-                self.squeeze_layer_prediction = squeeze_layer_prediction
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = conv_layer
-                self.squeeze_layer = squeeze_layer
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = final_layer
-
-        else:
-
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
-                self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
-                self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
-                self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-                self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = torch.nn.DataParallel(final_layer,GPU)
+        self.conv_layer_state = conv_layer_state
+        self.squeeze_layer_state = squeeze_layer_state
+        self.conv_layer_prediction = conv_layer_prediction
+        self.squeeze_layer_prediction = squeeze_layer_prediction
+        self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
 
-        '''prepare'''
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+        state_v = state_v.squeeze(1)
+        prediction_v = prediction_v.squeeze(1)
 
-            state_v = state_v.squeeze(1)
-            prediction_v = prediction_v.squeeze(1)
+        state_v = self.conv_layer_state(state_v)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            state_v = state_v.view(state_v.size()[0], -1)
+        state_v = self.squeeze_layer_state(state_v)
 
-            state_v = self.conv_layer_state(state_v)
-            state_v = self.squeeze_layer_state(state_v)
+        prediction_v = self.conv_layer_prediction(prediction_v)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            prediction_v = prediction_v.view(prediction_v.size()[0], -1)
+        prediction_v = self.squeeze_layer_prediction(prediction_v)
 
-            prediction_v = self.conv_layer_prediction(prediction_v)
-            prediction_v = self.squeeze_layer_prediction(prediction_v)
-
-            x = torch.cat([state_v,prediction_v],1)
-            x = self.final_layer(x)
-            x = x.view(-1)
-
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            x = torch.cat([state_v,prediction_v],1)
-            # N*D*F*H*W to N*F*D*H*W
-            x = x.permute(0,2,1,3,4)
-
-            '''forward'''
-            x = self.conv_layer(x)
-            if params['REPRESENTATION']==chris_domain.IMAGE:
-                x = x.view(x.size()[0], -1)
-            x = self.squeeze_layer(x)
-            x = self.final_layer(x)
-            x = x.view(-1)
+        x = torch.cat([state_v,prediction_v],1)
+        x = self.final_layer(x)
+        x = x.view(-1)
 
         return x
 
