@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'test 1d ln'
+MULTI_RUN = 'h-31'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -50,7 +50,7 @@ add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 2)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -87,11 +87,15 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
 if params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(DELTA_T = 0.1)
+
 elif params['REPRESENTATION']==chris_domain.IMAGE:
+
     if params['GRID_SIZE']==2:
         add_parameters(DELTA_T = 0.09132)
+
     elif params['GRID_SIZE']==5:
         add_parameters(DELTA_T = 0.0365324)
+
     else:
         raise Exception('unsupport')
 else:
@@ -426,7 +430,7 @@ class Generator(nn.Module):
             elif params['GRID_SIZE']==5:
 
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*25*25
+                    # (params['FEATURE'],1,25,25)
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
@@ -437,7 +441,7 @@ class Generator(nn.Module):
                     ),
                     nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
-                    # 64*1*12*12
+                    # (64,1,12,12)
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
@@ -448,7 +452,7 @@ class Generator(nn.Module):
                     ),
                     nn.BatchNorm3d(128),
                     nn.LeakyReLU(0.001),
-                    # 128*1*6*6
+                    # (128,1,6,6)
                     nn.Conv3d(
                         in_channels=128,
                         out_channels=256,
@@ -459,7 +463,7 @@ class Generator(nn.Module):
                     ),
                     nn.BatchNorm3d(256),
                     nn.LeakyReLU(0.001),
-                    # 256*1*3*3
+                    # (256,1,3,3)
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(256*1*3*3, params['DIM']),
@@ -477,7 +481,7 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
-                    # 256*1*3*3
+                    # (256,1,3,3)
                     nn.ConvTranspose3d(
                         in_channels=256,
                         out_channels=128,
@@ -488,7 +492,7 @@ class Generator(nn.Module):
                     ),
                     nn.BatchNorm3d(128),
                     nn.LeakyReLU(0.001),
-                    # 128*2*6*6
+                    # (128,2,6,6)
                     nn.ConvTranspose3d(
                         in_channels=128,
                         out_channels=64,
@@ -499,7 +503,7 @@ class Generator(nn.Module):
                     ),
                     nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
-                    # 64*2*12*12
+                    # (64,2,12,12)
                     nn.ConvTranspose3d(
                         in_channels=64,
                         out_channels=params['FEATURE'],
@@ -510,7 +514,7 @@ class Generator(nn.Module):
                         output_padding=(0,1,1)
                     ),
                     nn.Sigmoid()
-                    # params['FEATURE']*2*25*25
+                    # (params['FEATURE'],2,25,25)
                 )
 
         else:
@@ -762,7 +766,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(64,1,5,5),
+                    LayerNorm(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -773,7 +777,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(128,1,2,2),
+                    LayerNorm(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
@@ -789,7 +793,7 @@ class Discriminator(nn.Module):
             elif params['GRID_SIZE']==5:
 
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*2*25*25
+                    # (params['FEATURE'],2,25,25)
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
@@ -798,8 +802,9 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
+                    LayerNorm(64,1,12,12),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*12*12
+                    # (64,1,12,12)
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
@@ -808,8 +813,9 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
+                    LayerNorm(128,1,6,6),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 128*1*6*6
+                    # (128,1,6,6)
                     nn.Conv3d(
                         in_channels=128,
                         out_channels=256,
@@ -818,12 +824,13 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
+                    LayerNorm(256,1,3,3),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 256*1*3*3
+                    # (256,1,3,3)
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(256*1*3*3, params['DIM']),
-                    LayerNorm1D(params['DIM']),
+                    LayerNorm(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
