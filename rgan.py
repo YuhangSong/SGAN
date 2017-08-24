@@ -23,7 +23,7 @@ import matplotlib.cm as cm
 
 CLEAR_RUN = True
 MULTI_RUN = 'test 3d ln'
-GPU = '1'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
