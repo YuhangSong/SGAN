@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'test uniform ln'
+MULTI_RUN = '3d ln in D'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -50,7 +50,7 @@ add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 2)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -172,7 +172,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'test uniform ln')
+add_parameters(AUX_INFO = '3d ln in D')
 
 '''summary settings'''
 DSP = ''
@@ -762,7 +762,7 @@ class Discriminator(nn.Module):
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(128*1*2*2, params['DIM']),
-                    LayerNorm(params['DIM']),
+                    LayerNorm1D(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
