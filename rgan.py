@@ -234,27 +234,29 @@ class LayerNorm1D(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
-class LayerNorm(nn.Module):
+class LayerNorm3D(nn.Module):
 
-    def __init__(self, eps=1e-6):
+    def __init__(self, features, depth, height, width, eps=1e-6):
 
-        super(LayerNorm, self).__init__()
+        super(LayerNorm3D, self).__init__()
         
-        self.gamma = None
-        self.beta = None
+        self.gamma = nn.Parameter(torch.ones(
+                features,
+                depth,
+                height,
+                width
+            )).cuda()
+
+        self.beta = nn.Parameter(torch.zeros(
+                features,
+                depth,
+                height,
+                width
+            )).cuda()
+
         self.eps = eps
 
-    def forward(self, x):
-
-        if self.gamma is None:
-            self.gamma = nn.Parameter(torch.ones(
-                x.size()[1:len(x.size())]
-            )).cuda()
-
-        if self.beta is None:
-            self.beta = nn.Parameter(torch.zeros(
-                x.size()[1:len(x.size())]
-            )).cuda()
+    def forward(self, x): 
 
         x_f = x.view(x.size()[0],-1)
         mean = x_f.mean(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
@@ -745,7 +747,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(),
+                    LayerNorm3D(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -756,7 +758,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(),
+                    LayerNorm3D(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
@@ -988,16 +990,16 @@ def weights_init(m):
             gain=1
         )
         m.bias.data.fill_(0.1)
-    # elif classname.find('Conv3d') != -1:
-    #     torch.nn.init.xavier_uniform(
-    #         m.weight.data,
-    #         gain=1
-    #     )
-    # elif classname.find('ConvTranspose3d') != -1:
-    #     torch.nn.init.xavier_uniform(
-    #         m.weight.data,
-    #         gain=1
-    #     )
+    elif classname.find('Conv3d') != -1:
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
+    elif classname.find('ConvTranspose3d') != -1:
+        torch.nn.init.xavier_uniform(
+            m.weight.data,
+            gain=1
+        )
 
 def chris2song(x):
 
