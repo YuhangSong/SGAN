@@ -21,9 +21,9 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
-CLEAR_RUN = True
-MULTI_RUN = 'test 3d ln'
-GPU = '0'
+CLEAR_RUN = False
+MULTI_RUN = 'test 1d ln'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -762,7 +762,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(64,1,5,5),
+                    # LayerNorm(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -773,7 +773,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    LayerNorm(128,1,2,2),
+                    # LayerNorm(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
