@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-test-nc-gg'
-GPU = '0'
+MULTI_RUN = 'spc-test-nc-gg-no-bn1d'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -181,7 +181,7 @@ add_parameters(CRITIC_ITERS = 5)
 
 add_parameters(LayerNorm=False)
 
-add_parameters(AUX_INFO = '')
+add_parameters(AUX_INFO = 'spc-test-nc-gg-no-bn1d')
 
 '''summary settings'''
 DSP = ''
@@ -401,17 +401,17 @@ class Generator(nn.Module):
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(128*1*2*2, params['DIM']),
-                    nn.BatchNorm1d(params['DIM']),
+                    # nn.BatchNorm1d(params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 cat_layer = nn.Sequential(
                     nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.BatchNorm1d(params['DIM']),
+                    # nn.BatchNorm1d(params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
                     nn.Linear(params['DIM'], 128*1*2*2),
-                    nn.BatchNorm1d(128*1*2*2),
+                    # nn.BatchNorm1d(128*1*2*2),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
@@ -480,17 +480,17 @@ class Generator(nn.Module):
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(256*1*3*3, params['DIM']),
-                    nn.BatchNorm1d(params['DIM']),
+                    # nn.BatchNorm1d(params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 cat_layer = nn.Sequential(
                     nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.BatchNorm1d(params['DIM']),
+                    # nn.BatchNorm1d(params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
                     nn.Linear(params['DIM'], 256*1*3*3),
-                    nn.BatchNorm1d(256*1*3*3),
+                    # nn.BatchNorm1d(256*1*3*3),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
@@ -583,22 +583,22 @@ class Transitor(nn.Module):
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
             )
             if params['REPRESENTATION']==chris_domain.SCALAR:
                 deconv_layer = nn.Sequential(
