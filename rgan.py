@@ -80,11 +80,11 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
