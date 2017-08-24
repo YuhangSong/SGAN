@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'no ln in D'
-GPU = '0'
+MULTI_RUN = 'ln in D'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -172,7 +172,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'no ln in D')
+add_parameters(AUX_INFO = 'ln in D')
 
 '''summary settings'''
 DSP = ''
@@ -794,7 +794,7 @@ class Discriminator(nn.Module):
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(256*1*3*3, params['DIM']),
-                    # LayerNorm1D(params['DIM']),
+                    LayerNorm1D(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
