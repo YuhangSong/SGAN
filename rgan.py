@@ -375,32 +375,32 @@ class Generator(nn.Module):
             if params['GRID_SIZE']==2:
            
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*10*10
-                    nn.Conv3d(
+                    # params['FEATURE']*10*10
+                    nn.Conv2d(
                         in_channels=params['FEATURE'],
+                        out_channels=32,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=False
+                    ),
+                    nn.BatchNorm2d(32),
+                    nn.LeakyReLU(0.001),
+                    # 32*5*5
+                    nn.Conv2d(
+                        in_channels=32,
                         out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=False
                     ),
                     nn.BatchNorm3d(64),
                     nn.LeakyReLU(0.001),
-                    # 64*1*5*5
-                    nn.Conv3d(
-                        in_channels=64,
-                        out_channels=128,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False
-                    ),
-                    nn.BatchNorm3d(128),
-                    nn.LeakyReLU(0.001),
-                    # 128*1*2*2
+                    # 64*2*2
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(128*1*2*2, params['DIM']),
+                    nn.Linear(64*2*2, params['DIM']),
                     nn.BatchNorm1d(params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
@@ -410,30 +410,30 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 128*2*2*2),
-                    nn.BatchNorm1d(128*2*2*2),
+                    nn.Linear(params['DIM'], 64*2*2),
+                    nn.BatchNorm1d(64*2*2),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
-                    # 128*2*2*2
-                    nn.ConvTranspose3d(
-                        in_channels=128,
-                        out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                        output_padding=(0,1,1)
-                    ),
-                    nn.BatchNorm3d(64),
-                    nn.LeakyReLU(0.001),
-                    # 64*2*5*5
-                    nn.ConvTranspose3d(
+                    # 64*2*2
+                    nn.ConvTranspose2d(
                         in_channels=64,
+                        out_channels=32,
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
+                        bias=False,
+                        output_padding=(1,1)
+                    ),
+                    nn.BatchNorm2d(32),
+                    nn.LeakyReLU(0.001),
+                    # 32*5*5
+                    nn.ConvTranspose2d(
+                        in_channels=32,
                         out_channels=params['FEATURE'],
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
+                        kernel_size=(4,4),
+                        stride=(2,2),
+                        padding=(1,1),
                         bias=False,
                     ),
                     nn.Sigmoid()
@@ -533,21 +533,16 @@ class Generator(nn.Module):
         else:
             raise Exception('representation unsupport!')
 
-        self.conv_layer = nn.DataParallel(conv_layer,GPU)
-        self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
-        self.cat_layer = nn.DataParallel(cat_layer,GPU)
-        self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
-        self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
-        
+        self.conv_layer = conv_layer
+        self.squeeze_layer = squeeze_layer
+        self.cat_layer = cat_layer
+        self.unsqueeze_layer = unsqueeze_layer
+        self.deconv_layer = deconv_layer
 
     def forward(self, noise_v, state_v):
 
         '''prepare'''
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-            state_v = state_v.squeeze(1)
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            # N*D*F*H*W to N*F*D*H*W
-            state_v = state_v.permute(0,2,1,3,4)
+        state_v = state_v.squeeze(1)
 
         '''forward'''
         x = self.conv_layer(state_v)
@@ -559,7 +554,7 @@ class Generator(nn.Module):
         x = self.unsqueeze_layer(x)
         if params['REPRESENTATION']==chris_domain.IMAGE:
             if params['GRID_SIZE']==2:
-                x = x.view(x.size()[0],128,2,2,2)
+                x = x.view(x.size()[0],64,2,2)
             elif params['GRID_SIZE']==5:
                 raise Exception('s')
             else:
@@ -573,8 +568,10 @@ class Generator(nn.Module):
             x = torch.cat([stater_v,prediction_v],1)
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
-            # N*F*D*H*W to N*D*F*H*W
-            x = x.permute(0,2,1,3,4)
+
+            stater_v = x.unsqueeze(1)
+            prediction_v = x.unsqueeze(1)
+            x = torch.cat([stater_v,prediction_v],1)
 
         return x
 
