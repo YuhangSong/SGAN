@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-20'
-GPU = '0'
+MULTI_RUN = 'test uniform ln'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -48,9 +48,9 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5)
+add_parameters(GRID_SIZE = 2)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -172,7 +172,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'ln in D')
+add_parameters(AUX_INFO = 'test uniform ln')
 
 '''summary settings'''
 DSP = ''
@@ -234,23 +234,33 @@ class LayerNorm1D(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
-class LayerNorm3D(nn.Module):
+class LayerNorm(nn.Module):
 
-    def __init__(self, features, eps=1e-6):
+    def __init__(self, eps=1e-6):
 
-        raise Exception('unsupport')
-
-        super(LayerNorm3D, self).__init__()
-        self.gamma = nn.Parameter(torch.ones(features)).cuda().view(features,1,1,1)
-        self.beta = nn.Parameter(torch.zeros(features)).cuda().view(features,1,1,1)
+        super(LayerNorm, self).__init__()
+        
+        self.gamma = None
+        self.beta = None
         self.eps = eps
 
     def forward(self, x):
 
-        mean = x.mean(-1, keepdim=True)
-        std = x.std(-1, keepdim=True)
+        if self.gamma is None:
+            self.gamma = nn.Parameter(torch.ones(
+                x.size()[1:len(x.size())]
+            )).cuda()
 
-        return self.gamma.expand(x.size()[1:len(x.size())]) * (x - mean) / (std + self.eps) + self.beta.expand(x.size()[1:len(x.size())])
+        if self.beta is None:
+            self.beta = nn.Parameter(torch.zeros(
+                x.size()[1:len(x.size())]
+            )).cuda()
+
+        x_f = x.view(x.size()[0],-1)
+        mean = x_f.mean(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+        std = x_f.std(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+
+        return self.gamma * (x - mean) / (std + self.eps) + self.beta
 
 def vector2image(x):
     block_size = chris_domain.BLOCK_SIZE*3
@@ -735,6 +745,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
+                    # LayerNorm(),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -745,12 +756,13 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
+                    # LayerNorm(),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(128*1*2*2, params['DIM']),
-                    LayerNorm1D(params['DIM']),
+                    LayerNorm(params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
