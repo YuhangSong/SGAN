@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-30'
+MULTI_RUN = 'test no ln'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -50,7 +50,7 @@ add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5)
+add_parameters(GRID_SIZE = 2)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -80,10 +80,10 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
 if params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(DELTA_T = 0.1)
@@ -176,7 +176,9 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'test 3d ln')
+add_parameters(LayerNorm=False)
+
+add_parameters(AUX_INFO = '')
 
 '''summary settings'''
 DSP = ''
@@ -275,13 +277,21 @@ class LayerNorm(nn.Module):
 
         self.eps = eps
 
-    def forward(self, x): 
+    def forward(self, x):
 
-        x_f = x.view(x.size()[0],-1)
-        mean = x_f.mean(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
-        std = x_f.std(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+        if params['LayerNorm']:
 
-        return self.gamma * (x - mean) / (std + self.eps) + self.beta
+            x_f = x.view(x.size()[0],-1)
+            mean = x_f.mean(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+            std = x_f.std(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+
+            x = self.gamma * (x - mean) / (std + self.eps) + self.beta
+
+            return x
+
+        else:
+
+            return x
 
 def vector2image(x):
     block_size = chris_domain.BLOCK_SIZE*3
@@ -766,7 +776,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(64,1,5,5),
+                    LayerNorm(64,1,5,5),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*5*5
                     nn.Conv3d(
@@ -777,7 +787,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(128,1,2,2),
+                    LayerNorm(128,1,2,2),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*2*2
                 )
@@ -802,7 +812,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(64,1,12,12),
+                    LayerNorm(64,1,12,12),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (64,1,12,12)
                     nn.Conv3d(
@@ -813,7 +823,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(128,1,6,6),
+                    LayerNorm(128,1,6,6),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (128,1,6,6)
                     nn.Conv3d(
@@ -824,7 +834,7 @@ class Discriminator(nn.Module):
                         padding=(0,1,1),
                         bias=False
                     ),
-                    # LayerNorm(256,1,3,3),
+                    LayerNorm(256,1,3,3),
                     nn.LeakyReLU(0.001, inplace=True),
                     # (256,1,3,3)
                 )
