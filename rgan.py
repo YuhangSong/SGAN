@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-30'
+MULTI_RUN = 'spc-test-nc-gg'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'gg_how')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
@@ -80,11 +80,11 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
