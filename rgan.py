@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-80'
+MULTI_RUN = 'h-90'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -47,10 +47,10 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_works')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5)
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(GRID_SIZE = 25)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -87,7 +87,8 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.0365148)
+# add_parameters(DELTA_T = 0.0365148)
+add_parameters(DELTA_T = 0.06)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
