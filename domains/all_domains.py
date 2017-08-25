@@ -189,8 +189,6 @@ class BitFlip1D(object):
 
         return state_vector
 
-
-
 class Walk2D(object):
 
     def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap, fix_state=False):
@@ -252,7 +250,21 @@ class Walk2D(object):
                 return 'bad state'
 
         elif self.mode==VECTOR:
-            raise Exception('error')
+            agent_channel_should_be = [255,0,0]
+            state_vector = np.reshape(state_vector,(self.h,self.w))
+            agent_count = 0
+            for x in range(self.w):
+                for y in range(self.h):
+                    pixel_value_mean_on_channel = np.mean(state_vector[y:(y+1),x:(x+1)])
+                    if abs(pixel_value_mean_on_channel-1.0) <= ACCEPT_GATE:
+                        pos = (x,y)
+                        agent_count += 1
+
+            if agent_count==1:
+                return pos
+
+            else:
+                return 'bad state'
 
         elif self.mode==IMAGE:
 
@@ -314,7 +326,8 @@ class Walk2D(object):
             return np.array([float(x_pos)/float(self.w),float(y_pos)/float(self.h)])
 
         elif self.mode == VECTOR:
-            return np.reshape(array, [-1])
+            vector = np.reshape(array, [-1])
+            return vector
 
         elif self.mode == IMAGE:
             return self.visualizer.make_screen(array)
