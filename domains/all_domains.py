@@ -10,7 +10,7 @@ SCALAR = 0
 VECTOR = 1
 IMAGE = 2
 
-BLOCK_SIZE = 2
+BLOCK_SIZE = 1
 ACCEPT_GATE = 0.1
 
 class Walk1D(object):
