@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-95'
-GPU = '1'
+MULTI_RUN = 'w4-96'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,9 +47,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_works')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -88,7 +88,8 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(DELTA_T = 0.0365148)
-add_parameters(DELTA_T = 0.04472)
+# add_parameters(DELTA_T = 0.04472)
+add_parameters(DELTA_T = 0.1)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
@@ -366,23 +367,23 @@ class Generator(nn.Module):
                     padding=(0,0,0),
                     bias=False
                 ),
-                nn.BatchNorm3d(params['DIM']),
+                # nn.BatchNorm3d(params['DIM']),
                 nn.LeakyReLU(0.001),
                 # params['DIM']*1*1*1
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM']*1*1*1, params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']*1*1*1),
-                nn.BatchNorm1d(params['DIM']),
+                # nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
