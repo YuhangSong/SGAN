@@ -50,7 +50,7 @@ add_parameters(EXP = 'reproduce_low_dim')
 add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 1)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
