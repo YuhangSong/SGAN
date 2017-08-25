@@ -10,7 +10,7 @@ SCALAR = 0
 VECTOR = 1
 IMAGE = 2
 
-BLOCK_SIZE = 5
+BLOCK_SIZE = 1
 ACCEPT_GATE = 0.1
 
 class Walk1D(object):
@@ -270,13 +270,14 @@ class Walk2D(object):
 
             '''detect agent opsition from image'''
 
-            agent_channel_should_be = [255,0,0]
+            # agent_channel_should_be = [255,0,0]
+            agent_channel_should_be = [255]
 
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
                     valid_on_channel = True
-                    for c in range(3):
+                    for c in range(1):
                         pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
                         if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
                             valid_on_channel = False
@@ -330,8 +331,12 @@ class Walk2D(object):
             return vector
 
         elif self.mode == IMAGE:
-            return self.visualizer.make_screen(array)
-        
+            image = self.visualizer.make_screen(array)
+            image = 255 - image
+            image = image[:,:,1:2]
+            # print(image)
+            return image
+
         else:
             print(sss)
 
