@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'spc-71'
+MULTI_RUN = 'h-71'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
