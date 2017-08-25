@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-90'
-GPU = '0'
+MULTI_RUN = 'h-91'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,10 +47,10 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_works')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 25)
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -88,7 +88,7 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(DELTA_T = 0.0365148)
-add_parameters(DELTA_T = 0.06)
+add_parameters(DELTA_T = 0.04472)
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
@@ -112,7 +112,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 10)
+    add_parameters(LAMBDA = 5)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
@@ -165,7 +165,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'full linear net, init, remove bias')
+add_parameters(AUX_INFO = 'full linear net, init, remove bias, remove feture')
 
 '''summary settings'''
 DSP = ''
@@ -289,9 +289,9 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
            
             conv_layer = nn.Sequential(
-                # params['FEATURE']*1*5*5
+                # 1*1*5*5
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=params['DIM'],
                     kernel_size=(1,5,5),
                     stride=(1,1,1),
@@ -317,14 +317,14 @@ class Generator(nn.Module):
                 # params['DIM']*1*1*1
                 nn.ConvTranspose3d(
                     in_channels=params['DIM'],
-                    out_channels=params['FEATURE'],
-                    kernel_size=(2,5,5),
+                    out_channels=1,
+                    kernel_size=(1,5,5),
                     stride=(1,1,1),
                     padding=(0,0,0),
                     bias=False,
                 ),
                 nn.Sigmoid()
-                # params['FEATURE']*2*5*5
+                # 1*1*5*5
             )
 
         else:
@@ -367,6 +367,7 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*F*D*H*W to N*D*F*H*W
             x = x.permute(0,2,1,3,4)
+            x = torch.cat([autograd.Variable(torch.cuda.FloatTensor(x.size())),x],1)
 
         return x
 
@@ -565,9 +566,9 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             
             conv_layer = nn.Sequential(
-                # params['FEATURE']*2*5*5
+                # 1*2*5*5
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=params['DIM'],
                     kernel_size=(2,5,5),
                     stride=(1,1,1),
@@ -591,39 +592,21 @@ class Discriminator(nn.Module):
         else:
             raise Exception('Unsupport')
 
-        if params['GAN_MODE']=='wgan-grad-panish':
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = conv_layer_state
-                self.squeeze_layer_state = squeeze_layer_state
-                self.conv_layer_prediction = conv_layer_prediction
-                self.squeeze_layer_prediction = squeeze_layer_prediction
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+            self.conv_layer_state = conv_layer_state
+            self.squeeze_layer_state = squeeze_layer_state
+            self.conv_layer_prediction = conv_layer_prediction
+            self.squeeze_layer_prediction = squeeze_layer_prediction
 
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = conv_layer
-                self.squeeze_layer = squeeze_layer
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = final_layer
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
+            self.conv_layer = conv_layer
+            self.squeeze_layer = squeeze_layer
 
         else:
+            raise Exception('Unsupport')
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
-                self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
-                self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
-                self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-                self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = torch.nn.DataParallel(final_layer,GPU)
+        self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
 
