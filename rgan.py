@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-70'
+MULTI_RUN = 'h-80'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -62,11 +62,11 @@ elif params['DOMAIN']=='1Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [2.0/3.0, 0.0, 0.0, 1.0/3.0])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
