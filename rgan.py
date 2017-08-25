@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-94'
-GPU = '0'
+MULTI_RUN = 'w4-95'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -165,7 +165,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'add bn in conv')
+add_parameters(AUX_INFO = 'add all bn in conv')
 
 '''summary settings'''
 DSP = ''
@@ -372,14 +372,17 @@ class Generator(nn.Module):
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM']*1*1*1, params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']*1*1*1),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
