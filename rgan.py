@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-92'
-GPU = '0'
+MULTI_RUN = 'h-93'
+GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -165,7 +165,9 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'full linear net, init, remove bias, remove feture')
+add_parameters(LayerNorm=True)
+
+add_parameters(AUX_INFO = 'add ln')
 
 '''summary settings'''
 DSP = ''
@@ -211,6 +213,74 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 ############################### Definition Start ###############################
+
+class LayerNorm(nn.Module):
+
+    def __init__(self, features, depth=None, height=None, width=None, eps=1e-6):
+
+        super(LayerNorm, self).__init__()
+
+        if depth is None and height is None:
+
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                )).cuda()
+
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                )).cuda()
+        
+        elif depth is None and height is not None:
+
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                    height,
+                    width
+                )).cuda()
+
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                    height,
+                    width
+                )).cuda()
+
+        elif depth is not None and height is not None:
+
+            self.gamma = nn.Parameter(torch.ones(
+                    features,
+                    depth,
+                    height,
+                    width
+                )).cuda()
+
+            self.beta = nn.Parameter(torch.zeros(
+                    features,
+                    depth,
+                    height,
+                    width
+                )).cuda()
+
+        else:
+
+            raise Exception('unsupport')
+
+        self.eps = eps
+
+    def forward(self, x):
+
+        if params['LayerNorm']:
+
+            x_f = x.view(x.size()[0],-1)
+            mean = x_f.mean(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+            std = x_f.std(1, keepdim=True).expand(x_f.size()).contiguous().view(x.size())
+
+            x = self.gamma * (x - mean) / (std + self.eps) + self.beta
+
+            return x
+
+        else:
+
+            return x
 
 def vector2image(x):
     block_size = chris_domain.BLOCK_SIZE*3
@@ -576,11 +646,13 @@ class Discriminator(nn.Module):
                     dilation=(1,1,1),
                     bias=False
                 ),
+                LayerNorm(params['DIM'],1,1,1),
                 nn.LeakyReLU(0.001),
                 # params['DIM']*1*1*1
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM']*1*1*1, params['DIM']),
+                LayerNorm(params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
@@ -1383,7 +1455,10 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
         gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
 
-        if params['GP_MODE']=='use-guide':
+        if params['GP_MODE']=='pure-guide':
+            gradients_penalty = gradients_penalty * params['LAMBDA']
+
+        elif params['GP_MODE']=='use-guide':
             gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
