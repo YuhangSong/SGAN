@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'h-93'
-GPU = '1'
+MULTI_RUN = 'w4-0'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -165,9 +165,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(LayerNorm=True)
-
-add_parameters(AUX_INFO = 'add ln')
+add_parameters(AUX_INFO = 'add bn in conv')
 
 '''summary settings'''
 DSP = ''
@@ -368,6 +366,7 @@ class Generator(nn.Module):
                     padding=(0,0,0),
                     bias=False
                 ),
+                nn.BatchNorm3d(params['DIM']),
                 nn.LeakyReLU(0.001),
                 # params['DIM']*1*1*1
             )
@@ -646,13 +645,13 @@ class Discriminator(nn.Module):
                     dilation=(1,1,1),
                     bias=False
                 ),
-                LayerNorm(params['DIM'],1,1,1),
+                # LayerNorm(params['DIM'],1,1,1),
                 nn.LeakyReLU(0.001),
                 # params['DIM']*1*1*1
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM']*1*1*1, params['DIM']),
-                LayerNorm(params['DIM']),
+                # LayerNorm(params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
