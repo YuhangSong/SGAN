@@ -233,6 +233,8 @@ class Walk2D(object):
             return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
     def state_vector_to_position(self, state_vector):
+        
+        # print(state_vector)
 
         if self.mode==SCALAR:
 
