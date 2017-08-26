@@ -23,7 +23,7 @@ import matplotlib.cm as cm
 
 CLEAR_RUN = False
 MULTI_RUN = 'add_conv_real_real'
-GPU = '0'
+GPU = '2'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
