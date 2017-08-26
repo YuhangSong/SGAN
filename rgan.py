@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'if_d_conv_blame'
+MULTI_RUN = 'remove_deconv_all'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'if_d_conv_blame')
+add_parameters(EXP = 'remove_deconv_all')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -261,114 +261,62 @@ class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
 
-        # if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             
-        #     conv_layer = nn.Sequential(
-        #         nn.Linear(DESCRIBE_DIM, params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     squeeze_layer = nn.Sequential(
-        #         nn.Linear(params['DIM'], params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     cat_layer = nn.Sequential(
-        #         nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     unsqueeze_layer = nn.Sequential(
-        #         nn.Linear(params['DIM'], params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
+            conv_layer = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
+            squeeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
+            unsqueeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
 
-        #     deconv_layer = nn.Sequential(
-        #         nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
-        #         nn.Sigmoid()
-        #     )
+            deconv_layer = nn.Sequential(
+                nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                nn.Sigmoid()
+            )
 
-        # elif params['REPRESENTATION']==chris_domain.IMAGE:
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
 
-        #     conv_layer = nn.Sequential(
-        #         # params['FEATURE']*5*5
-        #         nn.Conv2d(
-        #             in_channels=params['FEATURE'],
-        #             out_channels=params['DIM'],
-        #             kernel_size=(5,5),
-        #             stride=(1,1),
-        #             padding=(0,0),
-        #             bias=True
-        #         ),
-        #         nn.LeakyReLU(0.001),
-        #         # params['DIM']*1*1
-        #     )
-        #     squeeze_layer = nn.Sequential(
-        #         nn.Linear(params['DIM']*1*1, params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     cat_layer = nn.Sequential(
-        #         nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     unsqueeze_layer = nn.Sequential(
-        #         nn.Linear(params['DIM'], params['DIM']*1*1),
-        #         nn.LeakyReLU(0.001),
-        #     )
-        #     deconv_layer = nn.Sequential(
-        #         # params['DIM']*1*1*1
-        #         nn.ConvTranspose2d(
-        #             in_channels=params['DIM'],
-        #             out_channels=params['FEATURE'],
-        #             kernel_size=(5,5),
-        #             stride=(1,1),
-        #             padding=(0,0),
-        #             bias=True
-        #         ),
-        #         nn.Sigmoid()
-        #         # params['FEATURE']*5*5
-        #     )
+            conv_layer = nn.Sequential(
+                # 1*5*5
+                nn.Conv2d(
+                    in_channels=1,
+                    out_channels=params['DIM'],
+                    kernel_size=(5,5),
+                    stride=(1,1),
+                    padding=(0,0),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001),
+                # params['DIM']*1*1
+            )
+            squeeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
+            unsqueeze_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
 
-        conv_layer = nn.Sequential(
-            # 1*5*5
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=params['DIM'],
-                kernel_size=(5,5),
-                stride=(1,1),
-                padding=(0,0),
-                bias=True
-            ),
-            nn.LeakyReLU(0.001),
-            # params['DIM']*1*1
-        )
-        squeeze_layer = nn.Sequential(
-            nn.Linear(params['DIM'], params['DIM']),
-            nn.LeakyReLU(0.001),
-        )
-        cat_layer = nn.Sequential(
-            nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-            nn.LeakyReLU(0.001),
-        )
-        unsqueeze_layer = nn.Sequential(
-            nn.Linear(params['DIM'], params['DIM']),
-            nn.LeakyReLU(0.001),
-        )
-
-        deconv_layer = nn.Sequential(
-            nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
-            nn.Sigmoid()
-        )
-        # deconv_layer = nn.Sequential(
-        #     # params['DIM']*1*1
-        #     nn.ConvTranspose2d(
-        #         in_channels=params['DIM'],
-        #         out_channels=1,
-        #         kernel_size=(5,5),
-        #         stride=(1,1),
-        #         padding=(0,0),
-        #         bias=True
-        #     ),
-        #     nn.Sigmoid()
-        #     # params['FEATURE']*5*5
-        # )
+            deconv_layer = nn.Sequential(
+                nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                nn.Sigmoid()
+            )
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
         self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
@@ -416,9 +364,6 @@ class Generator(nn.Module):
         stater_v = stater_v.contiguous().view(x.size()[0],1,1,5,5)
         prediction_v = prediction_v.contiguous().view(x.size()[0],1,1,5,5)
         x = torch.cat([stater_v,prediction_v],1)
-
-        # x = x.unsqueeze(1)
-        # x = torch.cat([autograd.Variable(torch.cuda.FloatTensor(x.size())),x],1)
 
         return x
 
@@ -590,122 +535,82 @@ class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
 
-        # if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
 
-        #     conv_layer_state = nn.Sequential(
-        #         nn.Linear(DESCRIBE_DIM, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     squeeze_layer_state = nn.Sequential(
-        #         nn.Linear(params['DIM'], params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     conv_layer_prediction = nn.Sequential(
-        #         nn.Linear(DESCRIBE_DIM, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     squeeze_layer_prediction = nn.Sequential(
-        #         nn.Linear(params['DIM'], params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     final_layer = nn.Sequential(
-        #         nn.Linear(params['DIM']*2, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #         nn.Linear(params['DIM'], 1),
-        #     )
+            conv_layer_state = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            squeeze_layer_state = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            conv_layer_prediction = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            squeeze_layer_prediction = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            final_layer = nn.Sequential(
+                nn.Linear(params['DIM']*2, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+                nn.Linear(params['DIM'], 1),
+            )
 
-        # elif params['REPRESENTATION']==chris_domain.IMAGE:
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
 
-        #     conv_layer_state = nn.Sequential(
-        #         # params['FEATURE']*5*5
-        #         nn.Conv2d(
-        #             in_channels=params['FEATURE'],
-        #             out_channels=(params['DIM']),
-        #             kernel_size=(5,5),
-        #             stride=(1,1),
-        #             padding=(0,0),
-        #             bias=True
-        #         ),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #         # params['DIM']*1*1
-        #     )
-        #     conv_layer_prediction = nn.Sequential(
-        #         # params['FEATURE']*5*5
-        #         nn.Conv2d(
-        #             in_channels=params['FEATURE'],
-        #             out_channels=(params['DIM']),
-        #             kernel_size=(5,5),
-        #             stride=(1,1),
-        #             padding=(0,0),
-        #             bias=True
-        #         ),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #         # params['DIM']*1*1
-        #     )
-        #     squeeze_layer_state = nn.Sequential(
-        #         nn.Linear(params['DIM']*1*1, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     squeeze_layer_prediction = nn.Sequential(
-        #         nn.Linear(params['DIM']*1*1, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #     )
-        #     final_layer = nn.Sequential(
-        #         nn.Linear(params['DIM']*2, params['DIM']),
-        #         nn.LeakyReLU(0.001, inplace=True),
-        #         nn.Linear(params['DIM'], 1),
-        #     )
+            conv_layer_state = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            conv_layer_state = nn.Sequential(
+                # 1*5*5
+                nn.Conv2d(
+                    in_channels=1,
+                    out_channels=(params['DIM']),
+                    kernel_size=(5,5),
+                    stride=(1,1),
+                    padding=(0,0),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001, inplace=True),
+                # params['DIM']*1*1
+            )
+            squeeze_layer_state = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            conv_layer_prediction = nn.Sequential(
+                nn.Linear(DESCRIBE_DIM, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            conv_layer_prediction = nn.Sequential(
+                # 1*5*5
+                nn.Conv2d(
+                    in_channels=1,
+                    out_channels=(params['DIM']),
+                    kernel_size=(5,5),
+                    stride=(1,1),
+                    padding=(0,0),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001, inplace=True),
+                # params['DIM']*1*1
+            )
+            squeeze_layer_prediction = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+            )
+            final_layer = nn.Sequential(
+                nn.Linear(params['DIM']*2, params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+                nn.Linear(params['DIM'], 1),
+            )
 
-        # else:
-        #     raise Exception('Unsupport')
-
-        conv_layer_state = nn.Sequential(
-            nn.Linear(DESCRIBE_DIM, params['DIM']),
-            nn.LeakyReLU(0.001, inplace=True),
-        )
-        conv_layer_state = nn.Sequential(
-            # 1*5*5
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=(params['DIM']),
-                kernel_size=(5,5),
-                stride=(1,1),
-                padding=(0,0),
-                bias=True
-            ),
-            nn.LeakyReLU(0.001, inplace=True),
-            # params['DIM']*1*1
-        )
-        squeeze_layer_state = nn.Sequential(
-            nn.Linear(params['DIM'], params['DIM']),
-            nn.LeakyReLU(0.001, inplace=True),
-        )
-        conv_layer_prediction = nn.Sequential(
-            nn.Linear(DESCRIBE_DIM, params['DIM']),
-            nn.LeakyReLU(0.001, inplace=True),
-        )
-        conv_layer_prediction = nn.Sequential(
-            # 1*5*5
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=(params['DIM']),
-                kernel_size=(5,5),
-                stride=(1,1),
-                padding=(0,0),
-                bias=True
-            ),
-            nn.LeakyReLU(0.001, inplace=True),
-            # params['DIM']*1*1
-        )
-        squeeze_layer_prediction = nn.Sequential(
-            nn.Linear(params['DIM'], params['DIM']),
-            nn.LeakyReLU(0.001, inplace=True),
-        )
-        final_layer = nn.Sequential(
-            nn.Linear(params['DIM']*2, params['DIM']),
-            nn.LeakyReLU(0.001, inplace=True),
-            nn.Linear(params['DIM'], 1),
-        )
+        else:
+            raise Exception('Unsupport')
 
         self.conv_layer_state = conv_layer_state
         self.squeeze_layer_state = squeeze_layer_state
@@ -718,9 +623,6 @@ class Discriminator(nn.Module):
 
         state_v = state_v.squeeze(1)
         prediction_v = prediction_v.squeeze(1)
-
-        # state_v = state_v.contiguous().view(state_v.size()[0],-1)
-        # prediction_v = prediction_v.contiguous().view(prediction_v.size()[0],-1)
 
         state_v = self.conv_layer_state(state_v)
         state_v = state_v.view(state_v.size()[0], -1)
