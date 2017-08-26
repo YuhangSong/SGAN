@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'conv_posi'
-GPU = '3'
+MULTI_RUN = 'conv_posi_no_bias'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'conv_posi')
+add_parameters(EXP = 'conv_posi_no_bias')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -293,17 +293,17 @@ class Generator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=4,
+                    out_channels=1,
                     kernel_size=(2,2),
                     stride=(2,2),
                     padding=(0,0),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.001),
-                # 4*5*5
+                # 1*5*5
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(4*5*5, params['DIM']),
+                nn.Linear(1*5*5, params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -415,7 +415,7 @@ class Transitor(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
@@ -426,7 +426,7 @@ class Transitor(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
@@ -437,7 +437,7 @@ class Transitor(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(256),
                 nn.LeakyReLU(0.2, inplace=True),
@@ -463,7 +463,7 @@ class Transitor(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(128),
                 nn.LeakyReLU(0.2, inplace=True),
@@ -474,7 +474,7 @@ class Transitor(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.BatchNorm3d(64),
                 nn.LeakyReLU(0.2, inplace=True),
@@ -485,7 +485,7 @@ class Transitor(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.Sigmoid()
                 # params['FEATURE']*2*32*32  
@@ -566,34 +566,34 @@ class Discriminator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=4,
+                    out_channels=1,
                     kernel_size=(2,2),
                     stride=(2,2),
                     padding=(0,0),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.001),
-                # 4*5*5
+                # 1*5*5
             )
             squeeze_layer_state = nn.Sequential(
-                nn.Linear(4*5*5, params['DIM']),
+                nn.Linear(1*5*5, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             conv_layer_prediction = nn.Sequential(
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=4,
+                    out_channels=1,
                     kernel_size=(2,2),
                     stride=(2,2),
                     padding=(0,0),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.001),
-                # 4*5*5
+                # 1*5*5
             )
             squeeze_layer_prediction = nn.Sequential(
-                nn.Linear(4*5*5, params['DIM']),
+                nn.Linear(1*5*5, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
@@ -663,7 +663,7 @@ class Corrector(nn.Module):
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.2, inplace=True),
                 # 64*1*16*16
@@ -673,7 +673,7 @@ class Corrector(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.2, inplace=True),
                 # 128*1*8*8
@@ -683,7 +683,7 @@ class Corrector(nn.Module):
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
-                    bias=True
+                    bias=False
                 ),
                 nn.LeakyReLU(0.2, inplace=True),
                 # 256*1*4*4
@@ -736,13 +736,13 @@ def weights_init(m):
             m.weight.data,
             gain=1
         )
-        m.bias.data.fill_(0.1)
+        # m.bias.data.fill_(0.1)
     elif classname.find('ConvTranspose3d') != -1:
         torch.nn.init.xavier_uniform(
             m.weight.data,
             gain=1
         )
-        m.bias.data.fill_(0.1)
+        # m.bias.data.fill_(0.1)
 
 def chris2song(x):
 
