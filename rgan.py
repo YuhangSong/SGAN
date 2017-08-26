@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'if_g_deconv_blame'
+MULTI_RUN = 'if_g_inter_blame'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'if_g_deconv_blame')
+add_parameters(EXP = 'if_g_inter_blame')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -412,7 +412,7 @@ class Generator(nn.Module):
         #     x = torch.cat([x,x],1)
         
         x = x.unsqueeze(1)
-        x = torch.cat([x,x],1)
+        x = torch.cat([autograd.Variable(torch.cuda.FloatTensor(x.size())),x],1)
 
         return x
 
