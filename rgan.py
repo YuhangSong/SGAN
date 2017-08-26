@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'real_conv_g'
+MULTI_RUN = 's_gan'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,10 +46,10 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'real_conv_g')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(EXP = 's_gan')
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(FIX_STATE = True)
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -84,9 +84,8 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-# add_parameters(DELTA_T = 0.1/(5**0.5))
-add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
-#                             5           1
+add_parameters(DELTA_T = 0.1)
+# add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
@@ -208,8 +207,6 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         DESCRIBE_DIM = params['GRID_SIZE']**2
     else:
         print(unsupport)
-
-DESCRIBE_DIM = params['GRID_SIZE']**2 # pppp
 
 ############################### Definition Start ###############################
 
@@ -1326,7 +1323,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
-        gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
+        gradients_penalty = mse_loss_model(gradients_fl,gradients_direction_gt_fl)
 
         if params['GP_MODE']=='use-guide':
             gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
