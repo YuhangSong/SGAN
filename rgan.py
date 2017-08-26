@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'gd_conv'
+MULTI_RUN = 'gd_conv_deconv'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'gd_conv')
+add_parameters(EXP = 'gd_conv_deconv')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -309,13 +309,22 @@ class Generator(nn.Module):
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], params['DIM']),
+                nn.Linear(params['DIM'], 64*5*5),
                 nn.LeakyReLU(0.001),
             )
 
             deconv_layer = nn.Sequential(
-                nn.Linear(params['DIM'], (params['STATE_DEPTH']+1)*(1*10*10)),
+                # 64*5*5
+                nn.ConvTranspose2d(
+                    in_channels=64,
+                    out_channels=1,
+                    kernel_size=(2,2),
+                    stride=(2,2),
+                    padding=(0,0),
+                    bias=False
+                ),
                 nn.Sigmoid()
+                # 1*10*10
             )
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
@@ -342,8 +351,8 @@ class Generator(nn.Module):
         x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
-        # if params['REPRESENTATION']==chris_domain.IMAGE:
-        #     x = x.view(temp)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
@@ -354,15 +363,15 @@ class Generator(nn.Module):
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # # N*F*D*H*W to N*D*F*H*W
-            # # x = x.permute(0,2,1,3,4)
-            # x = x.unsqueeze(1)
-            # x = torch.cat([x,x],1)
+            # x = x.permute(0,2,1,3,4)
+            x = x.unsqueeze(1)
+            x = torch.cat([x,x],1)
         
-            stater_v = x.narrow(1,0,((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)*params['STATE_DEPTH']).unsqueeze(1)
-            prediction_v = x.narrow(1,((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)*params['STATE_DEPTH'],((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)).unsqueeze(1)
-            stater_v = stater_v.contiguous().view(x.size()[0],1,1,(params['GRID_SIZE']*chris_domain.BLOCK_SIZE),(params['GRID_SIZE']*chris_domain.BLOCK_SIZE))
-            prediction_v = prediction_v.contiguous().view(x.size()[0],1,1,(params['GRID_SIZE']*chris_domain.BLOCK_SIZE),(params['GRID_SIZE']*chris_domain.BLOCK_SIZE))
-            x = torch.cat([stater_v,prediction_v],1)
+            # stater_v = x.narrow(1,0,((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)*params['STATE_DEPTH']).unsqueeze(1)
+            # prediction_v = x.narrow(1,((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)*params['STATE_DEPTH'],((params['GRID_SIZE']*chris_domain.BLOCK_SIZE)**2)).unsqueeze(1)
+            # stater_v = stater_v.contiguous().view(x.size()[0],1,1,(params['GRID_SIZE']*chris_domain.BLOCK_SIZE),(params['GRID_SIZE']*chris_domain.BLOCK_SIZE))
+            # prediction_v = prediction_v.contiguous().view(x.size()[0],1,1,(params['GRID_SIZE']*chris_domain.BLOCK_SIZE),(params['GRID_SIZE']*chris_domain.BLOCK_SIZE))
+            # x = torch.cat([stater_v,prediction_v],1)
 
         return x
 
