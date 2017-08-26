@@ -84,7 +84,8 @@ add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(DELTA_T = 0.1)
+# add_parameters(DELTA_T = 0.1)
+add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((1.0**2)**0.5)/((5.0**2)**0.5)) )
 # add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
 
 '''this may not be a good way'''
@@ -287,20 +288,20 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer = nn.Sequential(
-                # 1*5*5
+                # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=params['DIM'],
-                    kernel_size=(5,5),
-                    stride=(1,1),
+                    out_channels=64,
+                    kernel_size=(2,2),
+                    stride=(2,2),
                     padding=(0,0),
                     bias=False
                 ),
                 nn.LeakyReLU(0.001),
-                # params['DIM']*1*1
+                # 64*5*5
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(params['DIM']*1*1, params['DIM']),
+                nn.Linear(64*5*5, params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -560,11 +561,11 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer_state = nn.Sequential(
-                # 1*5*5
+                # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
                     out_channels=params['DIM'],
-                    kernel_size=(5,5),
+                    kernel_size=(10,10),
                     stride=(1,1),
                     padding=(0,0),
                     bias=False
