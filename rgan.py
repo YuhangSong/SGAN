@@ -47,9 +47,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 's_gan')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = True)
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(FIX_STATE = False)
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -287,20 +287,20 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer = nn.Sequential(
-                # 1*10*10
+                # 1*5*5
                 nn.Conv2d(
                     in_channels=1,
                     out_channels=params['DIM'],
-                    kernel_size=(2,2),
-                    stride=(2,2),
+                    kernel_size=(5,5),
+                    stride=(1,1),
                     padding=(0,0),
                     bias=False
                 ),
                 nn.LeakyReLU(0.001),
-                # params['DIM']*5*5
+                # params['DIM']*1*1
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(params['DIM']*5*5, params['DIM']),
+                nn.Linear(params['DIM']*1*1, params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -560,11 +560,11 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer_state = nn.Sequential(
-                # 1*10*10
+                # 1*5*5
                 nn.Conv2d(
                     in_channels=1,
                     out_channels=params['DIM'],
-                    kernel_size=(10,10),
+                    kernel_size=(5,5),
                     stride=(1,1),
                     padding=(0,0),
                     bias=False
@@ -577,11 +577,11 @@ class Discriminator(nn.Module):
                 nn.LeakyReLU(0.001, inplace=True),
             )
             conv_layer_prediction = nn.Sequential(
-                # 1*10*10
+                # 1*5*5
                 nn.Conv2d(
                     in_channels=1,
                     out_channels=params['DIM'],
-                    kernel_size=(10,10),
+                    kernel_size=(5,5),
                     stride=(1,1),
                     padding=(0,0),
                     bias=False
