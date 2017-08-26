@@ -267,7 +267,6 @@ class Walk2D(object):
 
         elif self.mode==IMAGE:
 
-            state_vector = np.reshape(state_vector,(self.h,self.w))
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
