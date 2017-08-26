@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'try_5x5_image_single_channel_real_prob_2'
+MULTI_RUN = 'try_5x5_image_single_channel_real_prob_3'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'try_5x5_image_single_channel_real_prob_2')
+add_parameters(EXP = 'try_5x5_image_single_channel_real_prob_3')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -108,7 +108,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
-    add_parameters(LAMBDA = 10)
+    add_parameters(LAMBDA = 5)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
