@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'if_g_conv_blame'
+MULTI_RUN = 'if_g_deconv_blame'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'if_g_conv_blame')
+add_parameters(EXP = 'if_g_deconv_blame')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -327,10 +327,6 @@ class Generator(nn.Module):
         #     )
 
         conv_layer = nn.Sequential(
-            nn.Linear(DESCRIBE_DIM, params['DIM']),
-            nn.LeakyReLU(0.001),
-        )
-        conv_layer = nn.Sequential(
             # 1*5*5
             nn.Conv2d(
                 in_channels=1,
@@ -360,6 +356,19 @@ class Generator(nn.Module):
             nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
             nn.Sigmoid()
         )
+        deconv_layer = nn.Sequential(
+            # params['DIM']*1*1
+            nn.ConvTranspose2d(
+                in_channels=params['DIM'],
+                out_channels=1,
+                kernel_size=(5,5),
+                stride=(1,1),
+                padding=(0,0),
+                bias=True
+            ),
+            nn.Sigmoid()
+            # params['FEATURE']*5*5
+        )
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
         self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
@@ -378,9 +387,6 @@ class Generator(nn.Module):
             # state_v = state_v.permute(0,2,1,3,4)
             state_v = state_v.squeeze(1)
 
-            # state_v = state_v.contiguous().view(state_v.size()[0],-1)
-
-
         '''forward'''
         x = self.conv_layer(state_v)
         if params['REPRESENTATION']==chris_domain.IMAGE:
@@ -389,8 +395,8 @@ class Generator(nn.Module):
         x = self.squeeze_layer(x)
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
-        # if params['REPRESENTATION']==chris_domain.IMAGE:
-        #     x = x.view(temp)
+        if params['REPRESENTATION']==chris_domain.IMAGE:
+            x = x.view(temp)
         x = self.deconv_layer(x)
 
         '''decompose'''
@@ -405,11 +411,8 @@ class Generator(nn.Module):
         #     x = x.unsqueeze(1)
         #     x = torch.cat([x,x],1)
         
-        stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
-        prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
-        stater_v = stater_v.contiguous().view(x.size()[0],1,1,5,5)
-        prediction_v = prediction_v.contiguous().view(x.size()[0],1,1,5,5)
-        x = torch.cat([stater_v,prediction_v],1)
+        x = x.unsqueeze(1)
+        x = torch.cat([x,x],1)
 
         return x
 
