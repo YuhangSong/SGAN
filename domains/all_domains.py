@@ -250,7 +250,6 @@ class Walk2D(object):
                 return 'bad state'
 
         elif self.mode==VECTOR:
-            agent_channel_should_be = [255,0,0]
             state_vector = np.reshape(state_vector,(self.h,self.w))
             agent_count = 0
             for x in range(self.w):
@@ -268,21 +267,12 @@ class Walk2D(object):
 
         elif self.mode==IMAGE:
 
-            '''detect agent opsition from image'''
-
-            # agent_channel_should_be = [255,0,0]
-            agent_channel_should_be = [255]
-
+            state_vector = np.reshape(state_vector,(self.h,self.w))
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    valid_on_channel = True
-                    for c in range(1):
-                        pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
-                            valid_on_channel = False
-                            break
-                    if valid_on_channel:
+                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE])
+                    if abs(pixel_value_mean_on_channel-1.0) <= ACCEPT_GATE:
                         pos = (x,y)
                         agent_count += 1
 
@@ -332,7 +322,8 @@ class Walk2D(object):
 
         elif self.mode == IMAGE:
             image = self.visualizer.make_screen(array)
-            image = 255 - image
+            image = image/255.0
+            image = 1.0 - image
             image = image[:,:,1:2]
             # print(image)
             return image
@@ -414,13 +405,13 @@ def evaluate_domain(domain, s1_state, s2_samples):
             except Exception as e:
                 sample_distribution[str(s2_sample_pos)] = 1
 
+    print('At '+str(s1_pos)+', real: '+str(true_distribution))
+
     if good_count>0.0:
 
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
-        print('----------------------------------------------')
-        print('True: '+str(true_distribution))
-        print('Sample: '+str(sample_distribution))
+        print('At '+str(s1_pos)+', generate: '+str(sample_distribution))
         L1 = l1_distance(true_distribution, sample_distribution)
         AC = good_count / float(good_count + bad_count)
         return L1, AC

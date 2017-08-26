@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'try_5x5_image_single_channel_real_prob'
+MULTI_RUN = 'try_5x5_image_single_channel_real_prob_1'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'try_5x5_image_single_channel_real_prob')
+add_parameters(EXP = 'try_5x5_image_single_channel_real_prob_1')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -770,7 +770,7 @@ def chris2song(x):
         x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).float()
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()
 
     else:
         raise Exception('ss')
@@ -783,7 +783,7 @@ def song2chris(x):
         x = x.squeeze(1).cpu().numpy()
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+        x = x.permute(0,1,3,4,2).squeeze(1).cpu().numpy()
 
     else:
         raise Exception('ss')
@@ -1218,8 +1218,9 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             dataset = dataset.permute(0,1,4,2,3)
             dataset = dataset.float()
-            dataset = dataset / 255.0
+            dataset = dataset
         # print(dataset[0:3,:,:,:])
+        # print(s)
         yield dataset
 
 def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
