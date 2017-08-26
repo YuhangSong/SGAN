@@ -86,6 +86,7 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(DELTA_T = 0.1/(5**0.5))
 add_parameters(DELTA_T = 0.1/(2*10**0.5)*(4**0.5))
+#                             5           1
 
 '''this may not be a good way'''
 add_parameters(SOFT_GP = False)
