@@ -582,7 +582,7 @@ class Discriminator(nn.Module):
                 nn.Conv2d(
                     in_channels=1,
                     out_channels=params['DIM'],
-                    kernel_size=(5,5),
+                    kernel_size=(10,10),
                     stride=(1,1),
                     padding=(0,0),
                     bias=False
