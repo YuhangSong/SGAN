@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'add_conv_real_real'
+MULTI_RUN = 'conv_posi'
 GPU = '3'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'add_conv_real_real')
+add_parameters(EXP = 'conv_posi')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -293,37 +293,17 @@ class Generator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=params['DIM']/4,
+                    out_channels=4,
                     kernel_size=(2,2),
-                    stride=(1,1),
+                    stride=(2,2),
                     padding=(0,0),
                     bias=True
                 ),
                 nn.LeakyReLU(0.001),
-                # params['DIM']*9*9
-                nn.Conv2d(
-                    in_channels=params['DIM']/4,
-                    out_channels=params['DIM']/2,
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*8*8
-                nn.Conv2d(
-                    in_channels=params['DIM']/2,
-                    out_channels=params['DIM'],
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*7*7
+                # 4*5*5
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(params['DIM']*7*7, params['DIM']),
+                nn.Linear(4*5*5, params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -586,74 +566,34 @@ class Discriminator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=params['DIM']/4,
+                    out_channels=4,
                     kernel_size=(2,2),
-                    stride=(1,1),
+                    stride=(2,2),
                     padding=(0,0),
                     bias=True
                 ),
                 nn.LeakyReLU(0.001),
-                # params['DIM']*9*9
-                nn.Conv2d(
-                    in_channels=params['DIM']/4,
-                    out_channels=params['DIM']/2,
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*8*8
-                nn.Conv2d(
-                    in_channels=params['DIM']/2,
-                    out_channels=params['DIM'],
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*7*7
+                # 4*5*5
             )
             squeeze_layer_state = nn.Sequential(
-                nn.Linear(params['DIM']*7*7, params['DIM']),
+                nn.Linear(4*5*5, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             conv_layer_prediction = nn.Sequential(
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=params['DIM']/4,
+                    out_channels=4,
                     kernel_size=(2,2),
-                    stride=(1,1),
+                    stride=(2,2),
                     padding=(0,0),
                     bias=True
                 ),
                 nn.LeakyReLU(0.001),
-                # params['DIM']*9*9
-                nn.Conv2d(
-                    in_channels=params['DIM']/4,
-                    out_channels=params['DIM']/2,
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*8*8
-                nn.Conv2d(
-                    in_channels=params['DIM']/2,
-                    out_channels=params['DIM'],
-                    kernel_size=(2,2),
-                    stride=(1,1),
-                    padding=(0,0),
-                    bias=True
-                ),
-                nn.LeakyReLU(0.001),
-                # params['DIM']*7*7
+                # 4*5*5
             )
             squeeze_layer_prediction = nn.Sequential(
-                nn.Linear(params['DIM']*7*7, params['DIM']),
+                nn.Linear(4*5*5, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
