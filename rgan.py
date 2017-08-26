@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'w4-71'
-GPU = '2'
+MULTI_RUN = 'bn_in_g'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'conv_posi_no_bias')
+add_parameters(EXP = 'bn_in_g')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -80,10 +80,10 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(DELTA_T = 0.1/(5**0.5))
 add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
 #                             5           1
@@ -293,25 +293,29 @@ class Generator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=1,
+                    out_channels=4,
                     kernel_size=(2,2),
                     stride=(2,2),
                     padding=(0,0),
                     bias=False
                 ),
+                nn.BatchNorm2d(4),
                 nn.LeakyReLU(0.001),
                 # 1*5*5
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(1*5*5, params['DIM']),
+                nn.Linear(4*5*5, params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
+                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
 
