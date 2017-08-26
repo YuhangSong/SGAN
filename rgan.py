@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'gd_conv_deconv_no_one'
+MULTI_RUN = 'gd_conv_deconv_no_one_factor'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'gd_conv_deconv_no_one')
+add_parameters(EXP = 'gd_conv_deconv_no_one_factor')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -89,7 +89,7 @@ add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((1.0**2)**0.5)/((
 # add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
 
 '''this may not be a good way'''
-add_parameters(SOFT_GP = False)
+add_parameters(SOFT_GP = True)
 add_parameters(SOFT_GP_FACTOR = 3)
 
 add_parameters(STABLE_MSE = None) # None
