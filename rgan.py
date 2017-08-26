@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'bn_in_g'
+MULTI_RUN = 'bn_in_g_no_after_noise'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'bn_in_g')
+add_parameters(EXP = 'bn_in_g_no_after_noise')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -310,12 +310,10 @@ class Generator(nn.Module):
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.BatchNorm1d(params['DIM']),
                 nn.LeakyReLU(0.001),
             )
 
