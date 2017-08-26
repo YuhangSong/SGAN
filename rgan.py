@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'add_conv_real'
+MULTI_RUN = 'add_conv_real_real'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'add_conv_real')
+add_parameters(EXP = 'add_conv_real_real')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -291,10 +291,20 @@ class Generator(nn.Module):
                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
+                    out_channels=params['DIM']/2,
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001),
+                # params['DIM']*5*5
+                nn.Conv2d(
+                    in_channels=params['DIM']/2,
                     out_channels=params['DIM'],
-                    kernel_size=(9,9),
-                    stride=(1,1),
-                    padding=(0,0),
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
                     bias=True
                 ),
                 nn.LeakyReLU(0.001),
@@ -561,16 +571,26 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer_state = nn.Sequential(
-                # 1*10*10
+                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=(params['DIM']),
-                    kernel_size=(9,9),
-                    stride=(1,1),
-                    padding=(0,0),
+                    out_channels=params['DIM']/2,
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
                     bias=True
                 ),
-                nn.LeakyReLU(0.001, inplace=True),
+                nn.LeakyReLU(0.001),
+                # params['DIM']/2*5*5
+                nn.Conv2d(
+                    in_channels=params['DIM']/2,
+                    out_channels=params['DIM'],
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001),
                 # params['DIM']*2*2
             )
             squeeze_layer_state = nn.Sequential(
@@ -578,16 +598,26 @@ class Discriminator(nn.Module):
                 nn.LeakyReLU(0.001, inplace=True),
             )
             conv_layer_prediction = nn.Sequential(
-                # 1*10*10
+                 # 1*10*10
                 nn.Conv2d(
                     in_channels=1,
-                    out_channels=(params['DIM']),
-                    kernel_size=(9,9),
-                    stride=(1,1),
-                    padding=(0,0),
+                    out_channels=params['DIM']/2,
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
                     bias=True
                 ),
-                nn.LeakyReLU(0.001, inplace=True),
+                nn.LeakyReLU(0.001),
+                # params['DIM']/2*5*5
+                nn.Conv2d(
+                    in_channels=params['DIM']/2,
+                    out_channels=params['DIM'],
+                    kernel_size=(4,4),
+                    stride=(2,2),
+                    padding=(1,1),
+                    bias=True
+                ),
+                nn.LeakyReLU(0.001),
                 # params['DIM']*2*2
             )
             squeeze_layer_prediction = nn.Sequential(
