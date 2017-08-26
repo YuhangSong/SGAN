@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'gd_conv_deconv'
+MULTI_RUN = 'gd_conv_deconv_no_one'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'gd_conv_deconv')
+add_parameters(EXP = 'gd_conv_deconv_no_one')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -83,7 +83,7 @@ add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 # add_parameters(DELTA_T = 0.1)
 add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((1.0**2)**0.5)/((5.0**2)**0.5)) )
 # add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
@@ -1329,11 +1329,11 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
 
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
-        gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
+        # gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
-        gradients_penalty = mse_loss_model(gradients_fl,gradients_direction_gt_fl)
+        gradients_penalty =  (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
 
         if params['GP_MODE']=='use-guide':
             gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
