@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 'conv_posi_no_bias'
-GPU = '3'
+MULTI_RUN = 'w4-71'
+GPU = '2'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -80,10 +80,10 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 # add_parameters(DELTA_T = 0.1/(5**0.5))
 add_parameters(DELTA_T = 0.1 / (((1.0)**0.5)/((5.0)**0.5)) * (((2.0**2)**0.5)/((10.0**2)**0.5)) )
 #                             5           1
