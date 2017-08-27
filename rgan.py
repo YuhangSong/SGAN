@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_cd_rs_nf_lfulllike'
+MULTI_RUN = '5x5_cd_rs_nf_conv2full'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -319,17 +319,8 @@ class Generator(nn.Module):
                     in_channels=1,
                     out_channels=1,
                     kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False,
-                ),
-                nn.LeakyReLU(0.001),
-                nn.Conv3d(
-                    in_channels=1,
-                    out_channels=1,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
+                    stride=(1,4,4),
+                    padding=(0,0,0),
                     bias=False,
                 ),
                 nn.LeakyReLU(0.001),
@@ -347,25 +338,16 @@ class Generator(nn.Module):
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
-                nn.Linear(params['DIM'], 1*1*(params['GRID_SIZE']**2)),
+                nn.Linear(params['DIM'], 1*2*(params['GRID_SIZE']**2)),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
                 nn.ConvTranspose3d(
                     in_channels=1,
                     out_channels=1,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False,
-                ),
-                nn.LeakyReLU(0.001),
-                nn.ConvTranspose3d(
-                    in_channels=1,
-                    out_channels=1,
                     kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
+                    stride=(1,4,4),
+                    padding=(0,0,0),
                     bias=False,
                 ),
                 nn.Sigmoid()
@@ -399,7 +381,7 @@ class Generator(nn.Module):
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
         if params['REPRESENTATION']==chris_domain.IMAGE:
-            x = x.view(temp)
+            x = x.view(temp[0],temp[1],2,temp[3],temp[4])
         x = self.deconv_layer(x)
 
         '''decompose'''
@@ -613,17 +595,8 @@ class Discriminator(nn.Module):
                     in_channels=1,
                     out_channels=1,
                     kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.001, inplace=True),
-                nn.Conv3d(
-                    in_channels=1,
-                    out_channels=1,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
+                    stride=(1,4,4),
+                    padding=(0,0,0),
                     bias=False
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
