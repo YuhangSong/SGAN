@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = 're_2x2_cn-7'
+MULTI_RUN = 're_2x2_cn'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
