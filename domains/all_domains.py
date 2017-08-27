@@ -280,7 +280,7 @@ class Walk2D(object):
                     valid_on_channel = True
                     for c in range(1):
                         pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
+                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (ACCEPT_GATE):
                             valid_on_channel = False
                             break
                     if valid_on_channel:
