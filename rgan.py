@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = '5x5_cd_nw')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
@@ -124,7 +124,7 @@ if params['DOMAIN']=='marble':
 else:
     add_parameters(STATE_DEPTH = 1)
 
-add_parameters(FEATURE = 3)
+add_parameters(FEATURE = 1)
 
 '''default domain settings generate'''
 if params['DOMAIN']=='1Dflip':
@@ -802,7 +802,7 @@ def chris2song(x):
         x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).float()
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()/255.0
+        x = torch.from_numpy(np.array(x)).cuda().unsqueeze(1).permute(0,1,4,2,3).float()
 
     else:
         raise Exception('ss')
@@ -815,7 +815,7 @@ def song2chris(x):
         x = x.squeeze(1).cpu().numpy()
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        x = (x*255.0).byte().permute(0,1,3,4,2).squeeze(1).cpu().numpy()
+        x = x.permute(0,1,3,4,2).squeeze(1).cpu().numpy()
 
     else:
         raise Exception('ss')
@@ -1250,7 +1250,9 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             dataset = dataset.permute(0,1,4,2,3)
             dataset = dataset.float()
-            dataset = dataset / 255.0
+
+        # print(dataset.size())
+        # print(dataset[3,:,0,:,:])
 
         yield dataset
 
