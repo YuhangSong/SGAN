@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = '5x5_cd_nw')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = True)
+add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
