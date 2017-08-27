@@ -91,7 +91,7 @@ if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
             DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
         )
 
-    elif params['REPRESENTATION']==chris_domain.Image:
+    elif params['REPRESENTATION']==chris_domain.IMAGE:
         raise Exception('ss')
 
     else:
@@ -103,9 +103,8 @@ elif params['DOMAIN']=='2Dgrid':
             DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
         )
 
-    elif params['REPRESENTATION']==chris_domain.Image:
+    elif params['REPRESENTATION']==chris_domain.IMAGE:
         if params['OBSTACLE_POS_LIST']==[]:
-            print(ss)
             add_parameters(
                 DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( params['GRID_SIZE']*chris_domain.BLOCK_SIZE )**2)**0.5 ) ) )
             )
@@ -316,9 +315,9 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
            
             conv_layer = nn.Sequential(
-                # params['FEATURE']*1*12*12
+                # 1*1*12*12
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=64,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
@@ -364,14 +363,14 @@ class Generator(nn.Module):
                 # 64*2*6*6
                 nn.ConvTranspose3d(
                     in_channels=64,
-                    out_channels=params['FEATURE'],
+                    out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False,
                 ),
                 nn.Sigmoid()
-                # params['FEATURE']*2*12*12
+                # 1*2*12*12
             )
 
         else:
@@ -457,9 +456,9 @@ class Transitor(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer = nn.Sequential(
-                # params['FEATURE']*1*32*32
+                # 1*1*32*32
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=64,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
@@ -530,14 +529,14 @@ class Transitor(nn.Module):
                 # 64*2*16*16
                 nn.ConvTranspose3d(
                     in_channels=64,
-                    out_channels=params['FEATURE'],
+                    out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False
                 ),
                 nn.Sigmoid()
-                # params['FEATURE']*2*32*32  
+                # 1*2*32*32  
             )
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
@@ -612,9 +611,9 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             
             conv_layer = nn.Sequential(
-                # params['FEATURE']*2*12*12
+                # 1*2*12*12
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=64,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
@@ -739,9 +738,9 @@ class Corrector(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             conv_layer =    nn.Sequential(
-                # params['FEATURE']*2*32*32
+                # 1*2*32*32
                 nn.Conv3d(
-                    in_channels=params['FEATURE'],
+                    in_channels=1,
                     out_channels=64,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
