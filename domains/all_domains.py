@@ -62,7 +62,12 @@ class Walk1D(object):
         onehot = [0] * self.n
         onehot[pos] = 1
         if self.mode == IMAGE:
-            return self.visualizer.make_screen([onehot])
+            image = self.visualizer.make_screen([onehot])
+            image = image / 255.0
+            image = 1.0 - image
+            print(image)
+            print(testfirst)
+            return image
         else:
             return np.array(onehot)
 
@@ -85,14 +90,14 @@ class Walk1D(object):
 
             '''detect agent opsition from image'''
 
-            agent_channel_should_be = [255,0,0]
+            agent_channel_should_be = [1.0]
 
             agent_count = 0
             for x in range(self.n):
                 valid_on_channel = True
-                for c in range(3):
+                for c in range(1):
                     pixel_value_mean_on_channel = np.mean(state_vector[:,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                    if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (255.0*ACCEPT_GATE):
+                    if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (ACCEPT_GATE):
                         valid_on_channel = False
                         break
                 if valid_on_channel:
@@ -178,7 +183,9 @@ class BitFlip1D(object):
         if state is None:
             state = self.state
         if self.mode == IMAGE:
-            return self.visualizer.make_screen(state)
+            image = self.visualizer.make_screen(state)
+            print(we_donot_need_this_domain)
+            return 
         else:
             return state.copy()
 
@@ -340,9 +347,9 @@ class Walk2D(object):
 
         elif self.mode == IMAGE:
             image = self.visualizer.make_screen(array)
-            image = 255 - image
             image = image[:,:,1:2]
             image = image / 255.0
+            image = 1.0 - image
             return image
         
         else:
