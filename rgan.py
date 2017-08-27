@@ -191,7 +191,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'no bn on vector and scalar domain')
+add_parameters(AUX_INFO = '5x5_cd_rs_nf_conv2full')
 
 '''summary settings'''
 DSP = ''
