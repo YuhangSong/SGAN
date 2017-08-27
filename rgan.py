@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_cd_rs_nf'
+MULTI_RUN = '5x5_cd_rs_nf_lfulllike'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -317,7 +317,7 @@ class Generator(nn.Module):
             conv_layer = nn.Sequential(
                 nn.Conv3d(
                     in_channels=1,
-                    out_channels=64,
+                    out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -325,8 +325,8 @@ class Generator(nn.Module):
                 ),
                 nn.LeakyReLU(0.001),
                 nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
+                    in_channels=1,
+                    out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -335,21 +335,25 @@ class Generator(nn.Module):
                 nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
+                nn.Linear(1*1*(params['GRID_SIZE']**2), params['DIM']),
                 nn.LeakyReLU(0.001),
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE']**2)),
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
+                nn.Linear(params['DIM'], 1*1*(params['GRID_SIZE']**2)),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
                 nn.ConvTranspose3d(
-                    in_channels=128,
-                    out_channels=64,
+                    in_channels=1,
+                    out_channels=1,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -357,7 +361,7 @@ class Generator(nn.Module):
                 ),
                 nn.LeakyReLU(0.001),
                 nn.ConvTranspose3d(
-                    in_channels=64,
+                    in_channels=1,
                     out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
@@ -607,16 +611,16 @@ class Discriminator(nn.Module):
             conv_layer = nn.Sequential(
                 nn.Conv3d(
                     in_channels=1,
-                    out_channels=64,
-                    kernel_size=(2,4,4),
+                    out_channels=1,
+                    kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
                 nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
+                    in_channels=1,
+                    out_channels=1,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -625,10 +629,12 @@ class Discriminator(nn.Module):
                 nn.LeakyReLU(0.001, inplace=True),
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
+                nn.Linear(1*2*(params['GRID_SIZE']**2), params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], 1),
