@@ -85,7 +85,7 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 add_parameters(
-    DELTA_T = ( 0.09132 / ( ( (5*5*2)**0.5 ) / ( (10*10*3)**0.5 ) ) * ( ( (5*5*2)**0.5 ) / ( (25*25*3)**0.5 ) ) )
+    DELTA_T = ( 0.09132 / ( ( (5*5*2)**0.5 ) / ( (10*10*3)**0.5 ) ) * ( ( (5*5*1)**0.5 ) / ( (25*25*1)**0.5 ) ) )
 )
 
 '''this may not be a good way'''
