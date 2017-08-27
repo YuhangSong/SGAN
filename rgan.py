@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '3x3_cd_rs_nf'
-GPU = '1'
+MULTI_RUN = '2x2_cd_rs_nf'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -50,7 +50,7 @@ add_parameters(EXP = '2x2_cd_rs')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 3)
+add_parameters(GRID_SIZE = 2)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -315,7 +315,6 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
            
             conv_layer = nn.Sequential(
-                # 1*1*12*12
                 nn.Conv3d(
                     in_channels=1,
                     out_channels=64,
@@ -325,7 +324,6 @@ class Generator(nn.Module):
                     bias=False,
                 ),
                 nn.LeakyReLU(0.001),
-                # 64*1*6*6
                 nn.Conv3d(
                     in_channels=64,
                     out_channels=128,
@@ -335,10 +333,9 @@ class Generator(nn.Module):
                     bias=False,
                 ),
                 nn.LeakyReLU(0.001),
-                # 128*1*3*3
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*3*3, params['DIM']),
+                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
                 nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
@@ -346,11 +343,10 @@ class Generator(nn.Module):
                 nn.LeakyReLU(0.001),
             )
             unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 128*1*3*3),
+                nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE']**2)),
                 nn.LeakyReLU(0.001),
             )
             deconv_layer = nn.Sequential(
-                # 128*1*3*3
                 nn.ConvTranspose3d(
                     in_channels=128,
                     out_channels=64,
@@ -360,7 +356,6 @@ class Generator(nn.Module):
                     bias=False,
                 ),
                 nn.LeakyReLU(0.001),
-                # 64*2*6*6
                 nn.ConvTranspose3d(
                     in_channels=64,
                     out_channels=1,
@@ -370,7 +365,6 @@ class Generator(nn.Module):
                     bias=False,
                 ),
                 nn.Sigmoid()
-                # 1*2*12*12
             )
 
         else:
@@ -611,7 +605,6 @@ class Discriminator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             
             conv_layer = nn.Sequential(
-                # 1*2*12*12
                 nn.Conv3d(
                     in_channels=1,
                     out_channels=64,
@@ -621,7 +614,6 @@ class Discriminator(nn.Module):
                     bias=False
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
-                # 64*1*6*6
                 nn.Conv3d(
                     in_channels=64,
                     out_channels=128,
@@ -631,10 +623,9 @@ class Discriminator(nn.Module):
                     bias=False
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
-                # 128*1*3*3
             )
             squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*3*3, params['DIM']),
+                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
