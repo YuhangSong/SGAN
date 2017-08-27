@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_cd'
+MULTI_RUN = '5x5_cd_nw'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -46,7 +46,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = '5x5_cd')
+add_parameters(EXP = '5x5_cd_nw')
 add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -150,7 +150,7 @@ elif params['DOMAIN']=='2Dgrid':
         prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
         obstacle_pos_list=params['OBSTACLE_POS_LIST'],
         mode=params['REPRESENTATION'],
-        should_wrap=True,
+        should_wrap=False,
         fix_state=params['FIX_STATE']
     )
 
@@ -587,17 +587,17 @@ class Discriminator(nn.Module):
                 nn.Conv3d(
                     in_channels=params['FEATURE'],
                     out_channels=64,
-                    kernel_size=(2,4,4),
+                    kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
-                # 64*1*10*10
+                # 64*2*10*10
                 nn.Conv3d(
                     in_channels=64,
                     out_channels=128,
-                    kernel_size=(1,4,4),
+                    kernel_size=(2,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
                     bias=False
@@ -610,6 +610,8 @@ class Discriminator(nn.Module):
                 nn.LeakyReLU(0.001, inplace=True),
             )
             final_layer = nn.Sequential(
+                nn.Linear(params['DIM'], params['DIM']),
+                nn.LeakyReLU(0.001, inplace=True),
                 nn.Linear(params['DIM'], 1),
             )
 
