@@ -191,7 +191,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = '5x5_cd_rs_nf_conv2full')
+add_parameters(AUX_INFO = '5x5_cd_rs_nf_conv2full_1')
 
 '''summary settings'''
 DSP = ''
@@ -329,7 +329,7 @@ class Generator(nn.Module):
                 nn.Linear(1*1*(params['GRID_SIZE']**2), params['DIM']),
                 nn.LeakyReLU(0.001),
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001, inplace=True),
+                nn.LeakyReLU(0.001),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
@@ -337,7 +337,7 @@ class Generator(nn.Module):
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001, inplace=True),
+                nn.LeakyReLU(0.001),
                 nn.Linear(params['DIM'], 1*2*(params['GRID_SIZE']**2)),
                 nn.LeakyReLU(0.001),
             )
