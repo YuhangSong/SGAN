@@ -346,9 +346,11 @@ class Walk2D(object):
 
         elif self.mode == IMAGE:
             image = self.visualizer.make_screen(array)
-            image = image[:,:,1:2]
             image = image / 255.0
             image = 1.0 - image
+            image_obst = image[:,:,0:1]
+            image_agent = image[:,:,1:2] - image_obst
+            image = np.concatenate((image_agent,image_obst),2)
             return image
         
         else:

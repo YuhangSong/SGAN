@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '1x20_cd_rs_nf_comp'
+MULTI_RUN = '5x5_ob'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -47,10 +47,10 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_rs')
-add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 20)
+add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -60,8 +60,8 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [])
@@ -69,8 +69,13 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+
+    if params['OBSTACLE_POS_LIST']==[]:
+        add_parameters(FEATURE = 1)
+    else:
+        add_parameters(FEATURE = 2)
 
 else:
     print(unsupport)
@@ -78,12 +83,12 @@ else:
 '''method settings'''
 add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
@@ -107,13 +112,9 @@ elif params['DOMAIN']=='2Dgrid':
         )
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        if params['OBSTACLE_POS_LIST']==[]:
-            add_parameters(
-                DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)**0.5 ) ) )
-            )
-
-        else:
-            raise Exception('fix feature representation first')
+        add_parameters(
+            DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        )
 
     else:
         raise Exception('s')
@@ -319,7 +320,7 @@ class Generator(nn.Module):
            
             conv_layer = nn.Sequential(
                 nn.Conv3d(
-                    in_channels=1,
+                    in_channels=params['FEATURE'],
                     out_channels=64,
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
@@ -377,7 +378,7 @@ class Generator(nn.Module):
                 nn.LeakyReLU(0.001),
                 nn.ConvTranspose3d(
                     in_channels=64,
-                    out_channels=1,
+                    out_channels=params['FEATURE'],
                     kernel_size=(1,4,4),
                     stride=(1,2,2),
                     padding=(0,1,1),
@@ -625,7 +626,7 @@ class Discriminator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Conv3d(
-                    in_channels=1,
+                    in_channels=params['FEATURE'],
                     out_channels=64,
                     kernel_size=(2,4,4),
                     stride=(1,2,2),
@@ -1298,7 +1299,9 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = dataset.float()
 
         # print(dataset.size())
-        # print(dataset[3,:,0,:,:])
+        # print(dataset[3,0,0,:,:])
+        # print(dataset[3,0,1,:,:])
+        # print(s)
 
         yield dataset
 
