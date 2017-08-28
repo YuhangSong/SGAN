@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_ob'
+MULTI_RUN = '5x5_ob_sf'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -72,10 +72,7 @@ elif params['DOMAIN']=='2Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    if params['OBSTACLE_POS_LIST']==[]:
-        add_parameters(FEATURE = 1)
-    else:
-        add_parameters(FEATURE = 2)
+    add_parameters(FEATURE = 1)
 
 else:
     print(unsupport)
@@ -263,7 +260,8 @@ def log_img(x,name,iteration):
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
         if not (params['OBSTACLE_POS_LIST']==[]):
-            x = torch.cat([x,x[:,0:1,:,:]],1)
+            # x = torch.cat([x,x[:,0:1,:,:]],1)
+            pass
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
                 win=str(MULTI_RUN)+'-'+name,
@@ -1319,15 +1317,16 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = dataset.permute(0,1,4,2,3)
             dataset = dataset.float()
 
-        print(dataset.size())
-        print(dataset[3,0,0,:,:])
-        print(dataset[3,0,1,:,:])
-        print('---')
-        print(dataset[3,1,0,:,:])
-        print(dataset[3,1,1,:,:])
-        # print(dataset[3,0,:])
-        # print(dataset[3,0,:])
-        print(s)
+        # print(dataset.size())
+        # # print(dataset[3,0,0,:,:])
+        # # print(dataset[3,0,1,:,:])
+        # # print('---')
+        # # print(dataset[3,1,0,:,:])
+        # # print(dataset[3,1,1,:,:])
+        # # print(dataset[3,0,:])
+        # # print(dataset[3,0,:])
+        # print(dataset[3,:,0,:,:])
+        # print(s)
 
         yield dataset
 

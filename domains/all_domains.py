@@ -354,12 +354,13 @@ class Walk2D(object):
             image = self.visualizer.make_screen(array)
             image = image / 255.0
             image = 1.0 - image
-            if obstacle_pos_list==[]:
+            if self.obstacle_pos_list==[]:
                 print(sss)
             else:
                 image_obst = image[:,:,0:1]
                 image_agent = image[:,:,1:2] - image_obst
-                image = np.concatenate((image_agent,image_obst),2)
+                # image = np.concatenate((image_agent,image_obst),2)
+                image = image_agent + image_obst * 0.5
             return image
         
         else:
