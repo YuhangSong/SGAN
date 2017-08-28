@@ -13,6 +13,8 @@ IMAGE = 2
 BLOCK_SIZE = 4
 ACCEPT_GATE = 0.1
 
+LIMIT_START_STATE_TO = 200
+
 class Walk1D(object):
 
     def __init__(self, length, prob_left, mode, fix_state=False):
@@ -150,9 +152,13 @@ class BitFlip1D(object):
 
     def get_all_possible_start_states(self):
         if self.fix_state:
-            return [self.get_state(self.fix_state_to)]
+            all_start_state = [self.get_state(self.fix_state_to)]
         else:
-            return [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
+            all_start_state = [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
+
+        all_start_state = all_start_state[0:LIMIT_START_STATE_TO]
+
+        return all_start_state
 
     def get_transition_probs(self, state_pos):
 

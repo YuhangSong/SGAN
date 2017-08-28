@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_ob_811'
-GPU = '2'
+MULTI_RUN = '5_filp'
+GPU = '3'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,9 +47,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_rs')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
@@ -221,10 +221,7 @@ FILTER_RATE = 0.5
 TrainTo   = 100000
 LOG_INTER =   1000
 if params['DOMAIN']=='1Dflip':
-    if params['GRID_SIZE']>5:
-        LOG_INTER = 10000
-    if params['GRID_SIZE']>10:
-        LOG_INTER = TrainTo
+    LOG_INTER = 10000
 
 if params['REPRESENTATION']==chris_domain.SCALAR:
     if params['DOMAIN']=='2Dgrid':
@@ -264,7 +261,9 @@ def log_img(x,name,iteration):
     if params['REPRESENTATION']==chris_domain.VECTOR:
         x = vector2image(x)
     x = x.squeeze(1)
-    x = torch.cat([x,x[:,0:1,:,:]],1)
+    if params['DOMAIN']=='2Dgrid':
+        if not (params['OBSTACLE_POS_LIST']==[]):
+            x = torch.cat([x,x[:,0:1,:,:]],1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
                 win=str(MULTI_RUN)+'-'+name,
@@ -303,10 +302,20 @@ class Generator(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            cat_layer = nn.Sequential(
-                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.LeakyReLU(0.001),
-            )
+            if params['DOMAIN']=='1Dflip':
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+            else:
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
@@ -617,11 +626,22 @@ class Discriminator(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
             )
-            final_layer = nn.Sequential(
-                nn.Linear(params['DIM']*2, params['DIM']),
-                nn.LeakyReLU(0.001, inplace=True),
-                nn.Linear(params['DIM'], 1),
-            )
+            if params['DOMAIN']=='1Dflip':
+                final_layer = nn.Sequential(
+                    nn.Linear(params['DIM']*2, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    nn.Linear(params['DIM'], 1),
+                )
+            else:
+                final_layer = nn.Sequential(
+                    nn.Linear(params['DIM']*2, params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    nn.Linear(params['DIM'], 1),
+                )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             
@@ -1300,8 +1320,10 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = dataset.float()
 
         # print(dataset.size())
-        # print(dataset[3,0,0,:,:])
-        # print(dataset[3,0,1,:,:])
+        # # print(dataset[3,0,0,:,:])
+        # # print(dataset[3,0,1,:,:])
+        # print(dataset[3,0,:])
+        # print(dataset[3,0,:])
         # print(s)
 
         yield dataset
