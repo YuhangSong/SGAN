@@ -63,10 +63,9 @@ class Walk1D(object):
         onehot[pos] = 1
         if self.mode == IMAGE:
             image = self.visualizer.make_screen([onehot])
+            image = image[:,:,1:2]
             image = image / 255.0
             image = 1.0 - image
-            print(image)
-            print(testfirst)
             return image
         else:
             return np.array(onehot)

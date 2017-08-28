@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '5x5_cd_rs_nf_811'
+MULTI_RUN = '1x5_cd_rs_f'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -47,19 +47,17 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_rs')
-add_parameters(DOMAIN = '2Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
-add_parameters(FIX_STATE = False)
+add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(FIX_STATE = True)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/params['GRID_SIZE']]*params['GRID_SIZE'])
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0,0,1,0,0])
 
 elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [1.0,0.0])
 
 elif params['DOMAIN']=='2Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
@@ -87,14 +85,17 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
+BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
     if params['REPRESENTATION']==chris_domain.VECTOR:
         add_parameters(
-            DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
+            DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
         )
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        raise Exception('ss')
+        add_parameters(
+            DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( (chris_domain.BLOCK_SIZE**2)*params['GRID_SIZE'])**0.5 ) ) )
+        )
 
     else:
         raise Exception('s')
@@ -102,13 +103,13 @@ if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
 elif params['DOMAIN']=='2Dgrid':
     if params['REPRESENTATION']==chris_domain.VECTOR:
         add_parameters(
-            DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
+            DELTA_T = ( BASE * ( ( (1**2)**0.5 ) / ( (params['GRID_SIZE']**2)**0.5 ) ) )
         )
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
         if params['OBSTACLE_POS_LIST']==[]:
             add_parameters(
-                DELTA_T = ( 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) ) * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( params['GRID_SIZE']*chris_domain.BLOCK_SIZE )**2)**0.5 ) ) )
+                DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)**0.5 ) ) )
             )
 
         else:
@@ -336,18 +337,34 @@ class Generator(nn.Module):
                 ),
                 nn.LeakyReLU(0.001),
             )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
-                nn.LeakyReLU(0.001),
-            )
+            if params['DOMAIN']=='1Dgrid':
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*(params['GRID_SIZE']), params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+            elif params['DOMAIN']=='2Dgrid':
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+            else:
+                raise Exception('s')
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE']**2)),
-                nn.LeakyReLU(0.001),
-            )
+            if params['DOMAIN']=='1Dgrid':
+                unsqueeze_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE'])),
+                    nn.LeakyReLU(0.001),
+                )
+            elif params['DOMAIN']=='2Dgrid':
+                unsqueeze_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE']**2)),
+                    nn.LeakyReLU(0.001),
+                )
+            else:
+                raise Exception('s')
             deconv_layer = nn.Sequential(
                 nn.ConvTranspose3d(
                     in_channels=128,
@@ -626,10 +643,18 @@ class Discriminator(nn.Module):
                 ),
                 nn.LeakyReLU(0.001, inplace=True),
             )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
-                nn.LeakyReLU(0.001, inplace=True),
-            )
+            if params['DOMAIN']=='1Dgrid':
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*(params['GRID_SIZE']), params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+            elif params['DOMAIN']=='2Dgrid':
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
+                    nn.LeakyReLU(0.001, inplace=True),
+                )
+            else:
+                raise Exception('s')
             final_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
