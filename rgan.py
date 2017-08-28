@@ -22,7 +22,7 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '1x5_cd_rs_nf_comp'
+MULTI_RUN = '1x10_cd_rs_nf_comp'
 GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -50,7 +50,7 @@ add_parameters(EXP = '2x2_cd_rs')
 add_parameters(DOMAIN = '1Dgrid') # 1Dgrid, 1Dflip, 2Dgrid,
 add_parameters(FIX_STATE = False)
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5)
+add_parameters(GRID_SIZE = 10)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
