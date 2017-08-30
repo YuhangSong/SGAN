@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False
-MULTI_RUN = 'marble'
-GPU = '1'
+MULTI_RUN = '2_flip'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -48,10 +48,10 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'marble')
-add_parameters(DOMAIN = 'marble') # 1Dgrid, 1Dflip, 2Dgrid, marble
-add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 10)
+add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid, marble
+add_parameters(FIX_STATE = True)
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(GRID_SIZE = 2)
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
