@@ -81,8 +81,8 @@ elif params['DOMAIN']=='marble':
     add_parameters(IMAGE_SIZE = 64)
     add_parameters(CHANNEL = 1)
     add_parameters(FRAME_INTERVAL = 0.5)
-    add_parameters(DATA_IN_BUF = 32)
-    add_parameters(ACCEPT_DELTA = 400000)
+    add_parameters(DATA_IN_BUF = 128)
+    add_parameters(ACCEPT_DELTA = 410000)
 
 else:
     print(unsupport)
@@ -421,6 +421,16 @@ class Generator(nn.Module):
                     # params['FEATURE']*3*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
+                        out_channels=2,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 2*2*32*32
+                    nn.Conv3d(
+                        in_channels=2,
                         out_channels=4,
                         kernel_size=(2,4,4),
                         stride=(1,2,2),
@@ -428,20 +438,10 @@ class Generator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001),
-                    # 4*2*32*32
-                    nn.Conv3d(
-                        in_channels=4,
-                        out_channels=8,
-                        kernel_size=(2,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001),
-                    # 8*1*16*16
+                    # 4*1*16*16
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(8*1*16*16, params['DIM']),
+                    nn.Linear(4*1*16*16, params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 cat_layer = nn.Sequential(
@@ -449,23 +449,23 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 8*1*16*16),
+                    nn.Linear(params['DIM'], 4*1*16*16),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
-                    # 8*1*16*16
+                    # 4*1*16*16
                     nn.ConvTranspose3d(
-                        in_channels=8,
-                        out_channels=4,
+                        in_channels=4,
+                        out_channels=2,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001),
-                    # 4*1*32*32
+                    # 2*1*32*32
                     nn.ConvTranspose3d(
-                        in_channels=4,
+                        in_channels=2,
                         out_channels=params['FEATURE'],
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
@@ -768,7 +768,7 @@ class Discriminator(nn.Module):
                     # params['FEATURE']*4*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
-                        out_channels=4,
+                        out_channels=2,
                         kernel_size=(3,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -777,8 +777,8 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                     # 4*2*32*32
                     nn.Conv3d(
-                        in_channels=4,
-                        out_channels=8,
+                        in_channels=2,
+                        out_channels=4,
                         kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -788,7 +788,7 @@ class Discriminator(nn.Module):
                     # 8*1*16*16
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(8*1*16*16, params['DIM']),
+                    nn.Linear(4*1*16*16, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
