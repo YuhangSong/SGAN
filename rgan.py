@@ -22,8 +22,8 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 
 CLEAR_RUN = False
-MULTI_RUN = '10_flip_comp'
-GPU = '3'
+MULTI_RUN = 'marble'
+GPU = '0'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,9 +47,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = '2x2_cd_rs')
-add_parameters(DOMAIN = '1Dflip') # 1Dgrid, 1Dflip, 2Dgrid,
+add_parameters(DOMAIN = 'marble') # 1Dgrid, 1Dflip, 2Dgrid, marble
 add_parameters(FIX_STATE = False)
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 10)
 
 '''domain dynamic'''
@@ -150,7 +150,9 @@ else:
 add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
+    add_parameters(MARBLE_MODE = 'single') # single, full
     add_parameters(STATE_DEPTH = 3)
+    add_parameters(IMAGE_SIZE = 64)
 
 else:
     add_parameters(STATE_DEPTH = 1)

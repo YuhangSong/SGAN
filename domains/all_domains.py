@@ -189,7 +189,7 @@ class BitFlip1D(object):
             state = self.state
         if self.mode == IMAGE:
             image = self.visualizer.make_screen(state)
-            print(we_donot_need_this_domain)
+            raise Exception('we_donot_need_this_domain')
             return 
         else:
             return state.copy()
@@ -355,11 +355,13 @@ class Walk2D(object):
             image = image / 255.0
             image = 1.0 - image
             if self.obstacle_pos_list==[]:
-                print(sss)
+                image = self.visualizer.make_screen(array)
+                image = image[:,:,1:2]
+                image = image / 255.0
+                image = 1.0 - image
             else:
                 image_obst = image[:,:,0:1]
                 image_agent = image[:,:,1:2] - image_obst
-                # image = np.concatenate((image_agent,image_obst),2)
                 image = image_agent + image_obst * 0.5
             return image
         
