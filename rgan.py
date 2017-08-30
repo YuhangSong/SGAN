@@ -236,7 +236,8 @@ FILTER_RATE = 0.5
 TrainTo   = 100000
 LOG_INTER =   1000
 if params['DOMAIN']=='1Dflip':
-    LOG_INTER = 10000
+    if params['GRID_SIZE']>=5:
+        LOG_INTER = 10000
 
 if params['REPRESENTATION']==chris_domain.SCALAR:
     if params['DOMAIN']=='2Dgrid':
