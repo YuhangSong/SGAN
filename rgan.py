@@ -128,7 +128,7 @@ elif params['DOMAIN']=='2Dgrid':
 
 elif params['DOMAIN']=='marble':
     add_parameters(
-        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']/6)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']/10)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
 
 else:
