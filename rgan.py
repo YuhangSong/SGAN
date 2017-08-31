@@ -1524,7 +1524,7 @@ class marble_domain(object):
         for b in range(10):
             vis.images(self.dataset[b].cpu().numpy())
 
-        print(s)
+        # print(s)
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
