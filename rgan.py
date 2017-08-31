@@ -23,7 +23,7 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False
-MULTI_RUN = 'marble_more_features'
+MULTI_RUN = 'single_marble_thred'
 GPU = '1'
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -78,12 +78,20 @@ elif params['DOMAIN']=='2Dgrid':
 elif params['DOMAIN']=='marble':
     add_parameters(MARBLE_MODE = 'single') # single, full
     add_parameters(FEATURE = 1)
-    add_parameters(IMAGE_SIZE = 64)
-    add_parameters(CHANNEL = 1)
+    if params['MARBLE_MODE']=='single':
+        add_parameters(IMAGE_SIZE = 64)
+    elif params['MARBLE_MODE']=='full':
+        add_parameters(IMAGE_SIZE = 256)
+    else:
+        raise Exception('s')
     add_parameters(FRAME_INTERVAL = 0.5)
-    add_parameters(DATA_IN_BUF = 32)
-    add_parameters(ACCEPT_DELTA = 410000)
-
+    add_parameters(DATA_IN_BUF = 1024)
+    if params['MARBLE_MODE']=='single':
+        add_parameters(ACCEPT_DELTA = 410000)
+    elif params['MARBLE_MODE']=='full':
+        add_parameters(ACCEPT_DELTA = 5000000)
+    else:
+        raise Exception('s')
 else:
     print(unsupport)
 
@@ -127,9 +135,16 @@ elif params['DOMAIN']=='2Dgrid':
         raise Exception('s')
 
 elif params['DOMAIN']=='marble':
-    add_parameters(
-        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']/10)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
-    )
+    if params['MARBLE_MODE']=='single':
+        add_parameters(
+            DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']/10)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        )
+    elif params['MARBLE_MODE']=='full':
+        add_parameters(
+            DELTA_T = ( BASE * ( ( ( ((params['IMAGE_SIZE']*(4.0/8.0)/(16.0+6.0/8.0))*(params['IMAGE_SIZE']*(4.0/8.0)/(9.0+3.0/8.0))))**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        )
+    else:
+        raise Exception('s')
 
 else:
     raise Exception('s')
@@ -1432,7 +1447,14 @@ class marble_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        vid = imageio.get_reader('../../dataset/00014.MTS',  'ffmpeg')
+        if params['MARBLE_MODE']=='single':
+            file_name = '../../dataset/00014.MTS'
+        elif params['MARBLE_MODE']=='full':
+            file_name = '../../dataset/00106.MTS'
+        else:
+            raise Exception('s')
+        
+        vid = imageio.get_reader(file_name, 'ffmpeg')
         info = vid.get_meta_data()
         print(info)
 
@@ -1453,7 +1475,12 @@ class marble_domain(object):
                     break
 
                 image = vid.get_data(frame_start+frame_i*fram_interval)
-                image = image[:,:,params['CHANNEL']]
+                if params['MARBLE_MODE']=='single':
+                    image = image[:,:,1]
+                elif params['MARBLE_MODE']=='full':
+                    image = image[:,:,1]
+                else:
+                    raise Exception('s')
                 image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
                 image = torch.from_numpy(image)
                 image = image.unsqueeze(0)
@@ -1472,8 +1499,9 @@ class marble_domain(object):
                     data = image
 
             delta = delta / (params['STATE_DEPTH']+1)
-            print('Get data with delta: '+str(delta))
-            if delta > 10.0:
+            if delta > params['ACCEPT_DELTA']:
+                print('Get data with delta: '+str(delta))
+                # vis.images(data.cpu().numpy())
                 data = data.unsqueeze(0)
                 try:
                     self.dataset = torch.cat([self.dataset,data],0)
@@ -1490,6 +1518,8 @@ class marble_domain(object):
 
         for b in range(10):
             vis.images(self.dataset[b].cpu().numpy())
+
+        print(s)
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
