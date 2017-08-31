@@ -1466,12 +1466,14 @@ class marble_domain(object):
 
             delta = 0.0
             data = None
+            breaking = False
             for frame_i in range(params['STATE_DEPTH']+1):
 
                 try:
                     image = vid.get_data(frame_start+frame_i*fram_interval)
                 except Exception as e:
                     print(e)
+                    breaking = True
                     break
 
                 image = vid.get_data(frame_start+frame_i*fram_interval)
@@ -1497,6 +1499,9 @@ class marble_domain(object):
                     data = torch.cat([data,image],0)
                 except Exception as e:
                     data = image
+
+            if breaking:
+                break
 
             delta = delta / (params['STATE_DEPTH']+1)
             if delta > params['ACCEPT_DELTA']:
