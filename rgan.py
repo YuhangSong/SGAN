@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'single_marble_thred' # display a tag before the result printed
-GPU = '1' # use which GPU
+MULTI_RUN = 'single_marble' # display a tag before the result printed
+GPU = '0' # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -254,6 +254,8 @@ LOG_INTER =   1000
 if params['DOMAIN']=='1Dflip':
     if params['GRID_SIZE']>=5:
         LOG_INTER = 10000
+elif params['DOMAIN']=='marble':
+    LOG_INTER = 500
 
 if params['REPRESENTATION']==chris_domain.SCALAR:
     if params['DOMAIN']=='2Dgrid':
@@ -1153,6 +1155,11 @@ def collect_samples(iteration,tabular=None):
 
     elif params['DOMAIN']=='marble':
         state = domain.get_batch().narrow(1,0,params['STATE_DEPTH'])
+        state = state[0:1]
+        # print(state.size())
+        log_img(state.squeeze(0).unsqueeze(1),'state',iteration)
+        state = torch.cat([state]*params['BATCH_SIZE'],0)
+
         '''prediction'''
         noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
         prediction = netG(
