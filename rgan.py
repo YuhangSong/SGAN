@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'single_marble_comp' # display a tag before the result printed
-GPU = '1' # use which GPU
+MULTI_RUN = 'single_marble_comp_deter' # display a tag before the result printed
+GPU = '2' # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -97,7 +97,7 @@ else:
     raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 # add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -565,119 +565,192 @@ class Transitor(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
-            cat_layer = nn.Sequential(
-                nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
-            )
+            if params['DOMAIN']=='1Dflip':
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+            else:
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.BatchNorm1d(params['DIM']),
+                nn.LeakyReLU(0.001),
             )
-            if params['REPRESENTATION']==chris_domain.SCALAR:
-                deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM)
-                )
-            elif params['REPRESENTATION']==chris_domain.VECTOR:
-                deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM),
-                    nn.Sigmoid()
-                )
+
+            deconv_layer = nn.Sequential(
+                nn.Linear(params['DIM'], DESCRIBE_DIM),
+                nn.Sigmoid()
+            )
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
-            conv_layer = nn.Sequential(
-                # 1*1*32*32
-                nn.Conv3d(
-                    in_channels=1,
-                    out_channels=64,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 64*1*16*16
-                nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 128*1*8*8
-                nn.Conv3d(
-                    in_channels=128,
-                    out_channels=256,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(256),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 256*1*4*4
-            )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(256*1*4*4, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            cat_layer = nn.Sequential(
-                nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            unsqueeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 256*1*4*4),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            deconv_layer = nn.Sequential(
-                # 256*1*4*4
-                nn.ConvTranspose3d(
-                    in_channels=256,
-                    out_channels=128,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(128),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 128*2*8*8
-                nn.ConvTranspose3d(
-                    in_channels=128,
-                    out_channels=64,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.BatchNorm3d(64),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 64*2*16*16
-                nn.ConvTranspose3d(
-                    in_channels=64,
-                    out_channels=1,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.Sigmoid()
-                # 1*2*32*32  
-            )
+            if params['DOMAIN']!='marble':
+           
+                conv_layer = nn.Sequential(
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=128,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                )
+                if params['DOMAIN']=='1Dgrid':
+                    squeeze_layer = nn.Sequential(
+                        nn.Linear(128*1*(params['GRID_SIZE']), params['DIM']),
+                        nn.LeakyReLU(0.001),
+                    )
+                elif params['DOMAIN']=='2Dgrid':
+                    squeeze_layer = nn.Sequential(
+                        nn.Linear(128*1*(params['GRID_SIZE']**2), params['DIM']),
+                        nn.LeakyReLU(0.001),
+                    )
+                else:
+                    raise Exception('s')
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                if params['DOMAIN']=='1Dgrid':
+                    unsqueeze_layer = nn.Sequential(
+                        nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE'])),
+                        nn.LeakyReLU(0.001),
+                    )
+                elif params['DOMAIN']=='2Dgrid':
+                    unsqueeze_layer = nn.Sequential(
+                        nn.Linear(params['DIM'], 128*1*(params['GRID_SIZE']**2)),
+                        nn.LeakyReLU(0.001),
+                    )
+                else:
+                    raise Exception('s')
+                deconv_layer = nn.Sequential(
+                    nn.ConvTranspose3d(
+                        in_channels=128,
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    nn.ConvTranspose3d(
+                        in_channels=64,
+                        out_channels=params['FEATURE'],
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.Sigmoid()
+                )
+
+            elif params['DOMAIN']=='marble':
+
+                conv_layer = nn.Sequential(
+                    # params['FEATURE']*3*64*64
+                    nn.Conv3d(
+                        in_channels=params['FEATURE'],
+                        out_channels=32,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 32*3*32*32
+                    nn.Conv3d(
+                        in_channels=32,
+                        out_channels=64,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 64*2*16*16
+                    nn.Conv3d(
+                        in_channels=64,
+                        out_channels=64,
+                        kernel_size=(2,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 64*1*8*8
+                )
+                squeeze_layer = nn.Sequential(
+                    nn.Linear(64*1*8*8, params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                cat_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], params['DIM']),
+                    nn.LeakyReLU(0.001),
+                )
+                unsqueeze_layer = nn.Sequential(
+                    nn.Linear(params['DIM'], 64*1*8*8),
+                    nn.LeakyReLU(0.001),
+                )
+                deconv_layer = nn.Sequential(
+                    # 64*1*8*8
+                    nn.ConvTranspose3d(
+                        in_channels=64,
+                        out_channels=64,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 64*1*16*16
+                    nn.ConvTranspose3d(
+                        in_channels=64,
+                        out_channels=32,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 32*1*32*32
+                    nn.ConvTranspose3d(
+                        in_channels=32,
+                        out_channels=params['FEATURE'],
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.Sigmoid()
+                    # params['FEATURE']*1*64*64
+                )
+
+        else:
+            raise Exception('representation unsupport!')
 
         self.conv_layer = nn.DataParallel(conv_layer,GPU)
         self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
@@ -688,18 +761,11 @@ class Transitor(nn.Module):
 
     def forward(self, state_v):
 
-        '''
-            prepare data before feed to the network
-        '''
+        '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-            # the 1st dimension is time depth, squeeze it
             state_v = state_v.squeeze(1)
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*D*F*H*W to N*F*D*H*W
-            # N: batch size
-            # D: time depth
-            # F: feature ,channel
-            # H, W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
@@ -1102,7 +1168,7 @@ def collect_samples(iteration,tabular=None):
                 if params['METHOD']=='deterministic-deep-net':
                     prediction = netT(
                         state_v = autograd.Variable(start_state_batch)
-                    ).narrow(1,(params['STATE_DEPTH']-1),1).data
+                    ).data
 
                 elif params['METHOD']=='s-gan':
                     '''prediction'''
@@ -1161,11 +1227,16 @@ def collect_samples(iteration,tabular=None):
         state = torch.cat([state]*params['BATCH_SIZE'],0)
 
         '''prediction'''
-        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-        prediction = netG(
-            noise_v = autograd.Variable(noise, volatile=True),
-            state_v = autograd.Variable(state, volatile=True)
-        ).data
+        if params['METHOD']=='s-gan':
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            prediction = netG(
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(state, volatile=True)
+            ).data
+        elif params['METHOD']=='deterministic-deep-net':
+            prediction = netT(
+                state_v = autograd.Variable(state, volatile=True)
+            ).data
         log_img(prediction,'prediction',iteration)
 
         l1, ac = 0.0, 0.0
