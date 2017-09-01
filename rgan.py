@@ -22,9 +22,9 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 import imageio
 
-CLEAR_RUN = False
-MULTI_RUN = 'single_marble_thred'
-GPU = '1'
+CLEAR_RUN = False # if delete logdir and start a new run
+MULTI_RUN = 'single_marble_thred' # display a tag before the result printed
+GPU = '1' # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -47,11 +47,11 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'marble')
+add_parameters(EXP = 'marble') # the first level of log dir
 add_parameters(DOMAIN = 'marble') # 1Dgrid, 1Dflip, 2Dgrid, marble
-add_parameters(FIX_STATE = False)
+add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 2)
+add_parameters(GRID_SIZE = 2) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''domain dynamic'''
 if params['DOMAIN']=='1Dflip':
@@ -93,10 +93,10 @@ elif params['DOMAIN']=='marble':
     else:
         raise Exception('s')
 else:
-    print(unsupport)
+    raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 'grl') # tabular, bayes-net-learner, deterministic-deep-net, grl
+add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -582,11 +582,11 @@ class Transitor(nn.Module):
             )
             if params['REPRESENTATION']==chris_domain.SCALAR:
                 deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1))
+                    nn.Linear(params['DIM'], DESCRIBE_DIM)
                 )
             elif params['REPRESENTATION']==chris_domain.VECTOR:
                 deconv_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], DESCRIBE_DIM*(params['STATE_DEPTH']+1)),
+                    nn.Linear(params['DIM'], DESCRIBE_DIM),
                     nn.Sigmoid()
                 )
 
@@ -685,11 +685,18 @@ class Transitor(nn.Module):
 
     def forward(self, state_v):
 
-        '''prepare'''
+        '''
+            prepare data before feed to the network
+        '''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+            # the 1st dimension is time depth, squeeze it
             state_v = state_v.squeeze(1)
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*D*F*H*W to N*F*D*H*W
+            # N: batch size
+            # D: time depth
+            # F: feature ,channel
+            # H, W
             state_v = state_v.permute(0,2,1,3,4)
 
         '''forward'''
@@ -706,9 +713,7 @@ class Transitor(nn.Module):
 
         '''decompose'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-            stater_v = x.narrow(1,0,DESCRIBE_DIM*params['STATE_DEPTH']).unsqueeze(1)
-            prediction_v = x.narrow(1,DESCRIBE_DIM*params['STATE_DEPTH'],DESCRIBE_DIM).unsqueeze(1)
-            x = torch.cat([stater_v,prediction_v],1)
+            x = x.unsqueeze(1)
 
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*F*D*H*W to N*D*F*H*W
@@ -1096,7 +1101,7 @@ def collect_samples(iteration,tabular=None):
                         state_v = autograd.Variable(start_state_batch)
                     ).narrow(1,(params['STATE_DEPTH']-1),1).data
 
-                elif params['METHOD']=='grl':
+                elif params['METHOD']=='s-gan':
                     '''prediction'''
                     noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
                     prediction = netG(
@@ -1159,7 +1164,7 @@ def collect_samples(iteration,tabular=None):
 
     return l1, ac
 
-def generate_image(iteration,tabular=None):
+def evaluate_domain(iteration,tabular=None):
 
     if params['REPRESENTATION']==chris_domain.SCALAR:
 
@@ -1173,7 +1178,7 @@ def generate_image(iteration,tabular=None):
         dataset = data_fix_state.next()
         domain.set_fix_state(params['FIX_STATE'])
 
-        generate_image_with_filter(
+        evaluate_domain_with_filter(
             iteration=iteration,
             dataset=dataset,
             gen_basic=True,
@@ -1215,7 +1220,7 @@ def plot_convergence(images,name):
         np.asarray([accept_rate])
     )
 
-def generate_image_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
+def evaluate_domain_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
 
     plt.clf()
 
@@ -1849,7 +1854,7 @@ elif params['METHOD']=='deterministic-deep-net':
 
     L1, AC = 2.0, 0.0
 
-elif params['METHOD']=='grl':
+elif params['METHOD']=='s-gan':
 
     netG = Generator().cuda()
     netD = Discriminator().cuda()
@@ -1915,7 +1920,7 @@ while True:
                 print('Create a tabular: '+str(len(tabular_dic)))
 
         if iteration % LOG_INTER == 5:
-            l1,_ = generate_image(iteration,tabular_dic)
+            l1,_ = evaluate_domain(iteration,tabular_dic)
 
         print('[{}][{}] l1: {}'
             .format(
@@ -1927,16 +1932,30 @@ while True:
 
     elif params['METHOD']=='deterministic-deep-net':
 
-        '''get data set'''
+        '''
+            get data set
+            format:
+                # 0 dimension: batch size
+                # 1 dimension: depth (time), t_0 (state), t (prediction_gt)
+                # 2 dimension: feature (channel), for xianming default to 1
+                # 3 & 4 dimension: size (1D or 2D)
+        '''
         state_prediction_gt = data.next()
-        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
-        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+        state = state_prediction_gt.narrow(
+            dimension=1,
+            start=0,
+            length=params['STATE_DEPTH']
+        )
+        prediction_gt = state_prediction_gt.narrow(
+            dimension=1,
+            start=params['STATE_DEPTH'],
+            length=1)
 
         netT.zero_grad()
         
         prediction = netT(
             state_v = autograd.Variable(state)
-        ).narrow(1,(params['STATE_DEPTH']-1),1)
+        )
 
         T = mse_loss_model(prediction, autograd.Variable(prediction_gt))
 
@@ -1948,7 +1967,8 @@ while True:
         optimizerT.step()
 
         if iteration % LOG_INTER == 5:
-            L1, AC = generate_image(iteration)
+            # evaluate the L1 loss and accept percentage
+            L1, AC = evaluate_domain(iteration)
 
         print('[{}][{:<6}] T_cost:{:2.4f} L1::{:2.4f} AC::{:2.4f}'
             .format(
@@ -1960,7 +1980,7 @@ while True:
             )
         )
 
-    elif params['METHOD']=='grl':
+    elif params['METHOD']=='s-gan':
 
         ########################################################
         ############### (1) Update D network ###################
@@ -2096,9 +2116,9 @@ while True:
 
             if LOG_INTER==TrainTo:
                 if iteration>=TrainTo:
-                    L1, AC = generate_image(iteration)
+                    L1, AC = evaluate_domain(iteration)
             else:
-                L1, AC = generate_image(iteration)
+                L1, AC = evaluate_domain(iteration)
 
     if iteration % LOG_INTER == 5:
         logger.flush()
