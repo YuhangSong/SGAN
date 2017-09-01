@@ -92,6 +92,7 @@ elif params['DOMAIN']=='marble':
         add_parameters(ACCEPT_DELTA = 5000000)
     else:
         raise Exception('s')
+
 else:
     raise Exception('unsupport')
 
@@ -1453,81 +1454,105 @@ class marble_domain(object):
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
         if params['MARBLE_MODE']=='single':
-            file_name = '../../dataset/00014.MTS'
+            file_name = '../../dataset/marble/single/00014'
         elif params['MARBLE_MODE']=='full':
-            file_name = '../../dataset/00106.MTS'
+            file_name = '../../dataset/marble/single/00106'
         else:
             raise Exception('s')
+
+        try:
+            self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
+            print('load marble dataset from npy')
+
+        except Exception as e:
         
-        vid = imageio.get_reader(file_name, 'ffmpeg')
-        info = vid.get_meta_data()
-        print(info)
+            print('load marble dataset from MTS')
 
-        fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
+            vid = imageio.get_reader(file_name+'.MTS', 'ffmpeg')
+            info = vid.get_meta_data()
+            print(info)
 
-        frame_start = 0
-        while True:
-            frame_start += fram_interval
+            fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
 
-            delta = 0.0
-            data = None
-            breaking = False
-            for frame_i in range(params['STATE_DEPTH']+1):
+            frame_start = 0
+            while True:
+                frame_start += fram_interval
 
-                try:
+                delta = 0.0
+                data = None
+                breaking = False
+                for frame_i in range(params['STATE_DEPTH']+1):
+
+                    try:
+                        image = vid.get_data(frame_start+frame_i*fram_interval)
+                    except Exception as e:
+                        print(e)
+                        breaking = True
+                        break
+
                     image = vid.get_data(frame_start+frame_i*fram_interval)
-                except Exception as e:
-                    print(e)
-                    breaking = True
+                    if params['MARBLE_MODE']=='single':
+                        image = image[:,:,1]
+                    elif params['MARBLE_MODE']=='full':
+                        image = image[:,:,1]
+                    else:
+                        raise Exception('s')
+                    image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+                    image = torch.from_numpy(image)
+                    image = image.unsqueeze(0)
+                    image = image.unsqueeze(0)
+
+                    try:
+                        delta += (image-last_image).sum()
+                    except Exception as e:
+                        pass
+
+                    last_image = image
+
+                    try:
+                        data = torch.cat([data,image],0)
+                    except Exception as e:
+                        data = image
+
+                if breaking:
                     break
 
-                image = vid.get_data(frame_start+frame_i*fram_interval)
-                if params['MARBLE_MODE']=='single':
-                    image = image[:,:,1]
-                elif params['MARBLE_MODE']=='full':
-                    image = image[:,:,1]
-                else:
-                    raise Exception('s')
-                image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
-                image = torch.from_numpy(image)
-                image = image.unsqueeze(0)
-                image = image.unsqueeze(0)
+                delta = delta / (params['STATE_DEPTH']+1)
 
-                try:
-                    delta += (image-last_image).sum()
-                except Exception as e:
-                    pass
+                accept = False
+                if delta > params['ACCEPT_DELTA']:
+                    # vis.images(data.cpu().numpy())
+                    accept = True
+                    data = data.unsqueeze(0)
 
-                last_image = image
+                    try:
+                        self.dataset = torch.cat([self.dataset,data],0)
+                    except Exception as e:
+                        self.dataset = data
 
-                try:
-                    data = torch.cat([data,image],0)
-                except Exception as e:
-                    data = image
+                    if self.dataset.size()[0] >= params['DATA_IN_BUF']:
+                        break
+                
+                print('Get data at frame [{}/{}] with delta: {}. Accept: {}'
+                    .format(
+                        frame_start,
+                        info['nframes'],
+                        delta,
+                        accept
+                    )
+                )
 
-            if breaking:
-                break
+                
 
-            delta = delta / (params['STATE_DEPTH']+1)
-            if delta > params['ACCEPT_DELTA']:
-                print('Get data with delta: '+str(delta))
-                # vis.images(data.cpu().numpy())
-                data = data.unsqueeze(0)
-                try:
-                    self.dataset = torch.cat([self.dataset,data],0)
-                except Exception as e:
-                    self.dataset = data
-            else:
-                continue
+            print('Save marble dateset to npz')
+            np.save(file_name, self.dataset.cpu().numpy())
 
-            if self.dataset.size()[0] >= params['DATA_IN_BUF']:
-                break
-
-        print('Got marble dateset: '+str(self.dataset.size()))
         self.dataset = self.dataset.float()/255.0
+        print('Got marble dateset: '+str(self.dataset.size()))
 
         for b in range(10):
             vis.images(self.dataset[b].cpu().numpy())
+            vutils.save_image(self.dataset[b], LOGDIR+'dataset_'+str(b)+'.png')
 
         # print(s)
 
