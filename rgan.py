@@ -227,7 +227,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'filp uniform')
+add_parameters(AUX_INFO = 'flip_5_f_soft_vector')
 
 '''summary settings'''
 DSP = ''
