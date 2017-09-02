@@ -156,6 +156,14 @@ class BitFlip1D(object):
             all_start_state = [self.get_state(self.fix_state_to)]
         else:
             all_start_state = [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
+            for i in range(len(all_start_state)):
+                all_start_state[i] = np.clip(
+                    all_start_state[i],
+                    self.soft_factor,
+                    1.0-self.soft_factor
+                )
+            # print(all_start_state)
+            # print(s)
 
         all_start_state = all_start_state[0:LIMIT_START_STATE_TO]
 
@@ -213,6 +221,8 @@ class BitFlip1D(object):
         return self.state
 
     def state_vector_to_position(self, state_vector):
+
+        # print(state_vector)
 
         for i in range(np.shape(state_vector)[0]):
 
