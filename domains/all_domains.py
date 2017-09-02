@@ -198,8 +198,8 @@ class BitFlip1D(object):
                 self.soft_factor,
                 1.0-self.soft_factor
             )
-            print(vector)
-            print(s)
+            # print(vector)
+            # print(s)
             return vector
 
     def update_state(self, state, action):
