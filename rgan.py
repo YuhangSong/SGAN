@@ -84,10 +84,10 @@ elif params['DOMAIN']=='marble':
         add_parameters(IMAGE_SIZE = 256)
     else:
         raise Exception('s')
-    add_parameters(FRAME_INTERVAL = 0.5)
+    add_parameters(FRAME_INTERVAL = 5)
     add_parameters(DATA_IN_BUF = -1)
     if params['MARBLE_MODE']=='single':
-        add_parameters(ACCEPT_DELTA = 410000)
+        add_parameters(ACCEPT_DELTA = 5000)
     elif params['MARBLE_MODE']=='full':
         add_parameters(ACCEPT_DELTA = 5000000)
     else:
@@ -1540,6 +1540,8 @@ class marble_domain(object):
 
         if PRE_DATASET:
 
+            logger = lib.plot.logger(LOGDIR,DSP,params_str,MULTI_RUN)
+
             file = file_list[6]
             file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
 
@@ -1549,7 +1551,8 @@ class marble_domain(object):
             info = vid.get_meta_data()
             print(info)
 
-            fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
+            # fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
+            fram_interval = params['FRAME_INTERVAL']
 
             frame_start = 0
             while True:
@@ -1557,7 +1560,10 @@ class marble_domain(object):
 
                 delta = 0.0
                 data = None
+                image = None
+                last_image = None
                 breaking = False
+                processed_frame_dic = []
                 for frame_i in range(params['STATE_DEPTH']+1):
 
                     try:
@@ -1567,7 +1573,10 @@ class marble_domain(object):
                         breaking = True
                         break
 
-                    image = vid.get_data(frame_start+frame_i*fram_interval)
+                    processed_frame = frame_start+frame_i*fram_interval
+                    processed_frame_dic += [processed_frame]
+                    # print('Process: '+str(processed_frame))
+                    image = vid.get_data(processed_frame)
                     if params['MARBLE_MODE']=='single':
                         image = image[:,:,1]
                     elif params['MARBLE_MODE']=='full':
@@ -1580,7 +1589,13 @@ class marble_domain(object):
                     image = image.unsqueeze(0)
 
                     try:
-                        delta += (image-last_image).sum()
+                        # print(image.size())
+                        # delta_image = (torch.copy_(image).float()-torch.copy_(last_image).float())[:,:,:,16:64].squeeze()
+                        # delta_image = (image.float().numpy()-last_image.float().numpy())[:,:,:,16:64].squeeze()
+                        delta_image = (image.float()-last_image.float())[:,:,:,16:64].squeeze()
+                        # print(delta_image)
+                        delta += delta_image.abs().sum()
+                        # print(frame_start)
                     except Exception as e:
                         pass
 
@@ -1595,6 +1610,9 @@ class marble_domain(object):
                     break
 
                 delta = delta / (params['STATE_DEPTH']+1)
+
+                logger.plot('delta', delta)
+                logger.tick()
 
                 accept = False
                 if delta > params['ACCEPT_DELTA']:
@@ -1612,10 +1630,10 @@ class marble_domain(object):
                             break
                 
                 try:
-                    print('Get data from {} at frame [{}/{}] with delta: {}. Accept: {}. Dataset: {}'
+                    print('Get data from {} at [{}/{}] with delta: {}. Accept: {}. Dataset: {}'
                         .format(
                             file,
-                            frame_start,
+                            processed_frame_dic,
                             info['nframes'],
                             delta,
                             accept,
@@ -1628,7 +1646,6 @@ class marble_domain(object):
 
             print('Save marble dateset to npz')
             np.save(file_name, self.dataset.cpu().numpy())
-            raise Exception('Creat dataset done.')
 
         else:
 
@@ -1652,11 +1669,13 @@ class marble_domain(object):
         self.dataset = self.dataset.float()/255.0
         print('Got marble dateset: '+str(self.dataset.size()))
 
-        for b in range(10):
+        for b in range(32):
             vis.images(self.dataset[b].cpu().numpy())
             vutils.save_image(self.dataset[b], LOGDIR+'dataset_'+str(b)+'.png')
 
-        # print(s)
+        if PRE_DATASET:
+            logger.flush()
+            raise Exception('Creat dataset done.')
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
