@@ -216,9 +216,9 @@ class BitFlip1D(object):
 
         for i in range(np.shape(state_vector)[0]):
 
-            if np.abs(state_vector[i]-0.0)<=ACCEPT_GATE:
+            if np.abs(state_vector[i]-self.soft_factor)<=ACCEPT_GATE:
                 state_vector[i] = 0.0
-            elif np.abs(state_vector[i]-1.0)<=ACCEPT_GATE:
+            elif np.abs(state_vector[i]-(1.0-self.soft_factor))<=ACCEPT_GATE:
                 state_vector[i] = 1.0
             else:
                 return 'bad state'
