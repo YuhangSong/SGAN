@@ -13,7 +13,7 @@ IMAGE = 2
 BLOCK_SIZE = 4
 ACCEPT_GATE = 0.1
 
-LIMIT_START_STATE_TO = 200
+LIMIT_START_STATE_TO = 50
 
 class Walk1D(object):
 
@@ -446,7 +446,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
     )
-    print(true_distribution)
+    # print(true_distribution)
     bad_count = 0
     good_count = 0
     sample_distribution = {}
@@ -466,6 +466,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
         print('----------------------------------------------')
+        print('Start: '+str(s1_pos))
         print('True: '+str(true_distribution))
         print('Sample: '+str(sample_distribution))
         L1 = l1_distance(true_distribution, sample_distribution)

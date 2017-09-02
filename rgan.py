@@ -186,7 +186,10 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
 else:
     raise Exception('Unsupport')
 
-add_parameters(BATCH_SIZE = 32)
+if params['DOMAIN']=='1Dflip':
+    add_parameters(BATCH_SIZE = 1024)
+else:
+    add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 3)
@@ -262,7 +265,7 @@ TrainTo   = 100000
 LOG_INTER =   1000
 if params['DOMAIN']=='1Dflip':
     if params['GRID_SIZE']>=5:
-        LOG_INTER = 10000
+        LOG_INTER = 1000
 elif params['DOMAIN']=='marble':
     LOG_INTER = 500
 
