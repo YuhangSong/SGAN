@@ -1533,9 +1533,14 @@ class marble_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
+        if params['MARBLE_MODE']=='single':
+            file_list = ['00014','00015','00016','00017','00018','00019','00020']
+        elif params['MARBLE_MODE']=='full':
+            raise Exception('s')
+
         if PRE_DATASET:
 
-            file = '00020'
+            file = file_list[6]
             file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
 
             print('creating marble dataset from MTS')
@@ -1548,7 +1553,7 @@ class marble_domain(object):
 
             frame_start = 0
             while True:
-                frame_start += fram_interval
+                frame_start += 1
 
                 delta = 0.0
                 data = None
@@ -1626,11 +1631,6 @@ class marble_domain(object):
             raise Exception('Creat dataset done.')
 
         else:
-
-            if params['MARBLE_MODE']=='single':
-                file_list = ['00014','00015','00016','00017','00018','00019','00020']
-            elif params['MARBLE_MODE']=='full':
-                raise Exception('s')
 
             for file in file_list:
 
