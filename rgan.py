@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'simple_filp_5' # display a tag before the result printed
-GPU = '0' # use which GPU
+MULTI_RUN = 'marble_single' # display a tag before the result printed
+GPU = "3" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -48,9 +48,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
-add_parameters(DOMAIN = '1Dflip') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''domain dynamic'''
@@ -273,7 +273,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True
+    PRE_DATASET = False
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -1644,14 +1644,19 @@ class marble_domain(object):
                 file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
 
                 try:
-                    self.dataset = torch.cat([self.dataset,torch.from_numpy(np.load(file_name+'.npy'))],0)
+                    data = torch.from_numpy(np.load(file_name+'.npy'))
+                    print('Load data from '+file+' : '+str(data.size()))
+                except Exception as e:
+                    print('Failed to load data from '+file)
+
+                try:
+                    self.dataset = torch.cat([self.dataset,data],0)
 
                 except Exception as e:
-                    self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
+                    self.dataset = data
 
-                print('Get data from {}.npy. Dataset: {}'
+                print('Dataset: {}'
                     .format(
-                        file,
                         self.dataset.size()
                     )
                 )
