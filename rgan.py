@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'single_marble_comp_deter' # display a tag before the result printed
-GPU = '2' # use which GPU
+MULTI_RUN = 'single_marble' # display a tag before the result printed
+GPU = '0' # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -85,7 +85,7 @@ elif params['DOMAIN']=='marble':
     else:
         raise Exception('s')
     add_parameters(FRAME_INTERVAL = 0.5)
-    add_parameters(DATA_IN_BUF = 1024)
+    add_parameters(DATA_IN_BUF = -1)
     if params['MARBLE_MODE']=='single':
         add_parameters(ACCEPT_DELTA = 410000)
     elif params['MARBLE_MODE']=='full':
@@ -97,14 +97,14 @@ else:
     raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
@@ -271,6 +271,8 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
     else:
         print(unsupport)
 
+if params['DOMAIN']=='marble':
+    PRE_DATASET = True
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -1531,20 +1533,12 @@ class marble_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        if params['MARBLE_MODE']=='single':
-            file_name = '../../dataset/marble/single/00014'
-        elif params['MARBLE_MODE']=='full':
-            file_name = '../../dataset/marble/single/00106'
-        else:
-            raise Exception('s')
+        if PRE_DATASET:
 
-        try:
-            self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
-            print('load marble dataset from npy')
+            file = '00020'
+            file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
 
-        except Exception as e:
-        
-            print('load marble dataset from MTS')
+            print('creating marble dataset from MTS')
 
             vid = imageio.get_reader(file_name+'.MTS', 'ffmpeg')
             info = vid.get_meta_data()
@@ -1608,22 +1602,52 @@ class marble_domain(object):
                     except Exception as e:
                         self.dataset = data
 
-                    if self.dataset.size()[0] >= params['DATA_IN_BUF']:
-                        break
+                    if params['DATA_IN_BUF']>0:
+                        if self.dataset.size()[0] >= params['DATA_IN_BUF']:
+                            break
                 
-                print('Get data at frame [{}/{}] with delta: {}. Accept: {}'
-                    .format(
-                        frame_start,
-                        info['nframes'],
-                        delta,
-                        accept
+                try:
+                    print('Get data from {} at frame [{}/{}] with delta: {}. Accept: {}. Dataset: {}'
+                        .format(
+                            file,
+                            frame_start,
+                            info['nframes'],
+                            delta,
+                            accept,
+                            self.dataset.size()
+                        )
                     )
-                )
-
+                except Exception as e:
+                    pass
                 
 
             print('Save marble dateset to npz')
             np.save(file_name, self.dataset.cpu().numpy())
+            raise Exception('Creat dataset done.')
+
+        else:
+
+            if params['MARBLE_MODE']=='single':
+                file_list = ['00014','00015','00016','00017','00018','00019','00020']
+            elif params['MARBLE_MODE']=='full':
+                raise Exception('s')
+
+            for file in file_list:
+
+                file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
+
+                try:
+                    self.dataset = torch.cat([self.dataset,torch.from_numpy(np.load(file_name+'.npy'))],0)
+
+                except Exception as e:
+                    self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
+
+                print('Get data from {}.npy. Dataset: {}'
+                    .format(
+                        file,
+                        self.dataset.size()
+                    )
+                )
 
         self.dataset = self.dataset.float()/255.0
         print('Got marble dateset: '+str(self.dataset.size()))
