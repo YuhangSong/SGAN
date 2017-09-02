@@ -107,12 +107,19 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
+add_parameters(SOFT_VECTOR = 0.2)
+
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
     if params['REPRESENTATION']==chris_domain.VECTOR:
-        add_parameters(
-            DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
-        )
+        if params['DOMAIN']=='1Dflip':
+            add_parameters(
+                DELTA_T = ( BASE * ( ( (1-2*params['SOFT_VECTOR'])**0.5 ) / ( (params['GRID_SIZE']*(1.0-2.0*params['SOFT_VECTOR']))**0.5 ) ) )
+            )
+        else:
+            add_parameters(
+                DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( (params['GRID_SIZE'])**0.5 ) ) )
+            )
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
         add_parameters(
@@ -193,7 +200,8 @@ if params['DOMAIN']=='1Dflip':
         length=params['GRID_SIZE'],
         mode=params['REPRESENTATION'],
         prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
-        fix_state=params['FIX_STATE']
+        fix_state=params['FIX_STATE'],
+        soft_vector=params['SOFT_VECTOR']
     )
 
 elif params['DOMAIN']=='1Dgrid':

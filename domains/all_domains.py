@@ -129,7 +129,7 @@ class Walk1D(object):
 
 class BitFlip1D(object):
 
-    def __init__(self, length, mode, prob_dirs, fix_state=False):
+    def __init__(self, length, mode, prob_dirs, fix_state=False, soft_vector=0.0):
         assert mode in [IMAGE, VECTOR]
         self.mode = mode
         self.fix_state = fix_state
@@ -143,7 +143,7 @@ class BitFlip1D(object):
         self.prob_dirs = prob_dirs
         self.fix_state = fix_state
         self.fix_state_to = np.array([1.0]*(self.n/2)+[0.0]*(self.n-self.n/2))
-        self.soft_factor = 0.2
+        self.soft_vector = soft_vector
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
@@ -159,8 +159,8 @@ class BitFlip1D(object):
             for i in range(len(all_start_state)):
                 all_start_state[i] = np.clip(
                     all_start_state[i],
-                    self.soft_factor,
-                    1.0-self.soft_factor
+                    self.soft_vector,
+                    1.0-self.soft_vector
                 )
             # print(all_start_state)
             # print(s)
@@ -203,8 +203,8 @@ class BitFlip1D(object):
             vector = state.copy()
             vector = np.clip(
                 vector,
-                self.soft_factor,
-                1.0-self.soft_factor
+                self.soft_vector,
+                1.0-self.soft_vector
             )
             # print(vector)
             # print(s)
@@ -226,9 +226,9 @@ class BitFlip1D(object):
 
         for i in range(np.shape(state_vector)[0]):
 
-            if np.abs(state_vector[i]-self.soft_factor)<=ACCEPT_GATE:
+            if np.abs(state_vector[i]-self.soft_vector)<=ACCEPT_GATE:
                 state_vector[i] = 0.0
-            elif np.abs(state_vector[i]-(1.0-self.soft_factor))<=ACCEPT_GATE:
+            elif np.abs(state_vector[i]-(1.0-self.soft_vector))<=ACCEPT_GATE:
                 state_vector[i] = 1.0
             else:
                 return 'bad state'
