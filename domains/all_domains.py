@@ -143,6 +143,7 @@ class BitFlip1D(object):
         self.prob_dirs = prob_dirs
         self.fix_state = fix_state
         self.fix_state_to = np.array([1.0]*(self.n/2)+[0.0]*(self.n-self.n/2))
+        self.soft_factor = 0.2
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
@@ -190,9 +191,16 @@ class BitFlip1D(object):
         if self.mode == IMAGE:
             image = self.visualizer.make_screen(state)
             raise Exception('we_donot_need_this_domain')
-            return 
         else:
-            return state.copy()
+            vector = state.copy()
+            vector = np.clip(
+                vector,
+                self.soft_factor,
+                1.0-self.soft_factor
+            )
+            print(vector)
+            print(s)
+            return vector
 
     def update_state(self, state, action):
         state = state.copy()
