@@ -340,20 +340,10 @@ class Generator(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            if params['DOMAIN']=='1Dflip':
-                cat_layer = nn.Sequential(
-                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                    nn.Linear(params['DIM'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                    nn.Linear(params['DIM'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                )
-            else:
-                cat_layer = nn.Sequential(
-                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
@@ -574,20 +564,10 @@ class Transitor(nn.Module):
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
             )
-            if params['DOMAIN']=='1Dflip':
-                cat_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                    nn.Linear(params['DIM'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                    nn.Linear(params['DIM'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                )
-            else:
-                cat_layer = nn.Sequential(
-                    nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.LeakyReLU(0.001),
-                )
+            cat_layer = nn.Sequential(
+                nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
+                nn.LeakyReLU(0.001),
+            )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
                 nn.LeakyReLU(0.001),
