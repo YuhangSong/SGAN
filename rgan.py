@@ -917,6 +917,7 @@ def collect_samples(iteration,tabular=None):
 
     if params['DOMAIN']!='marble':
 
+        domain.reset()
         all_possible = chris2song(domain.get_all_possible_start_states())
 
         all_l1 = []
