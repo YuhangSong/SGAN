@@ -1354,7 +1354,7 @@ class marble_domain(object):
                         delta_image = image.float()[:,:,int(64.0/10.9*(5.8-1.0)):int(64.0/10.9*(5.8+1.0)),int(64.0/19.1*10.3):int(64.0/19.1*12.7)].squeeze()
                         delta = delta_image.sum()
                         # print(delta)
-                        logger.plot('delta', delta)
+                        logger.plot('delta_'+file, delta)
                         logger.tick()
                         if delta > params['ACCEPT_DELTA']:
                             data = None
@@ -1379,7 +1379,9 @@ class marble_domain(object):
 
                     frame_start += 20
 
-                    vis.images(data.cpu().numpy())
+                    vis.images(
+                        data.cpu().numpy(),
+                    )
 
                     data = data.unsqueeze(0)
 
