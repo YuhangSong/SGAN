@@ -23,7 +23,7 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'marble_pre' # display a tag before the result printed
+MULTI_RUN = 'marble' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -238,7 +238,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'strict filter marble domain')
+add_parameters(AUX_INFO = 'strict filter')
 
 '''summary settings'''
 DSP = ''
@@ -284,7 +284,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True
+    PRE_DATASET = False
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -441,7 +441,7 @@ class Generator(nn.Module):
             elif params['DOMAIN']=='marble':
 
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*3*64*64
+                    # params['FEATURE']*1*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=32,
@@ -451,21 +451,21 @@ class Generator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001),
-                    # 32*3*32*32
+                    # 32*1*32*32
                     nn.Conv3d(
                         in_channels=32,
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001),
-                    # 64*2*16*16
+                    # 64*1*16*16
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -858,7 +858,7 @@ class Discriminator(nn.Module):
             elif params['DOMAIN']=='marble':
 
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*4*64*64
+                    # params['FEATURE']*2*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=32,
@@ -868,21 +868,21 @@ class Discriminator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 32*3*32*32
+                    # 32*1*32*32
                     nn.Conv3d(
                         in_channels=32,
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*2*16*16
+                    # 64*1*16*16
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
