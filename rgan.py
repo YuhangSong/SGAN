@@ -23,7 +23,7 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'flip_5_nf_soft_vector' # display a tag before the result printed
+MULTI_RUN = 'marble_pre' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -48,9 +48,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
-add_parameters(DOMAIN = '1Dflip') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''domain dynamic'''
@@ -88,7 +88,7 @@ elif params['DOMAIN']=='marble':
     add_parameters(FRAME_INTERVAL = 5)
     add_parameters(DATA_IN_BUF = -1)
     if params['MARBLE_MODE']=='single':
-        add_parameters(ACCEPT_DELTA = 5000)
+        add_parameters(ACCEPT_DELTA = 10000)
     elif params['MARBLE_MODE']=='full':
         add_parameters(ACCEPT_DELTA = 5000000)
     else:
@@ -192,7 +192,7 @@ else:
     add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
-    add_parameters(STATE_DEPTH = 3)
+    add_parameters(STATE_DEPTH = 1)
 
 else:
     add_parameters(STATE_DEPTH = 1)
@@ -238,7 +238,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'flip_5_f_soft_vector')
+add_parameters(AUX_INFO = 'strict filter marble domain')
 
 '''summary settings'''
 DSP = ''
@@ -284,7 +284,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = False
+    PRE_DATASET = True
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -1535,14 +1535,13 @@ class marble_domain(object):
             # fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
             fram_interval = params['FRAME_INTERVAL']
 
-            frame_start = 0
+            frame_start = 21
             while True:
                 frame_start += 1
 
                 delta = 0.0
                 data = None
                 image = None
-                last_image = None
                 breaking = False
                 processed_frame_dic = []
                 for frame_i in range(params['STATE_DEPTH']+1):
@@ -1550,37 +1549,33 @@ class marble_domain(object):
                     try:
                         image = vid.get_data(frame_start+frame_i*fram_interval)
                     except Exception as e:
-                        print(e)
                         breaking = True
                         break
 
                     processed_frame = frame_start+frame_i*fram_interval
                     processed_frame_dic += [processed_frame]
-                    # print('Process: '+str(processed_frame))
-                    image = vid.get_data(processed_frame)
-                    if params['MARBLE_MODE']=='single':
-                        image = image[:,:,1]
-                    elif params['MARBLE_MODE']=='full':
-                        image = image[:,:,1]
-                    else:
-                        raise Exception('s')
-                    image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
-                    image = torch.from_numpy(image)
-                    image = image.unsqueeze(0)
-                    image = image.unsqueeze(0)
 
-                    try:
-                        # print(image.size())
-                        # delta_image = (torch.copy_(image).float()-torch.copy_(last_image).float())[:,:,:,16:64].squeeze()
-                        # delta_image = (image.float().numpy()-last_image.float().numpy())[:,:,:,16:64].squeeze()
-                        delta_image = (image.float()-last_image.float())[:,:,:,16:64].squeeze()
-                        # print(delta_image)
-                        delta += delta_image.abs().sum()
-                        # print(frame_start)
-                    except Exception as e:
-                        pass
+                    def get_frame(processed_frame):
+                        image = vid.get_data(processed_frame)
+                        image = image[:,:,1]
+                        image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+                        image = torch.from_numpy(image)
+                        image = image.unsqueeze(0)
+                        image = image.unsqueeze(0)
+                        return image
 
-                    last_image = image
+                    image = get_frame(processed_frame)
+
+                    if frame_i==0:
+                        delta_image = image.float()[:,:,int(64.0/10.9*(5.8-1.0)):int(64.0/10.9*(5.8+1.0)),int(64.0/19.1*10.3):int(64.0/19.1*12.7)].squeeze()
+                        delta = delta_image.sum()
+                        if delta > params['ACCEPT_DELTA']:
+                            data = None
+                            break
+                        else:
+                            image = get_frame(processed_frame-20)
+                            # image = image.fill_(1.0)
+                            frame_start += 20
 
                     try:
                         data = torch.cat([data,image],0)
@@ -1590,14 +1585,12 @@ class marble_domain(object):
                 if breaking:
                     break
 
-                delta = delta / (params['STATE_DEPTH']+1)
-
                 logger.plot('delta', delta)
                 logger.tick()
 
                 accept = False
-                if delta > params['ACCEPT_DELTA']:
-                    # vis.images(data.cpu().numpy())
+                if data is not None:
+
                     accept = True
                     data = data.unsqueeze(0)
 
@@ -1657,7 +1650,7 @@ class marble_domain(object):
 
         for b in range(32):
             vis.images(self.dataset[b].cpu().numpy())
-            vutils.save_image(self.dataset[b], LOGDIR+'dataset_'+str(b)+'.png')
+            vutils.save_image(self.dataset[b], 'dataset_'+str(b)+'.png')
 
         if PRE_DATASET:
             logger.flush()
