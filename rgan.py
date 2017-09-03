@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'marble' # display a tag before the result printed
+MULTI_RUN = 'flip_f' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -49,9 +49,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
-add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(DOMAIN = '1Dflip') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''domain dynamic'''
@@ -99,7 +99,7 @@ else:
     raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 'bayes-net-learner') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -108,7 +108,7 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
-add_parameters(SOFT_VECTOR = 0.2)
+add_parameters(SOFT_VECTOR = 0.0)
 
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
@@ -187,10 +187,7 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
 else:
     raise Exception('Unsupport')
 
-if params['DOMAIN']=='1Dflip':
-    add_parameters(BATCH_SIZE = 1024)
-else:
-    add_parameters(BATCH_SIZE = 32)
+add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 1)
