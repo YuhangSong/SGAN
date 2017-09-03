@@ -1535,7 +1535,7 @@ class marble_domain(object):
             # fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
             fram_interval = params['FRAME_INTERVAL']
 
-            frame_start = 21
+            frame_start = 91
             while True:
                 frame_start += 1
 
@@ -1573,7 +1573,7 @@ class marble_domain(object):
                             data = None
                             break
                         else:
-                            image = get_frame(processed_frame-20)
+                            image = get_frame(processed_frame-90)
                             # image = image.fill_(1.0)
                             frame_start += 20
 
