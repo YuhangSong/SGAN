@@ -244,7 +244,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'fix bug on pre data')
+add_parameters(AUX_INFO = '')
 
 '''summary settings'''
 DSP = ''
@@ -1488,6 +1488,8 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
         # print(dataset.size())
         # print(dataset[3,0,0,:,:])
         # print(dataset[3,1,0,:,:])
+        # print(dataset[4,0,0,:,:])
+        # print(dataset[4,1,0,:,:])
         # # # print('---')
         # # # print(dataset[3,1,0,:,:])
         # # # print(dataset[3,1,1,:,:])
