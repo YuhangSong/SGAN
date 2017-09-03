@@ -313,6 +313,8 @@ class Walk2D(object):
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
+                        if self.random_background:
+                            self.background_array[y,x] = 255
                     else:
                         '''if agent is not here'''
                         if self.random_background:
@@ -326,10 +328,14 @@ class Walk2D(object):
                                     raise Exception('s')
                             else:
                                 '''see if generate background right'''
-                                if abs(pixel_value_mean_on_channel-self.background_array[y,x]/4.0) >= (ACCEPT_GATE):
-                                    '''the self.background_array is a 0/2 vector, the image is 0.5 representation
-                                    so this /4.0 is to map 0~2 to 0~0.5'''
-                                    return 'bad state'
+                                if self.background_array[y,x]!=255:
+                                    # print(self.background_array[y,x])
+                                    # print(pixel_value_mean_on_channel)
+                                    if abs(pixel_value_mean_on_channel-self.background_array[y,x]/4.0) >= (ACCEPT_GATE):
+                                        '''the self.background_array is a 0/2 vector, the image is 0.5 representation
+                                        so this /4.0 is to map 0~2 to 0~0.5'''
+                                        # print('bad'+str([x,y]))
+                                        return 'bad state'
                         else:
                             pass
 
@@ -486,6 +492,8 @@ def evaluate_domain(domain, s1_state, s2_samples):
         start_state = True,
     )
     # print(s1_pos)
+    # print(domain.background_array)
+    # print(s)
 
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
