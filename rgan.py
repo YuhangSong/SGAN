@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'flip_nf' # display a tag before the result printed
+MULTI_RUN = '2dgrid_random_background_f' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -49,9 +49,9 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
-add_parameters(DOMAIN = '1Dflip') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
-add_parameters(REPRESENTATION = chris_domain.VECTOR) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''domain dynamic'''
@@ -66,14 +66,16 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    # add_parameters(OBSTACLE_POS_LIST = [])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
+    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+
+    add_parameters(RANDOM_BACKGROUND = True)
 
     add_parameters(FEATURE = 1)
 
@@ -108,7 +110,8 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
-add_parameters(SOFT_VECTOR = 0.0)
+if params['DOMAIN']=='1Dflip':
+    add_parameters(SOFT_VECTOR = 0.0)
 
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
@@ -187,7 +190,10 @@ elif params['REPRESENTATION']==chris_domain.IMAGE:
 else:
     raise Exception('Unsupport')
 
-add_parameters(BATCH_SIZE = 32)
+if params['DOMAIN']=='1Dflip':
+    add_parameters(BATCH_SIZE = 64)
+else:
+    add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
     add_parameters(STATE_DEPTH = 1)
@@ -221,7 +227,8 @@ elif params['DOMAIN']=='2Dgrid':
         obstacle_pos_list=params['OBSTACLE_POS_LIST'],
         mode=params['REPRESENTATION'],
         should_wrap=False,
-        fix_state=params['FIX_STATE']
+        fix_state=params['FIX_STATE'],
+        random_background = params['RANDOM_BACKGROUND'],
     )
 
 elif params['DOMAIN']=='marble':
@@ -1478,14 +1485,14 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = domain.get_batch()
 
         # print(dataset.size())
-        # # print(dataset[3,0,0,:,:])
-        # # print(dataset[3,0,1,:,:])
-        # # print('---')
-        # # print(dataset[3,1,0,:,:])
-        # # print(dataset[3,1,1,:,:])
-        # # print(dataset[3,0,:])
-        # # print(dataset[3,0,:])
-        # print(dataset[3:7])
+        # print(dataset[3,0,0,:,:])
+        # print(dataset[3,1,0,:,:])
+        # # # print('---')
+        # # # print(dataset[3,1,0,:,:])
+        # # # print(dataset[3,1,1,:,:])
+        # # # print(dataset[3,0,:])
+        # # # print(dataset[3,0,:])
+        # # print(dataset[3:7])
         # print(s)
 
         # print(dataset)
