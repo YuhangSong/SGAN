@@ -99,7 +99,7 @@ else:
     raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 'bayes-net-learner') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -286,7 +286,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True
+    PRE_DATASET = False
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -533,8 +533,8 @@ class Generator(nn.Module):
 
     def forward(self, noise_v, state_v):
 
-        if params['DOMAIN']=='marble':
-            state_v.data.fill_(0.0)
+        # if params['DOMAIN']=='marble':
+        #     state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -720,8 +720,8 @@ class Discriminator(nn.Module):
 
     def forward(self, state_v, prediction_v):
 
-        if params['DOMAIN']=='marble':
-            state_v.data.fill_(0.0)
+        # if params['DOMAIN']=='marble':
+        #     state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
