@@ -21,6 +21,7 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 import imageio
+from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
 MULTI_RUN = 'marble' # display a tag before the result printed
@@ -98,7 +99,7 @@ else:
     raise Exception('unsupport')
 
 '''method settings'''
-add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'bayes-net-learner') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -238,7 +239,8 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'strict filter')
+# add_parameters(AUX_INFO = 'strict filter')
+add_parameters(AUX_INFO = 'fix bug on pre data')
 
 '''summary settings'''
 DSP = ''
@@ -284,7 +286,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = False
+    PRE_DATASET = True
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -305,7 +307,7 @@ def vector2image(x):
                 x_temp[b,d,0,:,from_:to_].fill_(fill_)
     return x_temp
 
-def log_img(x,name,iteration):
+def log_img(x,name,iteration=0):
     if params['REPRESENTATION']==chris_domain.VECTOR:
         x = vector2image(x)
     x = x.squeeze(1)
@@ -531,6 +533,9 @@ class Generator(nn.Module):
 
     def forward(self, noise_v, state_v):
 
+        if params['DOMAIN']=='marble':
+            state_v.data.fill_(0.0)
+
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             state_v = state_v.squeeze(1)
@@ -714,6 +719,9 @@ class Discriminator(nn.Module):
             self.final_layer = torch.nn.DataParallel(final_layer,GPU)
 
     def forward(self, state_v, prediction_v):
+
+        if params['DOMAIN']=='marble':
+            state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -980,10 +988,10 @@ def collect_samples(iteration,tabular=None):
 
     elif params['DOMAIN']=='marble':
         state = domain.get_batch().narrow(1,0,params['STATE_DEPTH'])
-        state = state[0:1]
-        # print(state.size())
-        log_img(state.squeeze(0).unsqueeze(1),'state',iteration)
-        state = torch.cat([state]*params['BATCH_SIZE'],0)
+        # state = state[0:1]
+        # # print(state.size())
+        # log_img(state.squeeze(0).unsqueeze(1),'state',iteration)
+        # state = torch.cat([state]*params['BATCH_SIZE'],0)
 
         '''prediction'''
         if params['METHOD']=='s-gan':
@@ -1345,13 +1353,14 @@ class marble_domain(object):
                     if frame_i==0:
                         delta_image = image.float()[:,:,int(64.0/10.9*(5.8-1.0)):int(64.0/10.9*(5.8+1.0)),int(64.0/19.1*10.3):int(64.0/19.1*12.7)].squeeze()
                         delta = delta_image.sum()
+                        # print(delta)
+                        logger.plot('delta', delta)
+                        logger.tick()
                         if delta > params['ACCEPT_DELTA']:
                             data = None
                             break
                         else:
                             image = get_frame(processed_frame-90)
-                            # image = image.fill_(1.0)
-                            frame_start += 20
 
                     try:
                         data = torch.cat([data,image],0)
@@ -1361,13 +1370,17 @@ class marble_domain(object):
                 if breaking:
                     break
 
-                logger.plot('delta', delta)
-                logger.tick()
-
                 accept = False
                 if data is not None:
 
                     accept = True
+
+                    logger.flush()
+
+                    frame_start += 20
+
+                    vis.images(data.cpu().numpy())
+
                     data = data.unsqueeze(0)
 
                     try:
@@ -1393,9 +1406,10 @@ class marble_domain(object):
                 except Exception as e:
                     pass
                 
-
-            print('Save marble dateset to npz')
+            print('Save marble dateset '+str(self.dataset.size())+' to npz')
             np.save(file_name, self.dataset.cpu().numpy())
+
+            raise Exception('Creat dataset done.')
 
         else:
 
@@ -1421,16 +1435,8 @@ class marble_domain(object):
                     )
                 )
 
-        self.dataset = self.dataset.float()/255.0
-        print('Got marble dateset: '+str(self.dataset.size()))
-
-        for b in range(32):
-            vis.images(self.dataset[b].cpu().numpy())
-            vutils.save_image(self.dataset[b], 'dataset_'+str(b)+'.png')
-
-        if PRE_DATASET:
-            logger.flush()
-            raise Exception('Creat dataset done.')
+            self.dataset = self.dataset.float()/255.0
+            print('Got marble dateset: '+str(self.dataset.size()))
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
@@ -1736,6 +1742,45 @@ if params['METHOD']=='tabular':
     tabular_dic = []
     l1 = 2.0
 
+elif params['METHOD']=='bayes-net-learner':
+
+    dataset = data("")
+    data = dataset_iter()
+    for i in range(100):
+        state_prediction_gt = data.next()
+        state = state_prediction_gt.narrow(
+            dimension=1,
+            start=0,
+            length=params['STATE_DEPTH']
+        ).squeeze().cpu().numpy()
+        prediction_gt = state_prediction_gt.narrow(
+            dimension=1,
+            start=params['STATE_DEPTH'],
+            length=1).squeeze().cpu().numpy()
+        if i==0:
+            for attr in range(np.shape(state)[1]):
+                dataset.attributes += ['state_'+str(attr)]
+                dataset.attr_types += ['true']
+            for attr in range(np.shape(prediction_gt)[1]):
+                dataset.attributes += ['prediction_'+str(attr)]
+                dataset.attr_types += ['true']
+        for b in range(np.shape(state)[0]):
+            dataset.examples += [np.concatenate((state[b],prediction_gt[b]),0)]
+
+    classifier = 'prediction_0'
+    dataset.classifier = classifier
+    #find index of classifier
+    for a in range(len(dataset.attributes)):
+        if dataset.attributes[a] == dataset.classifier:
+            dataset.class_index = a
+    if dataset.class_index is None:
+        raise Exception('s')
+
+    root = compute_tree(dataset, None, classifier)
+    print(root.attr_split_value)
+
+    print(s)
+
 elif params['METHOD']=='deterministic-deep-net':
     netT = Generator().cuda()
     netT.apply(weights_init)
@@ -1830,6 +1875,9 @@ while True:
                 l1
             )
         )
+
+    elif params['METHOD']=='bayes-net-learner':
+        pass
 
     elif params['METHOD']=='deterministic-deep-net':
 
