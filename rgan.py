@@ -253,7 +253,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'simple 7')
+add_parameters(AUX_INFO = 'simple 9')
 
 '''summary settings'''
 DSP = ''
