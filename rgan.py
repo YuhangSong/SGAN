@@ -253,7 +253,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'simple 9')
+add_parameters(AUX_INFO = 'simple 15')
 
 '''summary settings'''
 DSP = ''
@@ -326,7 +326,12 @@ def log_img(x,name,iteration=0):
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
         if params['RANDOM_BACKGROUND']==True:
+            log_img_final(x[:,0:1,:,:],name+'_b',iteration)
+            log_img_final(x[:,1:2,:,:],name+'_a',iteration)
             x = torch.cat([x,x[:,0:1,:,:]],1)
+    log_img_final(x,name,iteration)
+
+def log_img_final(x,name,iteration=0):
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
                 win=str(MULTI_RUN)+'-'+name,
