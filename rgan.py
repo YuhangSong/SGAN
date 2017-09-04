@@ -80,7 +80,10 @@ elif params['DOMAIN']=='2Dgrid':
 
     add_parameters(RANDOM_BACKGROUND = True)
 
-    add_parameters(FEATURE = 1)
+    if params['RANDOM_BACKGROUND']==True:
+        add_parameters(FEATURE = 2)
+    else:
+        add_parameters(FEATURE = 1)
 
 elif params['DOMAIN']=='marble':
     add_parameters(MARBLE_MODE = 'single') # single, full
@@ -253,7 +256,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'simple 30')
+add_parameters(AUX_INFO = 'simple 36 more features')
 
 '''summary settings'''
 DSP = ''
@@ -391,7 +394,7 @@ class Generator(nn.Module):
                 conv_layer = nn.Sequential(
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
-                        out_channels=16,
+                        out_channels=64,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -399,8 +402,8 @@ class Generator(nn.Module):
                     ),
                     nn.LeakyReLU(0.001),
                     nn.Conv3d(
-                        in_channels=16,
-                        out_channels=32,
+                        in_channels=64,
+                        out_channels=128,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -410,12 +413,12 @@ class Generator(nn.Module):
                 )
 
                 if params['DOMAIN']=='1Dgrid':
-                    temp = 32*1*(params['GRID_SIZE'])
+                    temp = 128*1*(params['GRID_SIZE'])
                 elif params['DOMAIN']=='2Dgrid':
                     if params['RANDOM_BACKGROUND']==True:
-                        temp = 32*2*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                     else:
-                        temp = 32*1*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                 else:
                     raise Exception('s')
 
@@ -426,8 +429,6 @@ class Generator(nn.Module):
                 cat_layer = nn.Sequential(
                     nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
                     nn.LeakyReLU(0.001),
-                    # nn.Linear(params['DIM'], params['DIM']),
-                    # nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
                     nn.Linear(params['DIM'], temp),
@@ -435,8 +436,8 @@ class Generator(nn.Module):
                 )
                 deconv_layer = nn.Sequential(
                     nn.ConvTranspose3d(
-                        in_channels=32,
-                        out_channels=16,
+                        in_channels=128,
+                        out_channels=64,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -444,7 +445,7 @@ class Generator(nn.Module):
                     ),
                     nn.LeakyReLU(0.001),
                     nn.ConvTranspose3d(
-                        in_channels=16,
+                        in_channels=64,
                         out_channels=params['FEATURE'],
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
@@ -557,14 +558,11 @@ class Generator(nn.Module):
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
-            if params['DOMAIN']=='2Dgrid':
-                if params['RANDOM_BACKGROUND']==True:
-                    # print(state_v.size())
-                    state_v = torch.cat(
-                        [state_v[:,0:1,:,:,:],state_v[:,1:2,:,:,:]],
-                        2)
-                    # print(state_v.size())
-                    # print(s)
+            # if params['DOMAIN']=='2Dgrid':
+            #     if params['RANDOM_BACKGROUND']==True:
+            #         state_v = torch.cat(
+            #             [state_v[:,0:1,:,:,:],state_v[:,1:2,:,:,:]],
+            #             2)
 
         '''forward'''
         x = self.conv_layer(state_v)
@@ -587,14 +585,14 @@ class Generator(nn.Module):
             x = x.permute(0,2,1,3,4)
             # print(x.size())
             # print(s)
-            if params['DOMAIN']=='2Dgrid':
-                if params['RANDOM_BACKGROUND']==True:
-                    # print(x.size())
-                    x = torch.cat(
-                        [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
-                        2)
-                    # print(x.size())
-                    # print(s)
+            # if params['DOMAIN']=='2Dgrid':
+            #     if params['RANDOM_BACKGROUND']==True:
+            #         # print(x.size())
+            #         x = torch.cat(
+            #             [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
+            #             2)
+            #         # print(x.size())
+            #         # print(s)
 
         return x
 
@@ -634,16 +632,16 @@ class Discriminator(nn.Module):
                 conv_layer = nn.Sequential(
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
-                        out_channels=16,
-                        kernel_size=(1,4,4),
+                        out_channels=64,
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     nn.Conv3d(
-                        in_channels=16,
-                        out_channels=32,
+                        in_channels=64,
+                        out_channels=128,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
@@ -652,12 +650,12 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 if params['DOMAIN']=='1Dgrid':
-                    temp = 32*2*(params['GRID_SIZE'])
+                    temp = 128*1*(params['GRID_SIZE'])
                 elif params['DOMAIN']=='2Dgrid':
                     if params['RANDOM_BACKGROUND']==True:
-                        temp = 32*4*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                     else:
-                        temp = 32*2*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                 else:
                     raise Exception('s')
                 squeeze_layer = nn.Sequential(
@@ -667,8 +665,6 @@ class Discriminator(nn.Module):
                 final_layer = nn.Sequential(
                     nn.Linear(params['DIM'], params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # nn.Linear(params['DIM'], params['DIM']),
-                    # nn.LeakyReLU(0.001, inplace=True),
                     nn.Linear(params['DIM'], 1),
                 )
 
@@ -780,14 +776,14 @@ class Discriminator(nn.Module):
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
 
-            if params['DOMAIN']=='2Dgrid':
-                if params['RANDOM_BACKGROUND']==True:
-                    # print(x.size())
-                    x = torch.cat(
-                        [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
-                        2)
-                    # print(x.size())
-                    # print(s)
+            # if params['DOMAIN']=='2Dgrid':
+            #     if params['RANDOM_BACKGROUND']==True:
+            #         # print(x.size())
+            #         x = torch.cat(
+            #             [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
+            #             2)
+            #         # print(x.size())
+            #         # print(s)
 
             '''forward'''
             x = self.conv_layer(x)
