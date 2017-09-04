@@ -422,7 +422,7 @@ class Walk2D(object):
                     image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
 
                     image = np.concatenate(
-                        (image_background*0.1,image_agent),
+                        (image_background*0.2,image_agent),
                         axis=2
                     )
                     # image = image_agent + image_obst * 0.5
