@@ -271,7 +271,6 @@ class Walk2D(object):
                 size=(self.h, self.w),
                 dtype=np.uint8,
             )
-            self.background_array.fill(0)
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
