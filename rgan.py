@@ -240,7 +240,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'fix bug on pre data')
+add_parameters(AUX_INFO = 'simple 1')
 
 '''summary settings'''
 DSP = ''
@@ -446,6 +446,16 @@ class Generator(nn.Module):
                     # params['FEATURE']*1*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
+                        out_channels=16,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 16*1*32*32
+                    nn.Conv3d(
+                        in_channels=16,
                         out_channels=32,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
@@ -453,30 +463,10 @@ class Generator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001),
-                    # 32*1*32*32
-                    nn.Conv3d(
-                        in_channels=32,
-                        out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001),
-                    # 64*1*16*16
-                    nn.Conv3d(
-                        in_channels=64,
-                        out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001),
-                    # 64*1*8*8
+                    # 32*1*16*16
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(64*1*8*8, params['DIM']),
+                    nn.Linear(32*1*16*16, params['DIM']),
                     nn.LeakyReLU(0.001),
                 )
                 cat_layer = nn.Sequential(
@@ -484,33 +474,23 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001),
                 )
                 unsqueeze_layer = nn.Sequential(
-                    nn.Linear(params['DIM'], 64*1*8*8),
+                    nn.Linear(params['DIM'], 32*1*16*16),
                     nn.LeakyReLU(0.001),
                 )
                 deconv_layer = nn.Sequential(
-                    # 64*1*8*8
-                    nn.ConvTranspose3d(
-                        in_channels=64,
-                        out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001),
-                    # 64*1*16*16
-                    nn.ConvTranspose3d(
-                        in_channels=64,
-                        out_channels=32,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001),
-                    # 32*1*32*32
+                    # 32*1*16*16
                     nn.ConvTranspose3d(
                         in_channels=32,
+                        out_channels=16,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001),
+                    # 16*1*32*32
+                    nn.ConvTranspose3d(
+                        in_channels=16,
                         out_channels=params['FEATURE'],
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
@@ -533,8 +513,8 @@ class Generator(nn.Module):
 
     def forward(self, noise_v, state_v):
 
-        # if params['DOMAIN']=='marble':
-        #     state_v.data.fill_(0.0)
+        if params['DOMAIN']=='marble':
+            state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -642,37 +622,27 @@ class Discriminator(nn.Module):
                     # params['FEATURE']*2*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
-                        out_channels=32,
+                        out_channels=16,
                         kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 32*1*32*32
+                    # 16*1*32*32
                     nn.Conv3d(
-                        in_channels=32,
-                        out_channels=64,
+                        in_channels=16,
+                        out_channels=32,
                         kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*16*16
-                    nn.Conv3d(
-                        in_channels=64,
-                        out_channels=64,
-                        kernel_size=(1,4,4),
-                        stride=(1,2,2),
-                        padding=(0,1,1),
-                        bias=False,
-                    ),
-                    nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*8*8
+                    # 32*1*16*16
                 )
                 squeeze_layer = nn.Sequential(
-                    nn.Linear(64*1*8*8, params['DIM']),
+                    nn.Linear(32*1*16*16, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 final_layer = nn.Sequential(
@@ -720,8 +690,8 @@ class Discriminator(nn.Module):
 
     def forward(self, state_v, prediction_v):
 
-        # if params['DOMAIN']=='marble':
-        #     state_v.data.fill_(0.0)
+        if params['DOMAIN']=='marble':
+            state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -751,98 +721,6 @@ class Discriminator(nn.Module):
             x = self.squeeze_layer(x)
             x = self.final_layer(x)
             x = x.view(-1)
-
-        return x
-
-class Corrector(nn.Module):
-
-    def __init__(self):
-        super(Corrector, self).__init__()
-
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-
-            conv_layer = nn.Sequential(
-                nn.Linear(2*DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            final_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 1),
-                nn.Sigmoid(),
-            )
-
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-
-            conv_layer =    nn.Sequential(
-                # 1*2*32*32
-                nn.Conv3d(
-                    in_channels=1,
-                    out_channels=64,
-                    kernel_size=(2,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 64*1*16*16
-                nn.Conv3d(
-                    in_channels=64,
-                    out_channels=128,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 128*1*8*8
-                nn.Conv3d(
-                    in_channels=128,
-                    out_channels=256,
-                    kernel_size=(1,4,4),
-                    stride=(1,2,2),
-                    padding=(0,1,1),
-                    bias=False
-                ),
-                nn.LeakyReLU(0.2, inplace=True),
-                # 256*1*4*4
-            )
-            squeeze_layer = nn.Sequential(
-                nn.Linear(256*1*4*4, params['DIM']),
-                nn.LeakyReLU(0.2, inplace=True),
-            )
-            final_layer = nn.Sequential(
-                nn.Linear(params['DIM'], 1),
-                nn.Sigmoid(),
-            )
-
-        self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-        self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-        self.final_layer = torch.nn.DataParallel(final_layer,GPU)
-
-    def forward(self, state_v, prediction_v):
-
-        '''prepare'''
-        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-            state_v = state_v.squeeze(1)
-            prediction_v = prediction_v.squeeze(1)
-            x = torch.cat([state_v,prediction_v],1)
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            x = torch.cat([state_v,prediction_v],1)
-            # N*D*F*H*W to N*F*D*H*W
-            x = x.permute(0,2,1,3,4)
-
-        '''forward'''
-        x = self.conv_layer(x)
-        if params['REPRESENTATION']==chris_domain.IMAGE:
-            x = x.view(x.size()[0], -1)
-        x = self.squeeze_layer(x)
-        x = self.final_layer(x)
-        x = x.view(-1)
 
         return x
 
@@ -1440,6 +1318,13 @@ class marble_domain(object):
             self.dataset = self.dataset.float()/255.0
             print('Got marble dateset: '+str(self.dataset.size()))
 
+            log_batch = self.get_batch()#.cpu().numpy()
+            for b in range(log_batch.size()[0]):
+                # log_img(log_batch[b],'log_batch_'+str(b))
+                vis.images(
+                    log_batch[b].cpu().numpy(),
+                )
+
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
         return torch.index_select(self.dataset,0,indexs).cuda()
@@ -1694,11 +1579,6 @@ def restore_model():
     except Exception, e:
         print('Previous checkpoint for netD unfounded')
     try:
-        netC.load_state_dict(torch.load('{0}/netC.pth'.format(LOGDIR)))
-        print('Previous checkpoint for netC founded')
-    except Exception, e:
-        print('Previous checkpoint for netC unfounded')
-    try:
         netG.load_state_dict(torch.load('{0}/netG.pth'.format(LOGDIR)))
         print('Previous checkpoint for netG founded')
     except Exception, e:
@@ -1806,13 +1686,11 @@ elif params['METHOD']=='s-gan':
 
     netG = Generator().cuda()
     netD = Discriminator().cuda()
-    netC = Corrector().cuda()
 
     netD.apply(weights_init)
     netG.apply(weights_init)
     print netG
     print netD
-    print netC
 
     if params['OPTIMIZER']=='Adam':
         optimizerD = optim.Adam(netD.parameters(), lr=1e-4, betas=(0.0, 0.9))
@@ -2062,7 +1940,6 @@ while True:
 
         if iteration % LOG_INTER == 5:
             torch.save(netD.state_dict(), '{0}/netD.pth'.format(LOGDIR))
-            torch.save(netC.state_dict(), '{0}/netC.pth'.format(LOGDIR))
             torch.save(netG.state_dict(), '{0}/netG.pth'.format(LOGDIR))
 
             if LOG_INTER==TrainTo:
