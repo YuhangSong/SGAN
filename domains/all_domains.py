@@ -265,6 +265,14 @@ class Walk2D(object):
         self.fix_state_to = (self.w/2, self.h/2)
         self.random_background = random_background
 
+        if self.random_background:
+            self.background_array = np.random.randint(
+                2, 
+                size=(self.h, self.w),
+                dtype=np.uint8,
+            )
+            self.background_array.fill(0)
+
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
 
@@ -371,30 +379,6 @@ class Walk2D(object):
         else:
             self.x_pos, self.y_pos = self.fix_state_to
 
-        if self.random_background:
-            self.background_array = np.random.randint(
-                2, 
-                size=(self.h, self.w),
-                dtype=np.uint8,
-            ) * 2
-            self.background_array[self.y_pos, self.x_pos] = 0
-            try:
-                self.background_array[self.y_pos-1, self.x_pos] = 0
-            except Exception as e:
-                pass
-            try:
-                self.background_array[self.y_pos,   self.x_pos-1] = 0
-            except Exception as e:
-                pass
-            try:
-                self.background_array[self.y_pos+1, self.x_pos] = 0
-            except Exception as e:
-                pass
-            try:
-                self.background_array[self.y_pos,   self.x_pos+1] = 0
-            except Exception as e:
-                pass
-
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
         self.y_pos = y_pos
@@ -423,19 +407,13 @@ class Walk2D(object):
                     image = image / 255.0
                     image = 1.0 - image
                 else:
-                    array = np.copy(self.background_array)
-                    array[y_pos, x_pos] = 1
-                    # print(array)
+                    # print(self.background_array)
                     # print(s)
-                    image = self.visualizer.make_screen(array)
-                    image = image / 255.0
-                    image = 1.0 - image
-                    image_obst = image[:,:,0:1]
-                    image_agent = image[:,:,1:2] - image_obst
+                    image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
+                    image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
 
-                    # image_obst = image_obst * 0.0
                     image = np.concatenate(
-                        (image_obst,image_agent),
+                        (image_background,image_agent),
                         axis=2
                     )
                     # image = image_agent + image_obst * 0.5
