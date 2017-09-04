@@ -265,6 +265,13 @@ class Walk2D(object):
         self.fix_state_to = (self.w/2, self.h/2)
         self.random_background = random_background
 
+        if self.random_background:
+            self.background_array = np.random.randint(
+                2, 
+                size=(self.h, self.w),
+                dtype=np.uint8,
+            ) * 2
+
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
 
@@ -371,12 +378,12 @@ class Walk2D(object):
         else:
             self.x_pos, self.y_pos = self.fix_state_to
 
-        if self.random_background:
-            self.background_array = np.random.randint(
-                2, 
-                size=(self.h, self.w),
-                dtype=np.uint8,
-            ) * 2
+        # if self.random_background:
+        #     self.background_array = np.random.randint(
+        #         2, 
+        #         size=(self.h, self.w),
+        #         dtype=np.uint8,
+        #     ) * 2
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
@@ -416,7 +423,7 @@ class Walk2D(object):
                     image_obst = image[:,:,0:1]
                     image_agent = image[:,:,1:2] - image_obst
 
-                    image_obst = image_obst * 0.0
+                    # image_obst = image_obst * 0.0
                     image = np.concatenate(
                         (image_obst,image_agent),
                         axis=2
