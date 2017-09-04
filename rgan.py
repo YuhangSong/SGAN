@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = '2dgrid_random_background_nf' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = '2dgrid_random_background_f' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -50,7 +50,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
 add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
@@ -77,7 +77,10 @@ elif params['DOMAIN']=='2Dgrid':
 
     add_parameters(RANDOM_BACKGROUND = True)
 
-    add_parameters(FEATURE = 1)
+    if params['RANDOM_BACKGROUND']==True:
+        add_parameters(FEATURE = 2)
+    else:
+        add_parameters(FEATURE = 1)
 
 elif params['DOMAIN']=='marble':
     add_parameters(MARBLE_MODE = 'single') # single, full
@@ -113,6 +116,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 if params['DOMAIN']=='1Dflip':
     add_parameters(SOFT_VECTOR = 0.0)
 
+'''compute delta for differant domains'''
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
     if params['REPRESENTATION']==chris_domain.VECTOR:
@@ -140,9 +144,14 @@ elif params['DOMAIN']=='2Dgrid':
         )
 
     elif params['REPRESENTATION']==chris_domain.IMAGE:
-        add_parameters(
-            DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
-        )
+        if params['RANDOM_BACKGROUND']==False:
+            add_parameters(
+                DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+            )
+        else:
+            add_parameters(
+                DELTA_T = ( BASE * ( ( (chris_domain.BLOCK_SIZE**2)**0.5 ) / ( ( ( (chris_domain.BLOCK_SIZE*params['GRID_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+            )
 
     else:
         raise Exception('s')
@@ -244,7 +253,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = '1')
+add_parameters(AUX_INFO = 'simple 5')
 
 '''summary settings'''
 DSP = ''
@@ -316,9 +325,8 @@ def log_img(x,name,iteration=0):
         x = vector2image(x)
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
-        if not (params['OBSTACLE_POS_LIST']==[]):
-            # x = torch.cat([x,x[:,0:1,:,:]],1)
-            pass
+        if params['RANDOM_BACKGROUND']==True:
+            x = torch.cat([x,x[:,0:1,:,:]],1)
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
     vis.images( x.cpu().numpy(),
                 win=str(MULTI_RUN)+'-'+name,
@@ -960,8 +968,8 @@ def collect_samples(iteration,tabular=None):
                 if prediction is not None:
                     prediction = torch.cuda.FloatTensor(prediction)
 
-            log_img(start_state_batch,'start_state_batch',iteration)
-            log_img(prediction,'prediction',iteration)
+            log_img(start_state_batch,'state_'+str(ii),iteration)
+            log_img(prediction,'prediction_'+str(ii),iteration)
 
             if prediction is not None:
                 l1, ac = chris_domain.evaluate_domain(
@@ -1486,8 +1494,8 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
             dataset = domain.get_batch()
 
         # print(dataset.size())
-        # print(dataset[3,0,0,:,:])
         # print(dataset[3,1,0,:,:])
+        # print(dataset[3,1,1,:,:])
         # print(dataset[4,0,0,:,:])
         # print(dataset[4,1,0,:,:])
         # # # print('---')

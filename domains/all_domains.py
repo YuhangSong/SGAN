@@ -303,41 +303,42 @@ class Walk2D(object):
 
             '''detect agent opsition from image'''
 
-            # print(state_vector[:,:,0])
+            # print(state_vector[:,:,1])
+            # print(s)
 
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,0])
+                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,1])
                     if abs(pixel_value_mean_on_channel-1.0) < (ACCEPT_GATE):
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
-                        if self.random_background:
-                            self.background_array[y,x] = 255
-                    else:
-                        '''if agent is not here'''
-                        if self.random_background:
-                            if start_state:
-                                '''if start state, set the self.background_array'''
-                                if pixel_value_mean_on_channel == 0.5:
-                                    self.background_array[y,x] = 2
-                                elif pixel_value_mean_on_channel == 0.0:
-                                    self.background_array[y,x] = 0
-                                else:
-                                    raise Exception('s')
-                            else:
-                                '''see if generate background right'''
-                                if self.background_array[y,x]!=255:
-                                    # print(self.background_array[y,x])
-                                    # print(pixel_value_mean_on_channel)
-                                    if abs(pixel_value_mean_on_channel-self.background_array[y,x]/4.0) >= (ACCEPT_GATE):
-                                        '''the self.background_array is a 0/2 vector, the image is 0.5 representation
-                                        so this /4.0 is to map 0~2 to 0~0.5'''
-                                        # print('bad'+str([x,y]))
-                                        return 'bad state'
-                        else:
-                            pass
+                        # if self.random_background:
+                        #     self.background_array[y,x] = 255
+                    # else:
+                    #     '''if agent is not here'''
+                    #     if self.random_background:
+                    #         if start_state:
+                    #             '''if start state, set the self.background_array'''
+                    #             if pixel_value_mean_on_channel == 0.5:
+                    #                 self.background_array[y,x] = 2
+                    #             elif pixel_value_mean_on_channel == 0.0:
+                    #                 self.background_array[y,x] = 0
+                    #             else:
+                    #                 raise Exception('s')
+                    #         else:
+                    #             '''see if generate background right'''
+                    #             if self.background_array[y,x]!=255:
+                    #                 # print(self.background_array[y,x])
+                    #                 # print(pixel_value_mean_on_channel)
+                    #                 if abs(pixel_value_mean_on_channel-self.background_array[y,x]/4.0) >= (ACCEPT_GATE):
+                    #                     '''the self.background_array is a 0/2 vector, the image is 0.5 representation
+                    #                     so this /4.0 is to map 0~2 to 0~0.5'''
+                    #                     # print('bad'+str([x,y]))
+                    #                     return 'bad state'
+                    #     else:
+                    #         pass
 
             if agent_count==1:
                 return pos
@@ -414,8 +415,16 @@ class Walk2D(object):
                     image = 1.0 - image
                     image_obst = image[:,:,0:1]
                     image_agent = image[:,:,1:2] - image_obst
-                    image = image_agent + image_obst * 0.5
+
+                    image_obst = image_obst * 0.0
+                    image = np.concatenate(
+                        (image_obst,image_agent),
+                        axis=2
+                    )
+                    # image = image_agent + image_obst * 0.5
+                    # image = image_agent + image_obst * 0.1
                     # print(image[:,:,0])
+                    # print(image[:,:,1])
                     # print(np.shape(image))
                     # print(s)
             else:
