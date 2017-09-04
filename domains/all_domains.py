@@ -316,8 +316,8 @@ class Walk2D(object):
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,1])
-                    if abs(pixel_value_mean_on_channel-1.0) < (ACCEPT_GATE):
+                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,0])
+                    if abs(pixel_value_mean_on_channel-(self.background_array[y,x]*0.2+0.8)) < (ACCEPT_GATE):
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
@@ -421,10 +421,11 @@ class Walk2D(object):
                     image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
                     image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
 
-                    image = np.concatenate(
-                        (image_background*0.2,image_agent),
-                        axis=2
-                    )
+                    # image = np.concatenate(
+                    #     (image_background,image_agent),
+                    #     axis=2
+                    # )
+                    image = image_background*0.2 + image_agent*0.8
                     # image = image_agent + image_obst * 0.5
                     # image = image_agent + image_obst * 0.1
                     # print(image[:,:,0])

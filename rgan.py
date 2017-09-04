@@ -81,7 +81,7 @@ elif params['DOMAIN']=='2Dgrid':
     add_parameters(RANDOM_BACKGROUND = True)
 
     if params['RANDOM_BACKGROUND']==True:
-        add_parameters(FEATURE = 2)
+        add_parameters(FEATURE = 1)
     else:
         add_parameters(FEATURE = 1)
 
@@ -256,7 +256,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'simple 36 more features')
+add_parameters(AUX_INFO = 'train no random background first, inter background')
 
 '''summary settings'''
 DSP = ''
@@ -328,7 +328,7 @@ def log_img(x,name,iteration=0):
         x = vector2image(x)
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
-        if params['RANDOM_BACKGROUND']==True:
+        if x.size()[1]==2:
             log_img_final(x[:,0:1,:,:],name+'_b',iteration)
             log_img_final(x[:,1:2,:,:],name+'_a',iteration)
             x = torch.cat([x,x[:,0:1,:,:]],1)
@@ -545,7 +545,6 @@ class Generator(nn.Module):
         self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
         self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
         
-
     def forward(self, noise_v, state_v):
 
         if params['DOMAIN']=='marble':
