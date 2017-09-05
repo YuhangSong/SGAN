@@ -388,7 +388,7 @@ class Walk2D(object):
         else:
             self.x_pos, self.y_pos = self.fix_state_to
 
-        self.reset_background()
+        # self.reset_background()
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
