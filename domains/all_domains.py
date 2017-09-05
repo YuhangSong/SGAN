@@ -397,10 +397,10 @@ class Walk2D(object):
             #     size=(self.h, self.w),
             #     dtype=np.uint8,
             # )
-            self.background_array[0,0] = np.random.randint(
-                2)
+            # self.background_array[0,0] = np.random.randint(
+            #     2)
             # self.background_array[0,0] = 1
-            # pass
+            pass
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos

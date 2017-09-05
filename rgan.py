@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = '2dgrid_random_background_f' # display a tag before the result printed
+MULTI_RUN = 'train_fix_bg_first' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
@@ -256,7 +256,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'feature mask')
+add_parameters(AUX_INFO = 'feature mask, train fix random bg first, no time conv')
 
 '''summary settings'''
 DSP = ''
@@ -632,7 +632,7 @@ class Discriminator(nn.Module):
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(2,4,4),
+                        kernel_size=(1,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False
@@ -649,12 +649,12 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 if params['DOMAIN']=='1Dgrid':
-                    temp = 128*1*(params['GRID_SIZE'])
+                    temp = 128*2*(params['GRID_SIZE'])
                 elif params['DOMAIN']=='2Dgrid':
                     if params['RANDOM_BACKGROUND']==True:
-                        temp = 128*1*(params['GRID_SIZE']**2)
+                        temp = 128*2*(params['GRID_SIZE']**2)
                     else:
-                        temp = 128*1*(params['GRID_SIZE']**2)
+                        temp = 128*2*(params['GRID_SIZE']**2)
                 else:
                     raise Exception('s')
                 squeeze_layer = nn.Sequential(
