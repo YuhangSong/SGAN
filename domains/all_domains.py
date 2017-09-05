@@ -266,6 +266,7 @@ class Walk2D(object):
         self.random_background = random_background
 
         if self.random_background:
+
             self.background_array = np.random.randint(
                 2, 
                 size=(self.h, self.w),
@@ -274,6 +275,15 @@ class Walk2D(object):
             self.background_array.fill(0)
             self.background_array[0,0] = np.random.randint(
                 2)
+            # self.reset()
+            self.background_feature_mask = (1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0)
+            for y in range(np.shape(self.background_feature_mask)[0]):
+                self.background_feature_mask[y,:,:] = y%2
+            # print(self.background_feature_mask[:,:,0])
+            # print(s)
+
+            # self.background_array.fill(0)
+            # self.background_array[0,0] = np.random.randint(2)
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
@@ -320,7 +330,7 @@ class Walk2D(object):
             for x in range(self.w):
                 for y in range(self.h):
                     pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,0])
-                    if abs(pixel_value_mean_on_channel-(self.background_array[y,x]*0.2+0.8)) < (ACCEPT_GATE):
+                    if abs(pixel_value_mean_on_channel-1.0) < (ACCEPT_GATE):
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
@@ -389,7 +399,8 @@ class Walk2D(object):
             # )
             self.background_array[0,0] = np.random.randint(
                 2)
-            pass
+            # self.background_array[0,0] = 1
+            # pass
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
@@ -428,7 +439,11 @@ class Walk2D(object):
                     #     (image_background,image_agent),
                     #     axis=2
                     # )
-                    image = image_background*0.2 + image_agent*0.8
+                    image_background = image_background*self.background_feature_mask
+                    image = image_background + image_agent
+                    # print(image_background[:,:,0])
+                    # print(image_agent[:,:,0])
+                    # print(image[:,:,0])
                     # image = image_agent + image_obst * 0.5
                     # image = image_agent + image_obst * 0.1
                     # print(image[:,:,0])

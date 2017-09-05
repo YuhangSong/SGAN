@@ -256,7 +256,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'free inter plot 1')
+add_parameters(AUX_INFO = 'feature mask')
 
 '''summary settings'''
 DSP = ''
@@ -1523,7 +1523,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         # # print(dataset.size())
         # print(dataset[3,0,0,:,:])
-        # print(dataset[3,0,1,:,:])
+        # # # print(dataset[3,0,1,:,:])
         # print(dataset[3,1,0,:,:])
         # print(dataset[3,1,1,:,:])
         # # print(dataset[4,0,0,:,:])
