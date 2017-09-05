@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'train_random_bg_size_5' # display a tag before the result printed
+MULTI_RUN = 'train_random_bg_size_5_small_noise_2' # display a tag before the result printed
 # MULTI_RUN = 'train_fix_bg' # display a tag before the result printed
 GPU = "0" # use which GPU
 
@@ -196,7 +196,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
 
 elif params['REPRESENTATION']==chris_domain.IMAGE:
     add_parameters(DIM = 512)
-    add_parameters(NOISE_SIZE = 128)
+    add_parameters(NOISE_SIZE = 2)
     add_parameters(LAMBDA = 10)
     add_parameters(TARGET_W_DISTANCE = 0.1)
 
@@ -256,7 +256,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'train random bg 1')
+add_parameters(AUX_INFO = 'train random bg, small noise size')
 # add_parameters(AUX_INFO = 'train fix bg')
 
 '''summary settings'''
