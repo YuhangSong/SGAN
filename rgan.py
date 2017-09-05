@@ -24,8 +24,9 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'train_fix_bg_first' # display a tag before the result printed
-GPU = "0" # use which GPU
+MULTI_RUN = 'train_random_bg' # display a tag before the result printed
+# MULTI_RUN = 'train_fix_bg' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -50,7 +51,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
 add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
@@ -63,14 +64,14 @@ elif params['DOMAIN']=='1Dgrid':
     add_parameters(GRID_ACTION_DISTRIBUTION = [1.0/3.0,2.0/3.0])
 
 elif params['DOMAIN']=='2Dgrid':
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
-    add_parameters(OBSTACLE_POS_LIST = [])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    # add_parameters(OBSTACLE_POS_LIST = [])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -255,8 +256,8 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-# add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'feature mask, train fix random bg first, no time conv')
+add_parameters(AUX_INFO = 'train random bg')
+# add_parameters(AUX_INFO = 'train fix bg')
 
 '''summary settings'''
 DSP = ''
@@ -632,7 +633,7 @@ class Discriminator(nn.Module):
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False
@@ -649,12 +650,12 @@ class Discriminator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                 )
                 if params['DOMAIN']=='1Dgrid':
-                    temp = 128*2*(params['GRID_SIZE'])
+                    temp = 128*1*(params['GRID_SIZE'])
                 elif params['DOMAIN']=='2Dgrid':
                     if params['RANDOM_BACKGROUND']==True:
-                        temp = 128*2*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                     else:
-                        temp = 128*2*(params['GRID_SIZE']**2)
+                        temp = 128*1*(params['GRID_SIZE']**2)
                 else:
                     raise Exception('s')
                 squeeze_layer = nn.Sequential(
@@ -1485,41 +1486,72 @@ class marble_domain(object):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
         return torch.index_select(self.dataset,0,indexs).cuda()
 
+class grid_domain(object):
+    """docstring for grid_domain"""
+    def __init__(self):
+        super(grid_domain, self).__init__()
+
+        self.dataset_lenth = 10000
+
+        self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
+
+        print('Creating dataset')
+
+        while True:
+
+            domain.reset()
+            ob = torch.from_numpy(domain.get_state()).unsqueeze(0)
+            ob_next = torch.from_numpy(domain.update()).unsqueeze(0)
+
+            data = torch.cat([ob,ob_next],0).unsqueeze(0)
+            
+            try:
+                self.dataset = torch.cat([self.dataset,data],0)
+            except Exception as e:
+                self.dataset = data
+
+            print('[{}/{}]'
+                .format(
+                    self.dataset.size()[0],
+                    self.dataset_lenth,
+                )
+            )
+
+            if self.dataset.size()[0]>self.dataset_lenth:
+                break
+
+        if params['REPRESENTATION']==chris_domain.SCALAR:
+            self.dataset = self.dataset.float()
+        if params['REPRESENTATION']==chris_domain.VECTOR:
+            self.dataset = self.dataset.float()
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
+            self.dataset = self.dataset.permute(0,1,4,2,3)
+            self.dataset = self.dataset.float()
+
+        self.dataset = self.dataset.cuda()
+
+        print('Got grid dateset: '+str(self.dataset.size()))
+
+        for b in range(params['BATCH_SIZE']):
+            vis.images(
+                self.dataset[b].cpu().numpy(),
+            )
+
+    def get_batch(self):
+        indexs = self.indexs_selector.random_(0,self.dataset.size()[0]).cuda()
+        return torch.index_select(self.dataset,0,indexs)
+
 if params['DOMAIN']=='marble':
     domain = marble_domain()
+    wrap_domain = domain
+else:
+    wrap_domain = grid_domain()
 
 def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
     while True:
 
-        dataset = None
-
-        if params['DOMAIN']!='marble':
-
-            for i in xrange(batch_size):
-
-                domain.reset()
-                ob = torch.from_numpy(domain.get_state()).cuda().unsqueeze(0)
-                ob_next = torch.from_numpy(domain.update()).cuda().unsqueeze(0)
-
-                data = torch.cat([ob,ob_next],0).unsqueeze(0)
-                
-                try:
-                    dataset = torch.cat([dataset,data],0)
-                except Exception as e:
-                    dataset = data
-
-            if params['REPRESENTATION']==chris_domain.SCALAR:
-                dataset = dataset.float()
-            if params['REPRESENTATION']==chris_domain.VECTOR:
-                dataset = dataset.float()
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                dataset = dataset.permute(0,1,4,2,3)
-                dataset = dataset.float()
-
-        else:
-
-            dataset = domain.get_batch()
+        dataset = wrap_domain.get_batch()
 
         # # print(dataset.size())
         # print(dataset[3,0,0,:,:])

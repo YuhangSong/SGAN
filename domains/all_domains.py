@@ -266,24 +266,21 @@ class Walk2D(object):
         self.random_background = random_background
 
         if self.random_background:
+            self.reset_background()
+            self.build_background_feature_mask()
 
+    def reset_background(self):
+        if self.random_background:
             self.background_array = np.random.randint(
                 2, 
                 size=(self.h, self.w),
                 dtype=np.uint8,
             )
-            self.background_array.fill(0)
-            self.background_array[0,0] = np.random.randint(
-                2)
-            # self.reset()
-            self.background_feature_mask = (1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0)
-            for y in range(np.shape(self.background_feature_mask)[0]):
-                self.background_feature_mask[y,:,:] = y%2
-            # print(self.background_feature_mask[:,:,0])
-            # print(s)
-
-            # self.background_array.fill(0)
-            # self.background_array[0,0] = np.random.randint(2)
+    
+    def build_background_feature_mask(self):
+        self.background_feature_mask = (1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0)
+        for y in range(np.shape(self.background_feature_mask)[0]):
+            self.background_feature_mask[y,:,:] = y%2
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
@@ -391,16 +388,7 @@ class Walk2D(object):
         else:
             self.x_pos, self.y_pos = self.fix_state_to
 
-        if self.random_background:
-            # self.background_array = np.random.randint(
-            #     2, 
-            #     size=(self.h, self.w),
-            #     dtype=np.uint8,
-            # )
-            # self.background_array[0,0] = np.random.randint(
-            #     2)
-            # self.background_array[0,0] = 1
-            pass
+        self.reset_background()
 
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
@@ -430,26 +418,13 @@ class Walk2D(object):
                     image = image / 255.0
                     image = 1.0 - image
                 else:
-                    # print(self.background_array)
-                    # print(s)
                     image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
                     image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
 
-                    # image = np.concatenate(
-                    #     (image_background,image_agent),
-                    #     axis=2
-                    # )
-                    image_background = image_background*self.background_feature_mask
-                    image = image_background + image_agent
-                    # print(image_background[:,:,0])
-                    # print(image_agent[:,:,0])
-                    # print(image[:,:,0])
-                    # image = image_agent + image_obst * 0.5
-                    # image = image_agent + image_obst * 0.1
-                    # print(image[:,:,0])
-                    # print(image[:,:,1])
-                    # print(np.shape(image))
-                    # print(s)
+                    image_background = image_background*self.background_feature_mask*0.5
+                    image_background_no_agent = image_background*(1.0-image_agent)
+
+                    image = image_background_no_agent + image_agent
             else:
                 if self.random_background:
                     raise Exception('s')
