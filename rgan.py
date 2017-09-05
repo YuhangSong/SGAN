@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'marble_comp_deter' # display a tag before the result printed
-GPU = "3" # use which GPU
+MULTI_RUN = 'marble_seq' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'marble') # the first level of log dir
+add_parameters(EXP = 'marble_seq') # the first level of log dir
 add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -78,22 +78,9 @@ elif params['DOMAIN']=='2Dgrid':
     add_parameters(FEATURE = 1)
 
 elif params['DOMAIN']=='marble':
-    add_parameters(MARBLE_MODE = 'single') # single, full
     add_parameters(FEATURE = 1)
-    if params['MARBLE_MODE']=='single':
-        add_parameters(IMAGE_SIZE = 64)
-    elif params['MARBLE_MODE']=='full':
-        add_parameters(IMAGE_SIZE = 256)
-    else:
-        raise Exception('s')
+    add_parameters(IMAGE_SIZE = 64)
     add_parameters(FRAME_INTERVAL = 3)
-    add_parameters(DATA_IN_BUF = -1)
-    if params['MARBLE_MODE']=='single':
-        add_parameters(ACCEPT_DELTA = 10000)
-    elif params['MARBLE_MODE']=='full':
-        add_parameters(ACCEPT_DELTA = 5000000)
-    else:
-        raise Exception('s')
 
 else:
     raise Exception('unsupport')
@@ -145,16 +132,9 @@ elif params['DOMAIN']=='2Dgrid':
         raise Exception('s')
 
 elif params['DOMAIN']=='marble':
-    if params['MARBLE_MODE']=='single':
-        add_parameters(
-            DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']/10)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
-        )
-    elif params['MARBLE_MODE']=='full':
-        add_parameters(
-            DELTA_T = ( BASE * ( ( ( ((params['IMAGE_SIZE']*(4.0/8.0)/(16.0+6.0/8.0))*(params['IMAGE_SIZE']*(4.0/8.0)/(9.0+3.0/8.0))))**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
-        )
-    else:
-        raise Exception('s')
+    add_parameters(
+        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+    )
 
 else:
     raise Exception('s')
@@ -193,7 +173,7 @@ else:
     add_parameters(BATCH_SIZE = 32)
 
 if params['DOMAIN']=='marble':
-    add_parameters(STATE_DEPTH = 1)
+    add_parameters(STATE_DEPTH = 2)
 
 else:
     add_parameters(STATE_DEPTH = 1)
@@ -286,7 +266,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = False
+    PRE_DATASET = True
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -1178,17 +1158,14 @@ class marble_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        if params['MARBLE_MODE']=='single':
-            file_list = ['00014','00015','00016','00017','00018','00019','00020']
-        elif params['MARBLE_MODE']=='full':
-            raise Exception('s')
+        file_list = ['00014','00015','00016','00017','00018','00019','00020']
 
         if PRE_DATASET:
 
             logger = lib.plot.logger(LOGDIR,DSP,params_str,MULTI_RUN)
 
             file = file_list[6]
-            file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
+            file_name = '../../dataset/marble/single/'+file
 
             print('creating marble dataset from MTS')
 
@@ -1196,51 +1173,50 @@ class marble_domain(object):
             info = vid.get_meta_data()
             print(info)
 
-            # fram_interval = int(round(params['FRAME_INTERVAL'] * info['fps']))
+            def get_frame(processed_frame):
+                try:
+                    image = vid.get_data(processed_frame)
+                except Exception as e:
+                    return None
+                image = image[:,:,1]
+                image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
+                image = torch.from_numpy(image).int()
+                image = image.unsqueeze(0)
+                image = image.unsqueeze(0)
+                return image
+
+            mask = torch.IntTensor(get_frame(0).size()).fill_(1)
+            mask[0,0,0:int(params['IMAGE_SIZE']*3.2/8.4),0:int(params['IMAGE_SIZE']*2.0/8.4)].fill_(0)
+            mask[0,0,int(params['IMAGE_SIZE']-params['IMAGE_SIZE']*3.2/8.4):params['IMAGE_SIZE'],0:int(params['IMAGE_SIZE']*2.1/8.4)].fill_(0)
+
             fram_interval = params['FRAME_INTERVAL']
 
-            frame_start = 91
+            frame_start = 0
             while True:
                 frame_start += 1
 
                 delta = 0.0
                 data = None
                 image = None
+                last_image = None
                 breaking = False
                 processed_frame_dic = []
                 for frame_i in range(params['STATE_DEPTH']+1):
 
-                    try:
-                        image = vid.get_data(frame_start+frame_i*fram_interval)
-                    except Exception as e:
-                        breaking = True
-                        break
-
                     processed_frame = frame_start+frame_i*fram_interval
                     processed_frame_dic += [processed_frame]
 
-                    def get_frame(processed_frame):
-                        image = vid.get_data(processed_frame)
-                        image = image[:,:,1]
-                        image = cv2.resize(image,(params['IMAGE_SIZE'],params['IMAGE_SIZE']))
-                        image = torch.from_numpy(image)
-                        image = image.unsqueeze(0)
-                        image = image.unsqueeze(0)
-                        return image
-
                     image = get_frame(processed_frame)
 
-                    if frame_i==0:
-                        delta_image = image.float()[:,:,int(64.0/10.9*(5.8-1.0)):int(64.0/10.9*(5.8+1.0)),int(64.0/19.1*10.3):int(64.0/19.1*12.7)].squeeze()
-                        delta = delta_image.sum()
-                        # print(delta)
-                        logger.plot('delta_'+file, delta)
-                        logger.tick()
-                        if delta > params['ACCEPT_DELTA']:
-                            data = None
-                            break
-                        # else:
-                        #     image = get_frame(processed_frame-90)
+                    if image is None:
+                        breaking = True
+                        break
+                    
+                    if last_image is not None:
+                        this_delta = (image*mask-last_image*mask).abs().sum()
+                        delta += this_delta
+                    else:
+                        last_image = image
 
                     try:
                         data = torch.cat([data,image],0)
@@ -1250,14 +1226,15 @@ class marble_domain(object):
                 if breaking:
                     break
 
+                logger.plot('delta_'+file, delta)
+                logger.tick()
+                
                 accept = False
-                if data is not None:
+                if (delta > 20000) and (delta < 70000):
 
                     accept = True
 
                     logger.flush()
-
-                    frame_start += 20
 
                     vis.images(
                         data.cpu().numpy(),
@@ -1269,14 +1246,11 @@ class marble_domain(object):
                         self.dataset = torch.cat([self.dataset,data],0)
                     except Exception as e:
                         self.dataset = data
-
-                    if params['DATA_IN_BUF']>0:
-                        if self.dataset.size()[0] >= params['DATA_IN_BUF']:
-                            break
                 
                 try:
-                    print('Get data from {} at [{}/{}] with delta: {}. Accept: {}. Dataset: {}'
+                    print('[{:2.4f}%]Get data from {} at [{}/{}] with delta: {}. Accept: {}. Dataset: {}'
                         .format(
+                            (float(frame_start)/info['nframes']*100.0),
                             file,
                             processed_frame_dic,
                             info['nframes'],
@@ -1297,7 +1271,7 @@ class marble_domain(object):
 
             for file in file_list:
 
-                file_name = '../../dataset/marble/'+params['MARBLE_MODE']+'/'+file
+                file_name = '../../dataset/marble/single/'+file
 
                 try:
                     data = torch.from_numpy(np.load(file_name+'.npy'))
@@ -1322,9 +1296,8 @@ class marble_domain(object):
 
             print('Got marble dateset: '+str(self.dataset.size()))
 
-            log_batch = self.get_batch()#.cpu().numpy()
+            log_batch = self.get_batch()
             for b in range(log_batch.size()[0]):
-                # log_img(log_batch[b],'log_batch_'+str(b))
                 vis.images(
                     log_batch[b].cpu().numpy(),
                 )
