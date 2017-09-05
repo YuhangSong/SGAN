@@ -25,7 +25,7 @@ from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
 MULTI_RUN = 'marble' # display a tag before the result printed
-GPU = "0" # use which GPU
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -86,7 +86,7 @@ elif params['DOMAIN']=='marble':
         add_parameters(IMAGE_SIZE = 256)
     else:
         raise Exception('s')
-    add_parameters(FRAME_INTERVAL = 5)
+    add_parameters(FRAME_INTERVAL = 3)
     add_parameters(DATA_IN_BUF = -1)
     if params['MARBLE_MODE']=='single':
         add_parameters(ACCEPT_DELTA = 10000)
@@ -240,7 +240,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'more features')
+add_parameters(AUX_INFO = 'small frame interval 1')
 
 '''summary settings'''
 DSP = ''
@@ -1239,8 +1239,8 @@ class marble_domain(object):
                         if delta > params['ACCEPT_DELTA']:
                             data = None
                             break
-                        else:
-                            image = get_frame(processed_frame-90)
+                        # else:
+                        #     image = get_frame(processed_frame-90)
 
                     try:
                         data = torch.cat([data,image],0)
@@ -1318,6 +1318,8 @@ class marble_domain(object):
                 )
 
             self.dataset = self.dataset.float()/255.0
+            self.dataset = self.dataset.cuda()
+
             print('Got marble dateset: '+str(self.dataset.size()))
 
             log_batch = self.get_batch()#.cpu().numpy()
@@ -1328,8 +1330,8 @@ class marble_domain(object):
                 )
 
     def get_batch(self):
-        indexs = self.indexs_selector.random_(0,self.dataset.size()[0])
-        return torch.index_select(self.dataset,0,indexs).cuda()
+        indexs = self.indexs_selector.random_(0,self.dataset.size()[0]).cuda()
+        return torch.index_select(self.dataset,0,indexs)
 
 if params['DOMAIN']=='marble':
     domain = marble_domain()
