@@ -256,7 +256,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'test fix bg')
+add_parameters(AUX_INFO = 'random bg, param noise 5')
 # add_parameters(AUX_INFO = 'train fix bg')
 
 '''summary settings'''
@@ -1491,7 +1491,7 @@ class grid_domain(object):
     def __init__(self):
         super(grid_domain, self).__init__()
 
-        self.dataset_lenth = 1000
+        self.dataset_lenth = 50000
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
@@ -2089,6 +2089,19 @@ while True:
                     L1, AC = evaluate_domain(iteration)
             else:
                 L1, AC = evaluate_domain(iteration)
+
+        def explore_parameters(model):
+            for p in model.parameters():
+                p.data = torch.normal(
+                    means=p.data,
+                    std=p.data*0.25,
+                )
+
+        if iteration % LOG_INTER == 5:
+            explore_parameters(netG.squeeze_layer)
+            explore_parameters(netG.cat_layer)
+            explore_parameters(netG.unsqueeze_layer)
+            # explore_parameters(netG.deconv_layer)
 
     if iteration % LOG_INTER == 5:
         logger.flush()
