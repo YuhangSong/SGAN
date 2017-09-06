@@ -52,7 +52,7 @@ add_parameters(EXP = 'marble') # the first level of log dir
 add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
+add_parameters(GRID_SIZE = 3) # size of 1Dgrid, 1Dflip, 2Dgrid
 
 '''
 domain dynamic
@@ -120,10 +120,10 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
-# add_parameters(KEEP_NOISE = False)
-add_parameters(KEEP_NOISE = True)
+# add_parameters(NOISE_ENCOURAGE = False)
+add_parameters(NOISE_ENCOURAGE = True)
 
-add_parameters(KEEP_NOISE_FACTOR = 0.1)
+add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
 
 '''
 compute delta for differant domains
@@ -247,7 +247,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = 'uniform in gp')
+add_parameters(AUX_INFO = 'reward noise no pow')
 
 '''
 summary settings
@@ -1710,18 +1710,17 @@ def calc_gradient_reward(netG, state, noise):
         )[0]
         gradients = gradients.contiguous()
         gradients_fl = gradients.view(gradients.size()[0],-1)
-        gradients_norm = gradients_fl.norm(2, dim=1)
+        gradients_norm = gradients_fl.norm(2, dim=1) / ((gradients_fl.size()[1])**0.5)
 
         return gradients_norm
 
-    gradients_norm_noise = get_grad_norm(noise_v).mean()
-    gradients_norm_input = get_grad_norm(cat_input).mean()
+    gradients_norm_noise = get_grad_norm(noise_v)
+    gradients_norm_input = get_grad_norm(cat_input)
 
-    logger.plot('gradients_norm_noise', gradients_norm_noise.data.cpu().numpy())
-    logger.plot('gradients_norm_input', gradients_norm_input.data.cpu().numpy())
+    logger.plot('gradients_norm_noise', [gradients_norm_noise.data.mean()])
+    logger.plot('gradients_norm_input', [gradients_norm_input.data.mean()])
 
-    # gradients_reward = (gradients_norm_noise-gradients_norm_input).pow(2)*params['KEEP_NOISE_FACTOR']
-    gradients_reward = gradients_norm_noise.pow(2)*params['KEEP_NOISE_FACTOR']
+    gradients_reward = gradients_norm_noise.mean()*params['NOISE_ENCOURAGE_FACTOR']
 
     return gradients_reward
 
@@ -2073,7 +2072,7 @@ while True:
             state=state,
             noise=noise
         )
-        if params['KEEP_NOISE']:
+        if params['NOISE_ENCOURAGE']:
             gradients_reward.backward(mone)
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
