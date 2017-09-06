@@ -24,9 +24,9 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'train_random_bg_size_3_f' # display a tag before the result printed
+MULTI_RUN = 'no keep noise' # display a tag before the result printed
 # MULTI_RUN = 'train_fix_bg' # display a tag before the result printed
-GPU = "1" # use which GPU
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
 #-------reuse--device
@@ -51,7 +51,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'marble') # the first level of log dir
 add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 3) # size of 1Dgrid, 1Dflip, 2Dgrid
 
@@ -79,7 +79,7 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = True)
+    add_parameters(RANDOM_BACKGROUND = False)
 
     if params['RANDOM_BACKGROUND']==True:
         add_parameters(FEATURE = 1)
@@ -116,6 +116,9 @@ add_parameters(GP_GUIDE_FACTOR = 1.0)
 
 add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+
+add_parameters(KEEP_NOISE = False)
+# add_parameters(KEEP_NOISE = True)
 
 if params['DOMAIN']=='1Dflip':
     add_parameters(SOFT_VECTOR = 0.0)
@@ -186,19 +189,16 @@ if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 0.1)
-    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.VECTOR:
     add_parameters(DIM = 512)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 5)
-    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 elif params['REPRESENTATION']==chris_domain.IMAGE:
-    add_parameters(DIM = 512)
+    add_parameters(DIM = 128)
     add_parameters(NOISE_SIZE = 128)
     add_parameters(LAMBDA = 10)
-    add_parameters(TARGET_W_DISTANCE = 0.1)
 
 else:
     raise Exception('Unsupport')
@@ -256,8 +256,7 @@ add_parameters(GAN_MODE = 'wgan-grad-panish') # wgan, wgan-grad-panish, wgan-gra
 add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
-add_parameters(AUX_INFO = 'random bg, param noise 5')
-# add_parameters(AUX_INFO = 'train fix bg')
+add_parameters(AUX_INFO = 'keep noise 3')
 
 '''summary settings'''
 DSP = ''
@@ -368,19 +367,19 @@ class Generator(nn.Module):
             
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             squeeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             cat_layer = nn.Sequential(
                 nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
             unsqueeze_layer = nn.Sequential(
                 nn.Linear(params['DIM'], params['DIM']),
-                nn.LeakyReLU(0.001),
+                nn.LeakyReLU(0.001, inplace=True),
             )
 
             deconv_layer = nn.Sequential(
@@ -401,7 +400,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
@@ -410,7 +409,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
 
                 if params['DOMAIN']=='1Dgrid':
@@ -425,15 +424,15 @@ class Generator(nn.Module):
 
                 squeeze_layer = nn.Sequential(
                     nn.Linear(temp, params['DIM']),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 cat_layer = nn.Sequential(
                     nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 unsqueeze_layer = nn.Sequential(
                     nn.Linear(params['DIM'], temp),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 deconv_layer = nn.Sequential(
                     nn.ConvTranspose3d(
@@ -444,7 +443,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     nn.ConvTranspose3d(
                         in_channels=64,
                         out_channels=params['FEATURE'],
@@ -468,7 +467,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     # 32*1*32*32
                     nn.Conv3d(
                         in_channels=32,
@@ -478,7 +477,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*16*16
                     nn.Conv3d(
                         in_channels=64,
@@ -488,20 +487,20 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*8*8
                 )
                 squeeze_layer = nn.Sequential(
                     nn.Linear(64*1*8*8, params['DIM']),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 cat_layer = nn.Sequential(
                     nn.Linear(params['DIM']+params['NOISE_SIZE'], params['DIM']),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 unsqueeze_layer = nn.Sequential(
                     nn.Linear(params['DIM'], 64*1*8*8),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                 )
                 deconv_layer = nn.Sequential(
                     # 64*1*8*8
@@ -513,7 +512,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     # 64*1*16*16
                     nn.ConvTranspose3d(
                         in_channels=64,
@@ -523,7 +522,7 @@ class Generator(nn.Module):
                         padding=(0,1,1),
                         bias=False,
                     ),
-                    nn.LeakyReLU(0.001),
+                    nn.LeakyReLU(0.001, inplace=True),
                     # 32*1*32*32
                     nn.ConvTranspose3d(
                         in_channels=32,
@@ -540,11 +539,11 @@ class Generator(nn.Module):
         else:
             raise Exception('representation unsupport!')
 
-        self.conv_layer = nn.DataParallel(conv_layer,GPU)
-        self.squeeze_layer = nn.DataParallel(squeeze_layer,GPU)
-        self.cat_layer = nn.DataParallel(cat_layer,GPU)
-        self.unsqueeze_layer = nn.DataParallel(unsqueeze_layer,GPU)
-        self.deconv_layer = torch.nn.DataParallel(deconv_layer,GPU)
+        self.conv_layer = conv_layer
+        self.squeeze_layer = squeeze_layer
+        self.cat_layer = cat_layer
+        self.unsqueeze_layer = unsqueeze_layer
+        self.deconv_layer = deconv_layer
         
     def forward(self, noise_v, state_v):
 
@@ -558,22 +557,18 @@ class Generator(nn.Module):
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
 
-            # if params['DOMAIN']=='2Dgrid':
-            #     if params['RANDOM_BACKGROUND']==True:
-            #         state_v = torch.cat(
-            #             [state_v[:,0:1,:,:,:],state_v[:,1:2,:,:,:]],
-            #             2)
-
         '''forward'''
         x = self.conv_layer(state_v)
         if params['REPRESENTATION']==chris_domain.IMAGE:
             temp = x.size()
             x = x.view(x.size()[0], -1)
         x = self.squeeze_layer(x)
+        cat_input = x
         x = self.cat_layer(torch.cat([x,noise_v],1))
         x = self.unsqueeze_layer(x)
         if params['REPRESENTATION']==chris_domain.IMAGE:
             x = x.view(temp)
+        defore_deconv = x
         x = self.deconv_layer(x)
 
         '''decompose'''
@@ -583,18 +578,8 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*F*D*H*W to N*D*F*H*W
             x = x.permute(0,2,1,3,4)
-            # print(x.size())
-            # print(s)
-            # if params['DOMAIN']=='2Dgrid':
-            #     if params['RANDOM_BACKGROUND']==True:
-            #         # print(x.size())
-            #         x = torch.cat(
-            #             [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
-            #             2)
-            #         # print(x.size())
-            #         # print(s)
 
-        return x
+        return x, defore_deconv, cat_input
 
 class Discriminator(nn.Module):
 
@@ -716,39 +701,20 @@ class Discriminator(nn.Module):
         else:
             raise Exception('Unsupport')
 
-        if params['GAN_MODE']=='wgan-grad-panish':
+        if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
+            self.conv_layer_state = conv_layer_state
+            self.squeeze_layer_state = squeeze_layer_state
+            self.conv_layer_prediction = conv_layer_prediction
+            self.squeeze_layer_prediction = squeeze_layer_prediction
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = conv_layer_state
-                self.squeeze_layer_state = squeeze_layer_state
-                self.conv_layer_prediction = conv_layer_prediction
-                self.squeeze_layer_prediction = squeeze_layer_prediction
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = conv_layer
-                self.squeeze_layer = squeeze_layer
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = final_layer
+        elif params['REPRESENTATION']==chris_domain.IMAGE:
+            self.conv_layer = conv_layer
+            self.squeeze_layer = squeeze_layer
 
         else:
+            raise Exception('Unsupport')
 
-            if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
-                self.conv_layer_state = torch.nn.DataParallel(conv_layer_state,GPU)
-                self.squeeze_layer_state = torch.nn.DataParallel(squeeze_layer_state,GPU)
-                self.conv_layer_prediction = torch.nn.DataParallel(conv_layer_prediction,GPU)
-                self.squeeze_layer_prediction = torch.nn.DataParallel(squeeze_layer_prediction,GPU)
-
-            elif params['REPRESENTATION']==chris_domain.IMAGE:
-                self.conv_layer = torch.nn.DataParallel(conv_layer,GPU)
-                self.squeeze_layer = torch.nn.DataParallel(squeeze_layer,GPU)
-
-            else:
-                raise Exception('Unsupport')
-
-            self.final_layer = torch.nn.DataParallel(final_layer,GPU)
+        self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
 
@@ -775,15 +741,6 @@ class Discriminator(nn.Module):
             x = torch.cat([state_v,prediction_v],1)
             # N*D*F*H*W to N*F*D*H*W
             x = x.permute(0,2,1,3,4)
-
-            # if params['DOMAIN']=='2Dgrid':
-            #     if params['RANDOM_BACKGROUND']==True:
-            #         # print(x.size())
-            #         x = torch.cat(
-            #             [x[:,0:1,:,:,:],x[:,1:2,:,:,:]],
-            #             2)
-            #         # print(x.size())
-            #         # print(s)
 
             '''forward'''
             x = self.conv_layer(x)
@@ -985,7 +942,7 @@ def collect_samples(iteration,tabular=None):
                     prediction = netG(
                         noise_v = autograd.Variable(noise, volatile=True),
                         state_v = autograd.Variable(start_state_batch, volatile=True)
-                    ).data
+                    )[0].data
 
                 else:
                     raise Exception('Unsupport')
@@ -1041,7 +998,7 @@ def collect_samples(iteration,tabular=None):
             prediction = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(state, volatile=True)
-            ).data
+            )[0].data
         elif params['METHOD']=='deterministic-deep-net':
             prediction = netT(
                 state_v = autograd.Variable(state, volatile=True)
@@ -1175,7 +1132,7 @@ def evaluate_domain_with_filter(iteration,dataset,gen_basic=False,filter_net=Non
     prediction = netG(
         noise_v = autograd.Variable(noise, volatile=True),
         state_v = autograd.Variable(state, volatile=True)
-    ).data
+    )[0].data
     
     if filter_net is not None:
         F_out = filter_net(
@@ -1491,7 +1448,7 @@ class grid_domain(object):
     def __init__(self):
         super(grid_domain, self).__init__()
 
-        self.dataset_lenth = 50000
+        self.dataset_lenth = 10000
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
@@ -1704,6 +1661,43 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         raise Exception('Unsupport')
     
     return gradients_penalty, num_t_sum
+
+def calc_gradient_reward(netG, state, noise):
+    noise_v = autograd.Variable(
+        noise,
+        requires_grad=True
+    )
+
+    _, prediction_v, cat_input = netG(
+        noise_v = noise_v,
+        state_v = autograd.Variable(state)
+    )
+
+    def get_grad_norm(x):
+
+        gradients = autograd.grad(
+            outputs=prediction_v,
+            inputs=x,
+            grad_outputs=torch.ones(prediction_v.size()).cuda(),
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True
+        )[0]
+        gradients = gradients.contiguous()
+        gradients_fl = gradients.view(gradients.size()[0],-1)
+        gradients_norm = gradients_fl.norm(2, dim=1)
+
+        return gradients_norm
+
+    gradients_norm_noise = get_grad_norm(noise_v).mean()
+    gradients_norm_input = get_grad_norm(cat_input).mean()
+
+    logger.plot('gradients_norm_noise', gradients_norm_noise.data.cpu().numpy())
+    logger.plot('gradients_norm_input', gradients_norm_input.data.cpu().numpy())
+
+    gradients_reward = (gradients_norm_noise-gradients_norm_input).pow(2)
+
+    return gradients_reward
 
 def restore_model():
     print('Trying load models....')
@@ -1971,7 +1965,7 @@ while True:
             prediction = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(state, volatile=True)
-            ).data
+            )[0].data
 
             '''
             call backward in the following,
@@ -2048,7 +2042,7 @@ while True:
         prediction_v = netG(
             noise_v = autograd.Variable(noise),
             state_v = autograd.Variable(state)
-        )
+        )[0]
 
         G = netD(
                 state_v = autograd.Variable(state),
@@ -2061,11 +2055,22 @@ while True:
         
         optimizerG.step()
 
+        GR_cost = [0.0]
+        gradients_reward = calc_gradient_reward(
+            netG=netG,
+            state=state,
+            noise=noise
+        )
+        if params['KEEP_NOISE']:
+            gradients_reward.backward(mone)
+        GR_cost = gradients_reward.data.cpu().numpy()
+        logger.plot('GR_cost', GR_cost)
+
         ############################
         # (4) Log summary
         ############################
 
-        print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_cost:{:2.4f}'
+        print('[{}][{:<6}] L1: {:2.4f} AC: {:2.4f} T: {:2.4f} W_cost:{:2.4f} GP_cost:{:2.4f} D_cost:{:2.4f} G_cost:{:2.4f} GR_cost:{:2.4f}'
             .format(
                 MULTI_RUN,
                 iteration,
@@ -2076,6 +2081,7 @@ while True:
                 GP_cost[0],
                 D_cost[0],
                 G_cost[0],
+                GR_cost[0],
             )
         )
 
@@ -2089,19 +2095,6 @@ while True:
                     L1, AC = evaluate_domain(iteration)
             else:
                 L1, AC = evaluate_domain(iteration)
-
-        def explore_parameters(model):
-            for p in model.parameters():
-                p.data = torch.normal(
-                    means=p.data,
-                    std=p.data*0.25,
-                )
-
-        if iteration % LOG_INTER == 5:
-            explore_parameters(netG.squeeze_layer)
-            explore_parameters(netG.cat_layer)
-            explore_parameters(netG.unsqueeze_layer)
-            # explore_parameters(netG.deconv_layer)
 
     if iteration % LOG_INTER == 5:
         logger.flush()
