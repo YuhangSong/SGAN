@@ -186,7 +186,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
 add_parameters(NOISE_SIZE = 128)
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 335544)
+add_parameters(DATASET_SIZE = 100) # 335544
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -1472,47 +1472,60 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        print('Creating dataset')
+        file = '5x5_random_bg'
+        file_name = '../../dataset/grid/'+file
 
-        while True:
+        try:
+            self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
+            print('Load dataset from '+file+' : '+str(self.dataset.size()))
 
-            domain.reset()
-            ob = torch.from_numpy(domain.get_state()).unsqueeze(0)
-            ob_next = torch.from_numpy(domain.update()).unsqueeze(0)
+        except Exception as e:
 
-            data = torch.cat([ob,ob_next],0).unsqueeze(0)
-            
-            try:
-                self.dataset = torch.cat([self.dataset,data],0)
-            except Exception as e:
-                self.dataset = data
+            print('Failed to load dataset from '+file)
+            print('Creating dataset')
 
-            print('[{}/{}]'
-                .format(
-                    self.dataset.size()[0],
-                    self.dataset_lenth,
+            while True:
+
+                domain.reset()
+                ob = torch.from_numpy(domain.get_state()).unsqueeze(0)
+                ob_next = torch.from_numpy(domain.update()).unsqueeze(0)
+
+                data = torch.cat([ob,ob_next],0).unsqueeze(0)
+                
+                try:
+                    self.dataset = torch.cat([self.dataset,data],0)
+                except Exception as e:
+                    self.dataset = data
+
+                print('[{}/{}]'
+                    .format(
+                        self.dataset.size()[0],
+                        self.dataset_lenth,
+                    )
                 )
-            )
 
-            if self.dataset.size()[0]>self.dataset_lenth:
-                break
+                if self.dataset.size()[0]>self.dataset_lenth:
+                    break
 
-        if params['REPRESENTATION']==chris_domain.SCALAR:
-            self.dataset = self.dataset.float()
-        if params['REPRESENTATION']==chris_domain.VECTOR:
-            self.dataset = self.dataset.float()
-        elif params['REPRESENTATION']==chris_domain.IMAGE:
-            self.dataset = self.dataset.permute(0,1,4,2,3)
-            self.dataset = self.dataset.float()
+            if params['REPRESENTATION']==chris_domain.SCALAR:
+                self.dataset = self.dataset.float()
+            if params['REPRESENTATION']==chris_domain.VECTOR:
+                self.dataset = self.dataset.float()
+            elif params['REPRESENTATION']==chris_domain.IMAGE:
+                self.dataset = self.dataset.permute(0,1,4,2,3)
+                self.dataset = self.dataset.float()
 
-        self.dataset = self.dataset.cuda()
+            self.dataset = self.dataset.cuda()
 
-        print('Got grid dateset: '+str(self.dataset.size()))
+            print('Got grid dateset: '+str(self.dataset.size()))
 
-        for b in range(params['BATCH_SIZE']):
-            vis.images(
-                self.dataset[b].cpu().numpy(),
-            )
+            for b in range(params['BATCH_SIZE']):
+                vis.images(
+                    self.dataset[b].cpu().numpy(),
+                )
+
+            print('Save marble dateset '+str(self.dataset.size())+' to npz')
+            np.save(file_name, self.dataset.cpu().numpy())
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0]).cuda()
