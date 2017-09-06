@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'reward noise log 10.0' # display a tag before the result printed
+MULTI_RUN = 'reward noise log 1000.0' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
@@ -123,7 +123,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
 
-add_parameters(NOISE_ENCOURAGE_FACTOR = 10.0)
+add_parameters(NOISE_ENCOURAGE_FACTOR = 1000.0)
 
 '''
 compute delta for differant domains
