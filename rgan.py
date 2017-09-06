@@ -123,7 +123,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(KEEP_NOISE = False)
 add_parameters(KEEP_NOISE = True)
 
-add_parameters(KEEP_NOISE_FACTOR = 0.001)
+add_parameters(KEEP_NOISE_FACTOR = 1.0)
 
 '''
 compute delta for differant domains
