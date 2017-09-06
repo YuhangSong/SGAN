@@ -23,9 +23,9 @@ import matplotlib.cm as cm
 import imageio
 from decision_tree import *
 
-CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'keep noise oneside, random bg' # display a tag before the result printed
-GPU = "2" # use which GPU
+CLEAR_RUN = True # if delete logdir and start a new run
+MULTI_RUN = 'keep noise, random bg' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -123,7 +123,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(KEEP_NOISE = False)
 add_parameters(KEEP_NOISE = True)
 
-add_parameters(KEEP_NOISE_FACTOR = 1.0)
+add_parameters(KEEP_NOISE_FACTOR = 0.1)
 
 '''
 compute delta for differant domains
@@ -1720,7 +1720,7 @@ def calc_gradient_reward(netG, state, noise):
     logger.plot('gradients_norm_noise', gradients_norm_noise.data.cpu().numpy())
     logger.plot('gradients_norm_input', gradients_norm_input.data.cpu().numpy())
 
-    gradients_reward = (gradients_norm_noise-autograd.Variable(gradients_norm_input.data)).pow(2)*params['KEEP_NOISE_FACTOR']
+    gradients_reward = (gradients_norm_noise-gradients_norm_input).pow(2)*params['KEEP_NOISE_FACTOR']
 
     return gradients_reward
 
@@ -2063,11 +2063,8 @@ while True:
                 prediction_v = prediction_v
             ).mean()
         G.backward(mone)
-
         G_cost = -G.data.cpu().numpy()
         logger.plot('G_cost', G_cost)
-        
-        optimizerG.step()
 
         GR_cost = [0.0]
         gradients_reward = calc_gradient_reward(
@@ -2079,6 +2076,8 @@ while True:
             gradients_reward.backward(one)
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
+
+        optimizerG.step()
 
         ############################
         # (4) Log summary
