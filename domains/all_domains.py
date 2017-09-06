@@ -15,6 +15,8 @@ ACCEPT_GATE = 0.1
 
 LIMIT_START_STATE_TO = 50
 
+FEATURE_DISCOUNT = 0.5
+
 class Walk1D(object):
 
     def __init__(self, length, prob_left, mode, fix_state=False):
@@ -282,6 +284,17 @@ class Walk2D(object):
         for y in range(np.shape(self.background_feature_mask)[0]):
             self.background_feature_mask[y,:,:] = y%2
 
+        self.background_feature_block = np.copy(self.background_feature_mask[0:BLOCK_SIZE,0:BLOCK_SIZE,:])
+        for y in range(np.shape(self.background_feature_block)[0]):
+            self.background_feature_block[y,:,:] = y%2
+        self.background_feature_block = self.background_feature_block * FEATURE_DISCOUNT
+
+        self.background_unfeature_block = np.copy(self.background_feature_block)
+        self.background_unfeature_block = self.background_unfeature_block*0.0
+
+        self.agent_block = np.copy(self.background_unfeature_block)
+        self.agent_block = 1.0 - self.agent_block
+
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
 
@@ -320,42 +333,43 @@ class Walk2D(object):
 
             '''detect agent opsition from image'''
 
-            # print(state_vector[:,:,1])
-            # print(s)
-
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,0])
-                    if abs(pixel_value_mean_on_channel-1.0) < (ACCEPT_GATE):
+                    block = state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,:]
+                    close_to_agent = np.mean(np.abs(block-self.agent_block))
+                    if close_to_agent <= ACCEPT_GATE:
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
-                        # if self.random_background:
-                        #     self.background_array[y,x] = 255
-                    # else:
-                    #     '''if agent is not here'''
-                    #     if self.random_background:
-                    #         if start_state:
-                    #             '''if start state, set the self.background_array'''
-                    #             if pixel_value_mean_on_channel == 0.5:
-                    #                 self.background_array[y,x] = 2
-                    #             elif pixel_value_mean_on_channel == 0.0:
-                    #                 self.background_array[y,x] = 0
-                    #             else:
-                    #                 raise Exception('s')
-                    #         else:
-                    #             '''see if generate background right'''
-                    #             if self.background_array[y,x]!=255:
-                    #                 # print(self.background_array[y,x])
-                    #                 # print(pixel_value_mean_on_channel)
-                    #                 if abs(pixel_value_mean_on_channel-self.background_array[y,x]/4.0) >= (ACCEPT_GATE):
-                    #                     '''the self.background_array is a 0/2 vector, the image is 0.5 representation
-                    #                     so this /4.0 is to map 0~2 to 0~0.5'''
-                    #                     # print('bad'+str([x,y]))
-                    #                     return 'bad state'
-                    #     else:
-                    #         pass
+                        self.background_array[y,x] = 255
+                    else:
+                        '''if agent is not here'''
+                        if self.random_background:
+                            close_to_feature_background = np.mean(np.abs(block-self.background_feature_block))
+                            close_to_unfeature_background = np.mean(np.abs(block-self.background_unfeature_block))
+                            if start_state:
+                                '''if start state, set the self.background_array'''        
+                                if close_to_feature_background <= ACCEPT_GATE:
+                                    self.background_array[y,x] = 1
+                                elif close_to_unfeature_background <= ACCEPT_GATE:
+                                    self.background_array[y,x] = 0
+                                else:
+                                    return 'bad state'
+                            else:
+                                '''see if generate background right'''
+                                if self.background_array[y,x]==1:
+                                    if not (close_to_feature_background <= ACCEPT_GATE):
+                                        return 'bad state'
+                                elif self.background_array[y,x]==0:
+                                    if not (close_to_unfeature_background <= ACCEPT_GATE):
+                                        return 'bad state'
+                                elif self.background_array[y,x]==255:
+                                    pass
+                                else:
+                                    print(self.background_array[y,x])
+                                    raise Exception('s')
+
 
             if agent_count==1:
                 return pos
@@ -421,7 +435,7 @@ class Walk2D(object):
                     image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
                     image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
 
-                    image_background = image_background*self.background_feature_mask*0.5
+                    image_background = image_background*self.background_feature_mask*FEATURE_DISCOUNT
                     image_background_no_agent = image_background*(1.0-image_agent)
 
                     image = image_background_no_agent + image_agent
