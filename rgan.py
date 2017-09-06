@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'reward noise, size 5' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'reward noise log' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -247,7 +247,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = 'reward noise no pow')
+add_parameters(AUX_INFO = 'reward noise log')
 
 '''
 summary settings
@@ -1720,7 +1720,7 @@ def calc_gradient_reward(netG, state, noise):
     logger.plot('gradients_norm_noise', [gradients_norm_noise.data.mean()])
     logger.plot('gradients_norm_input', [gradients_norm_input.data.mean()])
 
-    gradients_reward = gradients_norm_noise.mean()*params['NOISE_ENCOURAGE_FACTOR']
+    gradients_reward = (gradients_norm_noise+1.0).log().mean()*params['NOISE_ENCOURAGE_FACTOR']
 
     return gradients_reward
 
