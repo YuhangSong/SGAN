@@ -25,7 +25,7 @@ from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
 MULTI_RUN = 'low data, size 5' # display a tag before the result printed
-GPU = "0" # use which GPU
+GPU = "2" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -186,7 +186,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
 add_parameters(NOISE_SIZE = 128)
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 100) # 335544
+add_parameters(DATASET_SIZE = 335544) # 33554432
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -247,7 +247,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = 'reward noise log')
+add_parameters(AUX_INFO = '3')
 
 '''
 summary settings
@@ -1472,11 +1472,11 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        file = '5x5_random_bg'
+        file = '5x5_random_bg_3'
         file_name = '../../dataset/grid/'+file
 
         try:
-            self.dataset = torch.from_numpy(np.load(file_name+'.npy'))
+            self.dataset = torch.from_numpy(np.load(file_name+'.npy')).cuda()
             print('Load dataset from '+file+' : '+str(self.dataset.size()))
 
         except Exception as e:
@@ -1497,10 +1497,9 @@ class grid_domain(object):
                 except Exception as e:
                     self.dataset = data
 
-                print('[{}/{}]'
+                print('[{:2.4f}%]'
                     .format(
-                        self.dataset.size()[0],
-                        self.dataset_lenth,
+                        float(self.dataset.size()[0])/float(self.dataset_lenth)*100.0,
                     )
                 )
 
