@@ -88,12 +88,12 @@ else:
 '''method settings'''
 add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 add_parameters(SOFT_VECTOR = 0.2)
 
@@ -133,7 +133,7 @@ elif params['DOMAIN']=='2Dgrid':
 
 elif params['DOMAIN']=='marble':
     add_parameters(
-        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        DELTA_T = ( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
 
 else:
@@ -220,7 +220,7 @@ add_parameters(OPTIMIZER = 'Adam') # Adam, RMSprop
 add_parameters(CRITIC_ITERS = 5)
 
 # add_parameters(AUX_INFO = 'strict filter')
-add_parameters(AUX_INFO = 'small frame interval 1')
+add_parameters(AUX_INFO = 'full')
 
 '''summary settings'''
 DSP = ''
@@ -266,7 +266,9 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         print(unsupport)
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True
+    PRE_DATASET = False
+    LOG_SEQ_NUM = 32
+    LOG_SEQ_LENTH = 8
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -287,7 +289,7 @@ def vector2image(x):
                 x_temp[b,d,0,:,from_:to_].fill_(fill_)
     return x_temp
 
-def log_img(x,name,iteration=0):
+def log_img(x,name,iteration=0,nrow=8):
     if params['REPRESENTATION']==chris_domain.VECTOR:
         x = vector2image(x)
     x = x.squeeze(1)
@@ -295,10 +297,17 @@ def log_img(x,name,iteration=0):
         if not (params['OBSTACLE_POS_LIST']==[]):
             # x = torch.cat([x,x[:,0:1,:,:]],1)
             pass
-    vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
-    vis.images( x.cpu().numpy(),
-                win=str(MULTI_RUN)+'-'+name,
-                opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)))
+    vutils.save_image(
+        x,
+        LOGDIR+name+'_'+str(iteration)+'.png',
+        nrow=nrow,
+    )
+    vis.images( 
+        x.cpu().numpy(),
+        win=str(MULTI_RUN)+'-'+name,
+        opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)),
+        nrow=nrow,
+    )
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -423,11 +432,11 @@ class Generator(nn.Module):
             elif params['DOMAIN']=='marble':
 
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*64*64
+                    # params['FEATURE']*2*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -600,7 +609,7 @@ class Discriminator(nn.Module):
             elif params['DOMAIN']=='marble':
 
                 conv_layer = nn.Sequential(
-                    # 1*2*64*64
+                    # 1*3*64*64
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
                         out_channels=64,
@@ -610,11 +619,11 @@ class Discriminator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*32*32
+                    # 64*2*32*32
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -848,23 +857,36 @@ def collect_samples(iteration,tabular=None):
 
     elif params['DOMAIN']=='marble':
         state = domain.get_batch().narrow(1,0,params['STATE_DEPTH'])
-        # state = state[0:1]
-        # # print(state.size())
-        # log_img(state.squeeze(0).unsqueeze(1),'state',iteration)
-        # state = torch.cat([state]*params['BATCH_SIZE'],0)
+        state = state[0:1]
+        state = torch.cat([state]*LOG_SEQ_NUM,0)
 
-        '''prediction'''
-        if params['METHOD']=='s-gan':
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            prediction = netG(
-                noise_v = autograd.Variable(noise, volatile=True),
-                state_v = autograd.Variable(state, volatile=True)
-            ).data
-        elif params['METHOD']=='deterministic-deep-net':
-            prediction = netT(
-                state_v = autograd.Variable(state, volatile=True)
-            ).data
-        log_img(prediction,'prediction',iteration)
+        seq = state
+
+        for t in range(LOG_SEQ_LENTH):
+            '''prediction'''
+            if params['METHOD']=='s-gan':
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                prediction = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(state, volatile=True)
+                ).data
+            elif params['METHOD']=='deterministic-deep-net':
+                prediction = netT(
+                    state_v = autograd.Variable(state, volatile=True)
+                ).data
+
+            seq = torch.cat([seq,prediction],1)
+
+            state = seq.narrow(1,seq.size()[1]-params['STATE_DEPTH'],params['STATE_DEPTH'])
+
+        seq = seq.contiguous().view(-1,1,seq.size()[2],seq.size()[3],seq.size()[4])
+
+        log_img(
+            seq,
+            'seq',
+            iteration,
+            nrow=(LOG_SEQ_LENTH+params['STATE_DEPTH']),
+        )
 
         l1, ac = 0.0, 0.0
 
@@ -1276,20 +1298,12 @@ class marble_domain(object):
                 try:
                     data = torch.from_numpy(np.load(file_name+'.npy'))
                     print('Load data from '+file+' : '+str(data.size()))
+                    try:
+                        self.dataset = torch.cat([self.dataset,data],0)
+                    except Exception as e:
+                        self.dataset = data
                 except Exception as e:
                     print('Failed to load data from '+file)
-
-                try:
-                    self.dataset = torch.cat([self.dataset,data],0)
-
-                except Exception as e:
-                    self.dataset = data
-
-                print('Dataset: {}'
-                    .format(
-                        self.dataset.size()
-                    )
-                )
 
             self.dataset = self.dataset.float()/255.0
             self.dataset = self.dataset.cuda()
@@ -1365,10 +1379,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
-        # print(d_mean)
-        # print(prediction_gt[0:4,0,1,:,:])
-        # print(s)
-        num_t = (d_mean / params['DELTA_T']).floor().int() - 1
+        num_t = (d_mean / params['DELTA_T']).floor().int()-1
 
         num_t_sum = 0.0
         for b in range(num_t.size()[0]):
@@ -1447,10 +1458,6 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
     interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
 
-    # print(prediction_gt[0:1,0,1,:,:])
-    # print(prediction[0:1,0,1,:,:])
-    # print(interpolates[0:1,0,1,:,:])
-
     if log:
         plt.scatter(
             interpolates.squeeze(1).cpu().numpy()[:, 0], 
@@ -1478,60 +1485,18 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
 
-    if (params['GP_MODE']=='use-guide') or (params['GP_MODE']=='pure-guide'):
+    if params['GP_MODE']=='pure-guide':
 
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
 
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
 
-        def torch_remove_at_batch(x,index):
-
-            if x.size()[0]==1:
-                return None
-
-            if index==0:
-                x = x[index+1:x.size()[0]]
-            elif index==(x.size()[0]-1):
-                x[0:index]
-            else:
-                x = torch.cat(
-                    [x[0:index],x[index+1:x.size()[0]]],
-                    0
-                )
-
-            return x
-
-        original_size = gradients_direction_gt_fl.size()[0]
-
-        b = 0
-        while True:
-            if gradients_direction_gt_fl[b].abs().max() < 0.01:
-                gradients_direction_gt_fl = torch_remove_at_batch(
-                    gradients_direction_gt_fl,
-                    b
-                )
-                gradients_fl = torch_remove_at_batch(
-                    gradients_fl,
-                    b
-                )
-                if gradients_fl is None:
-                    print('No valid batch, return')
-                    return None, 0
-            else:
-                b += 1
-                if b>=gradients_direction_gt_fl.size()[0]:
-                    # print('Filter batch to: ' + str(gradients_direction_gt_fl.size()[0]))
-                    break
-
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
         gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
-
-        if params['GP_MODE']=='use-guide':
-            gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
