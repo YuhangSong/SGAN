@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'no keep noise uni gp' # display a tag before the result printed
+MULTI_RUN = 'no keep noise, random bg' # display a tag before the result printed
 # MULTI_RUN = 'train_fix_bg' # display a tag before the result printed
 GPU = "0" # use which GPU
 
@@ -79,7 +79,7 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = False)
+    add_parameters(RANDOM_BACKGROUND = True)
 
     if params['RANDOM_BACKGROUND']==True:
         add_parameters(FEATURE = 1)
@@ -365,6 +365,9 @@ class Generator(nn.Module):
 
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             
+            '''
+            low dimensional domain share following network
+            '''
             conv_layer = nn.Sequential(
                 nn.Linear(DESCRIBE_DIM, params['DIM']),
                 nn.LeakyReLU(0.001, inplace=True),
@@ -390,7 +393,10 @@ class Generator(nn.Module):
         elif params['REPRESENTATION']==chris_domain.IMAGE:
 
             if params['DOMAIN']!='marble':
-           
+
+                '''
+                image domains that are not marble share following network6
+                '''
                 conv_layer = nn.Sequential(
                     nn.Conv3d(
                         in_channels=params['FEATURE'],
@@ -412,13 +418,13 @@ class Generator(nn.Module):
                     nn.LeakyReLU(0.001, inplace=True),
                 )
 
+                '''
+                compute the number of the last conv layer
+                '''
                 if params['DOMAIN']=='1Dgrid':
                     temp = 128*1*(params['GRID_SIZE'])
                 elif params['DOMAIN']=='2Dgrid':
-                    if params['RANDOM_BACKGROUND']==True:
-                        temp = 128*1*(params['GRID_SIZE']**2)
-                    else:
-                        temp = 128*1*(params['GRID_SIZE']**2)
+                    temp = 128*1*(params['GRID_SIZE']**2)
                 else:
                     raise Exception('s')
 
@@ -457,6 +463,9 @@ class Generator(nn.Module):
 
             elif params['DOMAIN']=='marble':
 
+                '''
+                marble domain use a another network
+                '''
                 conv_layer = nn.Sequential(
                     # params['FEATURE']*1*64*64
                     nn.Conv3d(
@@ -547,12 +556,10 @@ class Generator(nn.Module):
         
     def forward(self, noise_v, state_v):
 
-        if params['DOMAIN']=='marble':
-            state_v.data.fill_(0.0)
-
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
             state_v = state_v.squeeze(1)
+
         elif params['REPRESENTATION']==chris_domain.IMAGE:
             # N*D*F*H*W to N*F*D*H*W
             state_v = state_v.permute(0,2,1,3,4)
