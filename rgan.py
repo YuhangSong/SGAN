@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = True # if delete logdir and start a new run
-MULTI_RUN = 'keep noise, random bg' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'reward noise, random bg' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -1720,7 +1720,8 @@ def calc_gradient_reward(netG, state, noise):
     logger.plot('gradients_norm_noise', gradients_norm_noise.data.cpu().numpy())
     logger.plot('gradients_norm_input', gradients_norm_input.data.cpu().numpy())
 
-    gradients_reward = (gradients_norm_noise-gradients_norm_input).pow(2)*params['KEEP_NOISE_FACTOR']
+    # gradients_reward = (gradients_norm_noise-gradients_norm_input).pow(2)*params['KEEP_NOISE_FACTOR']
+    gradients_reward = gradients_norm_noise.pow(2)*params['KEEP_NOISE_FACTOR']
 
     return gradients_reward
 
@@ -2073,7 +2074,7 @@ while True:
             noise=noise
         )
         if params['KEEP_NOISE']:
-            gradients_reward.backward(one)
+            gradients_reward.backward(mone)
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
 
