@@ -25,7 +25,7 @@ from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
 MULTI_RUN = 'marble_seq_noise_encourage' # display a tag before the result printed
-GPU = "0" # use which GPU
+GPU = "3" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -307,16 +307,19 @@ def log_img(x,name,iteration=0,nrow=8):
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
         if x.size()[1]==2:
-            log_img_final(x[:,0:1,:,:],name+'_b',iteration)
-            log_img_final(x[:,1:2,:,:],name+'_a',iteration)
+            log_img_final(x[:,0:1,:,:],name+'_b',iteration,nrow)
+            log_img_final(x[:,1:2,:,:],name+'_a',iteration,nrow)
             x = torch.cat([x,x[:,0:1,:,:]],1)
-    log_img_final(x,name,iteration)
+    log_img_final(x,name,iteration,nrow)
 
-def log_img_final(x,name,iteration=0):
+def log_img_final(x,name,iteration=0,nrow=8):
     vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
-    vis.images( x.cpu().numpy(),
-                win=str(MULTI_RUN)+'-'+name,
-                opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)))
+    vis.images( 
+        x.cpu().numpy(),
+        win=str(MULTI_RUN)+'-'+name,
+        opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)),
+        nrow=nrow,
+    )
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -906,7 +909,7 @@ def collect_samples(iteration,tabular=None):
                 prediction = netG(
                     noise_v = autograd.Variable(noise, volatile=True),
                     state_v = autograd.Variable(state, volatile=True)
-                ).data
+                )[0].data
             elif params['METHOD']=='deterministic-deep-net':
                 prediction = netT(
                     state_v = autograd.Variable(state, volatile=True)
@@ -1541,8 +1544,6 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
         raise Exception('Unsupport')
 
     interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
-
-    interpolates = autograd.Variable(interpolates, requires_grad=True)
 
     interpolates = autograd.Variable(
         interpolates,
