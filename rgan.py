@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'low data, size 5' # display a tag before the result printed
-GPU = "2" # use which GPU
+MULTI_RUN = 'marble_seq_noise_encourage' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -48,8 +48,8 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'noise_encourage') # the first level of log dir
-add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(EXP = 'marble_seq_noise_encourage') # the first level of log dir
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -100,12 +100,12 @@ method settings
 '''
 add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
@@ -277,7 +277,7 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         raise Exception('s')
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True # if prepare date on marble domain
+    PRE_DATASET = False # if prepare date on marble domain
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -442,11 +442,11 @@ class Generator(nn.Module):
                 marble domain use a another network
                 '''
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*64*64
+                    # params['FEATURE']*2*64*64
                     nn.Conv3d(
                         in_channels=1,
                         out_channels=64,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -653,9 +653,9 @@ class Discriminator(nn.Module):
                 marble domain use a another network
                 '''
                 conv_layer = nn.Sequential(
-                    # 1*2*64*64
+                    # 1*3*64*64
                     nn.Conv3d(
-                        in_channels=params['FEATURE'],
+                        in_channels=1,
                         out_channels=64,
                         kernel_size=(2,4,4),
                         stride=(1,2,2),
@@ -663,19 +663,29 @@ class Discriminator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*32*32
+                    # 64*2*32*32
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*16*16
+                    nn.Conv3d(
+                        in_channels=128,
+                        out_channels=256,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 256*1*8*8
                 )
-                temp = 128*1*16*16
+                temp = 256*1*8*8
                 squeeze_layer = nn.Sequential(
                     nn.Linear(temp, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
@@ -705,9 +715,6 @@ class Discriminator(nn.Module):
         self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
-
-        # if params['DOMAIN']=='marble':
-        #     state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -1425,7 +1432,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         dataset = wrap_domain.get_batch()
 
-        # # print(dataset.size())
+        # print(dataset.size())
         # print(dataset[3,0,0,:,:])
         # # # print(dataset[3,0,1,:,:])
         # print(dataset[3,1,0,:,:])
