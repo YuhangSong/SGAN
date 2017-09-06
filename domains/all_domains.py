@@ -15,6 +15,8 @@ ACCEPT_GATE = 0.1
 
 LIMIT_START_STATE_TO = 50
 
+FEATURE_DISCOUNT = 0.5
+
 class Walk1D(object):
 
     def __init__(self, length, prob_left, mode, fix_state=False):
@@ -237,7 +239,7 @@ class BitFlip1D(object):
 
 class Walk2D(object):
 
-    def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap, fix_state=False):
+    def __init__(self, width, height, prob_dirs, obstacle_pos_list, mode, should_wrap, fix_state=False, random_background=False):
         self.UP, self.DOWN, self.LEFT, self.RIGHT = 0, 1, 2, 3
         self.action_dic = [self.UP, self.DOWN, self.LEFT, self.RIGHT]
         assert sum(prob_dirs) == 1
@@ -263,6 +265,35 @@ class Walk2D(object):
         self.cleaner_function = clean_entry_012_vec
         self.fix_state = fix_state
         self.fix_state_to = (self.w/2, self.h/2)
+        self.random_background = random_background
+
+        if self.random_background:
+            self.reset_background()
+            self.build_background_feature_mask()
+
+    def reset_background(self):
+        if self.random_background:
+            self.background_array = np.random.randint(
+                2, 
+                size=(self.h, self.w),
+                dtype=np.uint8,
+            )
+    
+    def build_background_feature_mask(self):
+        self.background_feature_mask = (1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0)
+        for y in range(np.shape(self.background_feature_mask)[0]):
+            self.background_feature_mask[y,:,:] = y%2
+
+        self.background_feature_block = np.copy(self.background_feature_mask[0:BLOCK_SIZE,0:BLOCK_SIZE,:])
+        for y in range(np.shape(self.background_feature_block)[0]):
+            self.background_feature_block[y,:,:] = y%2
+        self.background_feature_block = self.background_feature_block * FEATURE_DISCOUNT
+
+        self.background_unfeature_block = np.copy(self.background_feature_block)
+        self.background_unfeature_block = self.background_unfeature_block*0.0
+
+        self.agent_block = np.copy(self.background_unfeature_block)
+        self.agent_block = 1.0 - self.agent_block
 
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
@@ -278,7 +309,7 @@ class Walk2D(object):
         else:
             return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
-    def state_vector_to_position(self, state_vector):
+    def state_vector_to_position(self, state_vector, start_state=False):
 
         if self.mode==SCALAR:
 
@@ -302,20 +333,43 @@ class Walk2D(object):
 
             '''detect agent opsition from image'''
 
-            agent_channel_should_be = [1.0]
-
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    valid_on_channel = True
-                    for c in range(1):
-                        pixel_value_mean_on_channel = np.mean(state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                        if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (ACCEPT_GATE):
-                            valid_on_channel = False
-                            break
-                    if valid_on_channel:
+                    block = state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,:]
+                    close_to_agent = np.mean(np.abs(block-self.agent_block))
+                    if close_to_agent <= ACCEPT_GATE:
+                        '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
+                        self.background_array[y,x] = 255
+                    else:
+                        '''if agent is not here'''
+                        if self.random_background:
+                            close_to_feature_background = np.mean(np.abs(block-self.background_feature_block))
+                            close_to_unfeature_background = np.mean(np.abs(block-self.background_unfeature_block))
+                            if start_state:
+                                '''if start state, set the self.background_array'''        
+                                if close_to_feature_background <= ACCEPT_GATE:
+                                    self.background_array[y,x] = 1
+                                elif close_to_unfeature_background <= ACCEPT_GATE:
+                                    self.background_array[y,x] = 0
+                                else:
+                                    return 'bad state'
+                            else:
+                                '''see if generate background right'''
+                                if self.background_array[y,x]==1:
+                                    if not (close_to_feature_background <= ACCEPT_GATE):
+                                        return 'bad state'
+                                elif self.background_array[y,x]==0:
+                                    if not (close_to_unfeature_background <= ACCEPT_GATE):
+                                        return 'bad state'
+                                elif self.background_array[y,x]==255:
+                                    pass
+                                else:
+                                    print(self.background_array[y,x])
+                                    raise Exception('s')
+
 
             if agent_count==1:
                 return pos
@@ -348,6 +402,8 @@ class Walk2D(object):
         else:
             self.x_pos, self.y_pos = self.fix_state_to
 
+        self.reset_background()
+
     def set_state(self, x_pos, y_pos):
         self.x_pos = x_pos
         self.y_pos = y_pos
@@ -369,15 +425,26 @@ class Walk2D(object):
             return np.reshape(array, [-1])
 
         elif self.mode == IMAGE:
-            image = self.visualizer.make_screen(array)
-            image = image / 255.0
-            image = 1.0 - image
             if self.obstacle_pos_list==[]:
+                if self.random_background==False:
+                    image = self.visualizer.make_screen(array)
+                    image = image[:,:,1:2]
+                    image = image / 255.0
+                    image = 1.0 - image
+                else:
+                    image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
+                    image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
+
+                    image_background = image_background*self.background_feature_mask*FEATURE_DISCOUNT
+                    image_background_no_agent = image_background*(1.0-image_agent)
+
+                    image = image_background_no_agent + image_agent
+            else:
+                if self.random_background:
+                    raise Exception('s')
                 image = self.visualizer.make_screen(array)
-                image = image[:,:,1:2]
                 image = image / 255.0
                 image = 1.0 - image
-            else:
                 image_obst = image[:,:,0:1]
                 image_agent = image[:,:,1:2] - image_obst
                 image = image_agent + image_obst * 0.5
@@ -441,7 +508,13 @@ def l1_distance(dist1, dist2):
 
 def evaluate_domain(domain, s1_state, s2_samples):
 
-    s1_pos = domain.state_vector_to_position(s1_state)
+    s1_pos = domain.state_vector_to_position(
+        s1_state,
+        start_state = True,
+    )
+    # print(s1_pos)
+    # print(domain.background_array)
+    # print(s)
 
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos
