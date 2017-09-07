@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_d_811' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'noise_encourage_d' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -68,11 +68,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
-
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
+
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -82,10 +82,7 @@ elif params['DOMAIN']=='2Dgrid':
 
     add_parameters(RANDOM_BACKGROUND = True)
 
-    if params['RANDOM_BACKGROUND']==True:
-        add_parameters(FEATURE = 1)
-    else:
-        add_parameters(FEATURE = 1)
+    add_parameters(FEATURE = 1)
 
 elif params['DOMAIN']=='marble':
     add_parameters(FEATURE = 1)
@@ -163,7 +160,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
 add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 33554) # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
+add_parameters(DATASET_SIZE = 100) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -1352,6 +1349,7 @@ class grid_domain(object):
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
         file = '5x5_random_bg_3_small10'
+        # file = '5x5_random_bg_3_small10_temp'
         file_name = '../../dataset/grid/'+file
 
         try:
@@ -1617,43 +1615,22 @@ def restore_model():
         print('Previous checkpoint for netG unfounded')
     print('')
 
-class TabulatCell(object):
-    """docstring for TabulatCell"""
-    def __init__(self, x):
-        super(TabulatCell, self).__init__()
-        self.x = x
-        self.count = 0.0
-    def push(self):
-        self.count += 1.0
-
 class Tabular(object):
     """docstring for Tabular"""
-    def __init__(self, x):
+    def __init__(self):
         super(Tabular, self).__init__()
-        self.x = x
-        self.x_next_dic = []
-    def push(self,x_next_push):
-        in_cell = False
-        for x_next in self.x_next_dic:
-            delta = np.mean(
-                np.abs((x_next_push-x_next.x)),
-                keepdims=False
-            )
-            if delta==0.0:
-                x_next.push()
-                in_cell = True
-                break
-        
-        if not in_cell:
-            self.x_next_dic += [TabulatCell(np.copy(x_next_push))]
-            # print('Create a cell.')
-            self.x_next_dic[-1].push()
-            print(len(self.x_next_dic))
+        self.next_dic = {}
+    def push(self,prediction_gt_str):
+        try:
+            self.next_dic.keys().index(prediction_gt_str)
+            self.next_dic[prediction_gt_str] = self.next_dic[prediction_gt_str] + 1
+        except Exception as e:
+            self.next_dic[prediction_gt_str] = 1
         
 ############################### Definition End ###############################
 
 if params['METHOD']=='tabular':
-    tabular_dic = []
+    tabular_dic = {}
     l1 = 2.0
 
 elif params['METHOD']=='bayes-net-learner':
@@ -1754,32 +1731,31 @@ while True:
 
         '''get data set'''
         state_prediction_gt = data.next()
-        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH']).cpu().numpy()
-        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1).cpu().numpy()
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
+
+        state=song2chris(state)
+        prediction_gt=song2chris(prediction_gt)
 
         for b in range(np.shape(state)[0]):
-            in_tabular = False
-            for tabular_i in tabular_dic:
-                delta = np.mean(
-                    np.abs(state[b] - tabular_i.x),
-                    keepdims=False
-                )
-                if delta==0.0:
-                    tabular_i.push(np.copy(prediction_gt[b]))
-                    in_tabular = True
-                    break
-            if not in_tabular:
-                tabular_dic += [Tabular(np.copy(state[b]))]
-                tabular_dic[-1].push(np.copy(prediction_gt[b]))
-                print('Create a tabular: '+str(len(tabular_dic)))
+            state_str = domain.get_state_str(state[b])
+            prediction_gt_str = domain.get_state_str(prediction_gt[b])
+            try:
+                tabular_dic.keys().index(state_str)
+            except Exception as e:
+                tabular_dic[state_str] = Tabular()
+            tabular_dic[state_str].push(prediction_gt_str)
 
-        if iteration % LOG_INTER == 5:
-            l1,_ = evaluate_domain(iteration,tabular_dic)
+        # if iteration % LOG_INTER == 5:
+        #     l1,_ = evaluate_domain(iteration,tabular_dic)
 
-        print('[{}][{}] l1: {}'
+        logger.plot('len(tabular_dic.keys())',[len(tabular_dic.keys())])
+
+        print('[{}][{}] tubular: {} l1: {}'
             .format(
                 MULTI_RUN,
                 iteration,
+                len(tabular_dic.keys()),
                 l1
             )
         )
