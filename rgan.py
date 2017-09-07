@@ -163,7 +163,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
 add_parameters(NOISE_SIZE = 128)
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 335544) # 33554432
+add_parameters(DATASET_SIZE = 33554) # 33554432
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -1351,7 +1351,7 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        file = '5x5_random_bg_3'
+        file = '5x5_random_bg_3_small10'
         file_name = '../../dataset/grid/'+file
 
         try:
