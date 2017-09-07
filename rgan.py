@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_d_comp' # display a tag before the result printed
-GPU = "2" # use which GPU
+MULTI_RUN = 'noise_encourage_d_comp_811' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -68,11 +68,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
