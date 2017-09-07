@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_d_rerun' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'rerun_no_background' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -80,12 +80,9 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = True)
+    add_parameters(RANDOM_BACKGROUND = False)
 
-    if params['RANDOM_BACKGROUND']==True:
-        add_parameters(FEATURE = 1)
-    else:
-        add_parameters(FEATURE = 1)
+    add_parameters(FEATURE = 1)
 
 elif params['DOMAIN']=='marble':
     add_parameters(FEATURE = 1)
@@ -108,7 +105,7 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 # add_parameters(NOISE_ENCOURAGE = False)
-add_parameters(NOISE_ENCOURAGE = True)
+add_parameters(NOISE_ENCOURAGE = False)
 
 add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
 
@@ -1352,7 +1349,8 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        file = '5x5_random_bg_3_small10'
+        # file = '5x5_random_bg_3_small10'
+        file = '5x5_fix_bg_small'
         file_name = '../../dataset/grid/'+file
 
         try:
