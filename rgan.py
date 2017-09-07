@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'rerun_fix_background' # display a tag before the result printed
-GPU = "0" # use which GPU
+MULTI_RUN = 'shallower_background_or_dim' # display a tag before the result printed
+GPU = "3" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -80,7 +80,7 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = False)
+    add_parameters(RANDOM_BACKGROUND = True)
 
     add_parameters(FEATURE = 1)
 
@@ -157,8 +157,8 @@ else:
     raise Exception('s')
 
 '''model settings'''
-add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
-add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
+add_parameters(DIM = 512) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
+add_parameters(NOISE_SIZE = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
 add_parameters(DATASET_SIZE = 33554) # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
@@ -222,7 +222,7 @@ else:
     print(unsupport)
 
 # add_parameters(AUX_INFO = '3')
-add_parameters(AUX_INFO = '3 rerun')
+add_parameters(AUX_INFO = 'shallower background')
 
 '''
 summary settings
@@ -1350,8 +1350,8 @@ class grid_domain(object):
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
         # file = '5x5_random_bg_3_small10'
-        # file = '5x5_random_bg_3_small10_background_shallower'
-        file = '5x5_fix_bg_small'
+        file = '5x5_random_bg_3_small10_background_shallower'
+        # file = '5x5_fix_bg_small'
         file_name = '../../dataset/grid/'+file
 
         try:
