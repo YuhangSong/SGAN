@@ -1947,22 +1947,18 @@ while True:
         ).mean()
         G.backward(
             mone,
-            retain_graph=True
+            retain_graph=params['NOISE_ENCOURAGE'],
         )
         G_cost = -G.data.cpu().numpy()
         logger.plot('G_cost', G_cost)
         
-        gradients_reward = calc_gradient_reward(
-            noise_v=noise_v,
-            prediction_v_before_deconv=prediction_v_before_deconv,
-        )
-
         GR_cost = [0.0]
         if params['NOISE_ENCOURAGE']:
-            gradients_reward.backward(
-                mone,
-                retain_graph=False
+            gradients_reward = calc_gradient_reward(
+                noise_v=noise_v,
+                prediction_v_before_deconv=prediction_v_before_deconv,
             )
+            gradients_reward.backward(mone)
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
 
@@ -1996,6 +1992,10 @@ while True:
                     L1, AC = evaluate_domain(iteration)
             else:
                 L1, AC = evaluate_domain(iteration)
+
+            if params['NOISE_ENCOURAGE']:
+                if L1<0.5:
+                    params['NOISE_ENCOURAGE'] = False
 
     if iteration % LOG_INTER == 5:
         logger.flush()
