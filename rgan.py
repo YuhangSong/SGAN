@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'smaller_noise_dim' # display a tag before the result printed
+MULTI_RUN = 'noise_encourage_d' # display a tag before the result printed
 GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
@@ -48,7 +48,7 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'noise_encourage') # the first level of log dir
+add_parameters(EXP = 'noise_encourage_dd') # the first level of log dir
 add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
@@ -1577,23 +1577,14 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     
     return gradients_penalty, num_t_sum
 
-def calc_gradient_reward(netG, state, noise):
-    noise_v = autograd.Variable(
-        noise,
-        requires_grad=True
-    )
+def calc_gradient_reward(noise_v, prediction_v_before_deconv):
 
-    _, prediction_v, cat_input = netG(
-        noise_v = noise_v,
-        state_v = autograd.Variable(state)
-    )
-
-    def get_grad_norm(x):
+    def get_grad_norm(inputs,outputs):
 
         gradients = autograd.grad(
-            outputs=prediction_v,
-            inputs=x,
-            grad_outputs=torch.ones(prediction_v.size()).cuda(),
+            outputs=outputs,
+            inputs=inputs,
+            grad_outputs=torch.ones(outputs.size()).cuda(),
             create_graph=True,
             retain_graph=True,
             only_inputs=True
@@ -1604,11 +1595,9 @@ def calc_gradient_reward(netG, state, noise):
 
         return gradients_norm
 
-    gradients_norm_noise = get_grad_norm(noise_v)
-    gradients_norm_input = get_grad_norm(cat_input)
+    gradients_norm_noise = get_grad_norm(noise_v,prediction_v_before_deconv)
 
     logger.plot('gradients_norm_noise', [gradients_norm_noise.data.mean()])
-    logger.plot('gradients_norm_input', [gradients_norm_input.data.mean()])
 
     gradients_reward = (gradients_norm_noise+1.0).log().mean()*params['NOISE_ENCOURAGE_FACTOR']
 
@@ -1943,27 +1932,37 @@ while True:
             p.requires_grad = False
 
         noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-        prediction_v = netG(
-            noise_v = autograd.Variable(noise),
-            state_v = autograd.Variable(state)
-        )[0]
 
+        noise_v = autograd.Variable(
+            noise,
+            requires_grad=True
+        )
+        prediction_v, prediction_v_before_deconv, _ = netG(
+            noise_v = noise_v,
+            state_v = autograd.Variable(state)
+        )
         G = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = prediction_v
-            ).mean()
-        G.backward(mone)
+            state_v = autograd.Variable(state),
+            prediction_v = prediction_v
+        ).mean()
+        G.backward(
+            mone,
+            retain_graph=True
+        )
         G_cost = -G.data.cpu().numpy()
         logger.plot('G_cost', G_cost)
+        
+        gradients_reward = calc_gradient_reward(
+            noise_v=noise_v,
+            prediction_v_before_deconv=prediction_v_before_deconv,
+        )
 
         GR_cost = [0.0]
-        gradients_reward = calc_gradient_reward(
-            netG=netG,
-            state=state,
-            noise=noise
-        )
         if params['NOISE_ENCOURAGE']:
-            gradients_reward.backward(mone)
+            gradients_reward.backward(
+                mone,
+                retain_graph=False
+            )
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
 
