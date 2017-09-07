@@ -160,10 +160,10 @@ else:
     raise Exception('s')
 
 '''model settings'''
-add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
-add_parameters(NOISE_SIZE = 8)
+add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
+add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 33554) # 1610612736
+add_parameters(DATASET_SIZE = 33554) # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
