@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'low data, size 5, bigger noise' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'low data, size 5, bigger noise, comp' # display a tag before the result printed
+GPU = "2" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -100,12 +100,12 @@ method settings
 '''
 add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
@@ -163,7 +163,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
 add_parameters(NOISE_SIZE = 128)
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 33554) # 33554432
+add_parameters(DATASET_SIZE = 33554) # 1610612736
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
