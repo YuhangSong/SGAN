@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'marble_seq_noise_encourage' # display a tag before the result printed
+MULTI_RUN = 'noise_encourage_nbg_ob' # display a tag before the result printed
 GPU = "3" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
@@ -48,8 +48,8 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'marble_seq_noise_encourage') # the first level of log dir
-add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
+add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -71,16 +71,16 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    add_parameters(OBSTACLE_POS_LIST = [])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = True)
+    add_parameters(RANDOM_BACKGROUND = False)
 
     if params['RANDOM_BACKGROUND']==True:
         add_parameters(FEATURE = 1)
@@ -160,10 +160,10 @@ else:
     raise Exception('s')
 
 '''model settings'''
-add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report is on DIM = 512
-add_parameters(NOISE_SIZE = 128)
+add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
+add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 335544) # 33554432
+add_parameters(DATASET_SIZE = 33554) # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -224,7 +224,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = '3')
+add_parameters(AUX_INFO = '')
 
 '''
 summary settings
@@ -1369,7 +1369,8 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        file = '5x5_random_bg_3'
+        # file = '5x5_random_bg_3_small10'
+        file = '5x5_nbg_ob'
         file_name = '../../dataset/grid/'+file
 
         try:
@@ -1464,11 +1465,13 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     
     '''get multiple interplots'''
     if params['INTERPOLATES_MODE']=='auto':
-
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
+        # print(d_mean)
+        # print(prediction_gt[0:4,0,1,:,:])
+        # print(s)
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
 
         num_t_sum = 0.0
@@ -1478,8 +1481,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                 continue
             else:
                 t = num_t[b]
-
-            num_t_sum += t
+                num_t_sum += t
 
             if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 state_b = state[b].unsqueeze(0).repeat(t,1,1)
@@ -1520,6 +1522,10 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     else:
         num_t_sum = params['BATCH_SIZE']
         alpha = torch.rand(prediction_gt.size()[0]).cuda()
+
+    # if params['SOFT_GP']:
+    #     '''solf function here'''
+    #     alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
         
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
@@ -1545,24 +1551,33 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
     interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
 
-    interpolates = autograd.Variable(
-        interpolates,
-        requires_grad=True
-    )
+    # print(prediction_gt[0:1,0,1,:,:])
+    # print(prediction[0:1,0,1,:,:])
+    # print(interpolates[0:1,0,1,:,:])
+
+    if log:
+        plt.scatter(
+            interpolates.squeeze(1).cpu().numpy()[:, 0], 
+            interpolates.squeeze(1).cpu().numpy()[:, 1],
+            c='red', 
+            marker='+', 
+            alpha=0.1
+        )
+
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
 
     disc_interpolates = netD(
-        state_v = autograd.Variable(state),
-        prediction_v = interpolates
-    )
+                            state_v = autograd.Variable(state),
+                            prediction_v = interpolates
+                        )
 
     gradients = autograd.grad(
-        outputs=disc_interpolates,
-        inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True
-    )[0]
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True)[0]
 
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
@@ -1574,11 +1589,53 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
 
+        def torch_remove_at_batch(x,index):
+
+            if x.size()[0]==1:
+                return None
+
+            if index==0:
+                x = x[index+1:x.size()[0]]
+            elif index==(x.size()[0]-1):
+                x[0:index]
+            else:
+                x = torch.cat(
+                    [x[0:index],x[index+1:x.size()[0]]],
+                    0
+                )
+
+            return x
+
+        original_size = gradients_direction_gt_fl.size()[0]
+
+        b = 0
+        while True:
+            if gradients_direction_gt_fl[b].abs().max() < 0.01:
+                gradients_direction_gt_fl = torch_remove_at_batch(
+                    gradients_direction_gt_fl,
+                    b
+                )
+                gradients_fl = torch_remove_at_batch(
+                    gradients_fl,
+                    b
+                )
+                if gradients_fl is None:
+                    print('No valid batch, return')
+                    return None, 0
+            else:
+                b += 1
+                if b>=gradients_direction_gt_fl.size()[0]:
+                    # print('Filter batch to: ' + str(gradients_direction_gt_fl.size()[0]))
+                    break
+
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
         gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
+
+        if params['GP_MODE']=='use-guide':
+            gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
@@ -1595,23 +1652,14 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     
     return gradients_penalty, num_t_sum
 
-def calc_gradient_reward(netG, state, noise):
-    noise_v = autograd.Variable(
-        noise,
-        requires_grad=True
-    )
+def calc_gradient_reward(noise_v, prediction_v_before_deconv):
 
-    _, prediction_v, cat_input = netG(
-        noise_v = noise_v,
-        state_v = autograd.Variable(state)
-    )
-
-    def get_grad_norm(x):
+    def get_grad_norm(inputs,outputs):
 
         gradients = autograd.grad(
-            outputs=prediction_v,
-            inputs=x,
-            grad_outputs=torch.ones(prediction_v.size()).cuda(),
+            outputs=outputs,
+            inputs=inputs,
+            grad_outputs=torch.ones(outputs.size()).cuda(),
             create_graph=True,
             retain_graph=True,
             only_inputs=True
@@ -1622,11 +1670,9 @@ def calc_gradient_reward(netG, state, noise):
 
         return gradients_norm
 
-    gradients_norm_noise = get_grad_norm(noise_v)
-    gradients_norm_input = get_grad_norm(cat_input)
+    gradients_norm_noise = get_grad_norm(noise_v,prediction_v_before_deconv)
 
     logger.plot('gradients_norm_noise', [gradients_norm_noise.data.mean()])
-    logger.plot('gradients_norm_input', [gradients_norm_input.data.mean()])
 
     gradients_reward = (gradients_norm_noise+1.0).log().mean()*params['NOISE_ENCOURAGE_FACTOR']
 
@@ -1961,26 +2007,32 @@ while True:
             p.requires_grad = False
 
         noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-        prediction_v = netG(
-            noise_v = autograd.Variable(noise),
-            state_v = autograd.Variable(state)
-        )[0]
 
+        noise_v = autograd.Variable(
+            noise,
+            requires_grad=True
+        )
+        prediction_v, prediction_v_before_deconv, _ = netG(
+            noise_v = noise_v,
+            state_v = autograd.Variable(state)
+        )
         G = netD(
-                state_v = autograd.Variable(state),
-                prediction_v = prediction_v
-            ).mean()
-        G.backward(mone)
+            state_v = autograd.Variable(state),
+            prediction_v = prediction_v
+        ).mean()
+        G.backward(
+            mone,
+            retain_graph=params['NOISE_ENCOURAGE'],
+        )
         G_cost = -G.data.cpu().numpy()
         logger.plot('G_cost', G_cost)
-
+        
         GR_cost = [0.0]
-        gradients_reward = calc_gradient_reward(
-            netG=netG,
-            state=state,
-            noise=noise
-        )
         if params['NOISE_ENCOURAGE']:
+            gradients_reward = calc_gradient_reward(
+                noise_v=noise_v,
+                prediction_v_before_deconv=prediction_v_before_deconv,
+            )
             gradients_reward.backward(mone)
         GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
@@ -2015,6 +2067,10 @@ while True:
                     L1, AC = evaluate_domain(iteration)
             else:
                 L1, AC = evaluate_domain(iteration)
+
+            if params['NOISE_ENCOURAGE']:
+                if L1<0.5:
+                    params['NOISE_ENCOURAGE'] = False
 
     if iteration % LOG_INTER == 5:
         logger.flush()
