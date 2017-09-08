@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_nbg_ob' # display a tag before the result printed
-GPU = "3" # use which GPU
+MULTI_RUN = 'noise_encourage_marble' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -49,7 +49,7 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
-add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -110,7 +110,10 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
 
-add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
+if params['DOMAIN']=='marble':
+    add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
+else:
+    add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
 
 '''
 compute delta for differant domains
@@ -153,7 +156,7 @@ elif params['DOMAIN']=='2Dgrid':
 
 elif params['DOMAIN']=='marble':
     add_parameters(
-        DELTA_T = ( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        DELTA_T = 2.0*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
 
 else:
@@ -2069,8 +2072,12 @@ while True:
                 L1, AC = evaluate_domain(iteration)
 
             if params['NOISE_ENCOURAGE']:
-                if L1<0.5:
-                    params['NOISE_ENCOURAGE'] = False
+                if params['DOMAIN']=='marble':
+                    if iteration>30*1000:
+                        params['NOISE_ENCOURAGE'] = False
+                else:
+                    if L1<0.5:
+                        params['NOISE_ENCOURAGE'] = False
 
     if iteration % LOG_INTER == 5:
         logger.flush()
