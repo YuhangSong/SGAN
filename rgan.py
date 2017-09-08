@@ -25,8 +25,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = '811_comp_tabular' # display a tag before the result printed
-GPU = "2" # use which GPU
+MULTI_RUN = 'marble_comp_deter' # display a tag before the result printed
+GPU = "3" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -50,7 +50,7 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
-add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -96,7 +96,7 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -842,7 +842,7 @@ def collect_samples(iteration,tabular=None):
                     raise Exception('ss')
                 
                 if params['METHOD']=='deterministic-deep-net':
-                    prediction = netT(
+                    prediction = netG(
                         state_v = autograd.Variable(start_state_song_batch)
                     ).data
 
@@ -909,16 +909,13 @@ def collect_samples(iteration,tabular=None):
 
         for t in range(LOG_SEQ_LENTH):
             '''prediction'''
-            if params['METHOD']=='s-gan':
-                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-                prediction = netG(
-                    noise_v = autograd.Variable(noise, volatile=True),
-                    state_v = autograd.Variable(state, volatile=True)
-                )[0].data
-            elif params['METHOD']=='deterministic-deep-net':
-                prediction = netT(
-                    state_v = autograd.Variable(state, volatile=True)
-                ).data
+            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            if params['METHOD']=='deterministic-deep-net':
+                noise.fill_(0.0)
+            prediction = netG(
+                noise_v = autograd.Variable(noise, volatile=True),
+                state_v = autograd.Variable(state, volatile=True)
+            )[0].data
 
             seq = torch.cat([seq,prediction],1)
 
@@ -1753,26 +1750,9 @@ elif params['METHOD']=='bayes-net-learner':
 
     print(s)
 
-elif params['METHOD']=='deterministic-deep-net':
-    netT = Generator().cuda()
-    netT.apply(weights_init)
-    print netT
-
-    if params['OPTIMIZER']=='Adam':
-        optimizerT = optim.Adam(netT.parameters(), lr=1e-4, betas=(0.5, 0.9))
-    elif params['OPTIMIZER']=='RMSprop':
-        optimizerT = optim.RMSprop(netT.parameters(), lr = 0.00005)
+elif params['METHOD']=='deterministic-deep-net' or params['METHOD']=='s-gan':
 
     mse_loss_model = torch.nn.MSELoss(size_average=True)
-
-    data_fix_state = dataset_iter(
-        fix_state=True,
-        batch_size=1
-    )
-
-    L1, AC = 2.0, 0.0
-
-elif params['METHOD']=='s-gan':
 
     '''build models'''
     netG = Generator().cuda()
@@ -1857,30 +1837,30 @@ while True:
                 # 3 & 4 dimension: size (1D or 2D)
         '''
         state_prediction_gt = data.next()
-        state = state_prediction_gt.narrow(
-            dimension=1,
-            start=0,
-            length=params['STATE_DEPTH']
-        )
-        prediction_gt = state_prediction_gt.narrow(
-            dimension=1,
-            start=params['STATE_DEPTH'],
-            length=1)
+        state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
+        prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
-        netT.zero_grad()
+        netG.zero_grad()
         
-        prediction = netT(
+        noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+        noise = noise.fill_(0.0)
+        noise_v = autograd.Variable(
+            noise,
+            requires_grad=True
+        )
+        prediction_v, prediction_v_before_deconv, _ = netG(
+            noise_v = noise_v,
             state_v = autograd.Variable(state)
         )
 
-        T = mse_loss_model(prediction, autograd.Variable(prediction_gt))
+        T = mse_loss_model(prediction_v, autograd.Variable(prediction_gt))
 
         T.backward()
 
         T_cost = T.data.cpu().numpy()
         logger.plot('T_cost', T_cost)
         
-        optimizerT.step()
+        optimizerG.step()
 
         if iteration % LOG_INTER == 5:
             # evaluate the L1 loss and accept percentage
