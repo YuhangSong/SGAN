@@ -1375,12 +1375,9 @@ class grid_domain(object):
         self.dataset_lenth = params['DATASET_SIZE']
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
-
-        if params['RANDOM_BACKGROUND']:
-            file = '5x5_random_bg_3_small10'
-        else:
-            file = '5x5_nbg_ob'
-        file_name = '../../dataset/grid/'+file
+        
+        file = 'dataset'
+        file_name = LOGDIR+file
 
         try:
             self.dataset = torch.from_numpy(np.load(file_name+'.npy')).cuda()
