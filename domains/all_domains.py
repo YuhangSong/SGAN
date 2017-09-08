@@ -267,17 +267,17 @@ class Walk2D(object):
         self.fix_state_to = (self.w/2, self.h/2)
         self.random_background = random_background
 
-        if self.random_background:
-            self.reset_background()
-            self.build_background_feature_mask()
+        self.reset_background()
+        self.build_background_feature_mask()
 
     def reset_background(self):
-        if self.random_background:
-            self.background_array = np.random.randint(
-                2, 
-                size=(self.h, self.w),
-                dtype=np.uint8,
-            )
+        self.background_array = np.random.randint(
+            2, 
+            size=(self.h, self.w),
+            dtype=np.uint8,
+        )
+        if not self.random_background:
+            self.background_array = self.background_array*0.0
     
     def build_background_feature_mask(self):
         self.background_feature_mask = (1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0)

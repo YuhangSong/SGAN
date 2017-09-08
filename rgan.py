@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_marble' # display a tag before the result printed
-GPU = "0" # use which GPU
+MULTI_RUN = 'noise_encourage' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -49,7 +49,7 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
-add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -71,16 +71,16 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    # add_parameters(OBSTACLE_POS_LIST = [])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
-    add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = False)
+    add_parameters(RANDOM_BACKGROUND = True)
 
     if params['RANDOM_BACKGROUND']==True:
         add_parameters(FEATURE = 1)
@@ -1376,8 +1376,10 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        # file = '5x5_random_bg_3_small10'
-        file = '5x5_nbg_ob'
+        if params['RANDOM_BACKGROUND']:
+            file = '5x5_random_bg_3_small10'
+        else:
+            file = '5x5_nbg_ob'
         file_name = '../../dataset/grid/'+file
 
         try:
