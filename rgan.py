@@ -25,8 +25,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'marble_comp_deter' # display a tag before the result printed
-GPU = "3" # use which GPU
+MULTI_RUN = 'noise_encourage_marble_comp' # display a tag before the result printed
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -96,14 +96,14 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
@@ -225,7 +225,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = '1')
+add_parameters(AUX_INFO = '')
 
 '''
 summary settings
@@ -901,8 +901,7 @@ def collect_samples(iteration,tabular=None):
         ac = np.mean(all_ac)
 
     elif params['DOMAIN']=='marble':
-        state = domain.get_batch().narrow(1,0,params['STATE_DEPTH'])
-        state = state[0:1]
+        state = domain.get_start_batch().narrow(1,0,params['STATE_DEPTH'])
         state = torch.cat([state]*LOG_SEQ_NUM,0)
 
         seq = state
@@ -1352,15 +1351,33 @@ class marble_domain(object):
 
             print('Got marble dateset: '+str(self.dataset.size()))
 
-            log_batch = self.get_batch()
-            for b in range(log_batch.size()[0]):
-                vis.images(
-                    log_batch[b].cpu().numpy(),
-                )
+        # log_batch = self.get_batch()
+        # for b in range(log_batch.size()[0]):
+        #     vis.images(
+        #         log_batch[b].cpu().numpy(),
+        #     )
+
+        # for b in range(100):
+        #     vis.images(
+        #         self.dataset[b].cpu().numpy(),
+        #         # win=str(b),
+        #         opts=dict(caption=str(b)),
+        #     )
+        #     raw_input('hit')
+
+        # vis.images(
+        #     self.dataset[4:5][0].cpu().numpy(),
+        #     # win=str(b),
+        #     opts=dict(caption=str(4)),
+        # )
+        # raw_input('hit')
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0]).cuda()
         return torch.index_select(self.dataset,0,indexs)
+
+    def get_start_batch(self):
+        return self.dataset[4:5]
 
 class grid_domain(object):
     """docstring for grid_domain"""
