@@ -379,25 +379,19 @@ class Walk2D(object):
         else:
             raise Exception('Not a valid mode')
 
-    def get_background_str(self):
-        return str(self.background_array)
-
     def get_state_str(self, state_vector):
-        state_str = self.state_vector_to_position(
-            state_vector,
-            include_background = True,
-        )
-        if self.random_background:
-            state_str = str(state_str)+'\n'+self.get_background_str()
-        return state_str
+        return str((state_vector/FEATURE_DISCOUNT).astype(int)[:,:,0])
 
-    def get_transition_probs(self, state_vector=None, state_pos=None):
+    def get_transition_probs(self, state_vector=None, state_pos=None, is_tabular=False):
 
         prob_dict = {}
 
         for action_i in range(len(self.action_dic)):
 
-            key = str(self.update_state(state_pos, self.action_dic[action_i]))
+            if is_tabular:
+                key = self.get_state_str(self.get_state(self.update_state(state_pos, self.action_dic[action_i])))
+            else:
+                key = str(self.update_state(state_pos, self.action_dic[action_i]))
 
             if prob_dict.has_key(key):
                 prob_dict[key] += self.prob_dirs[action_i]
@@ -440,12 +434,14 @@ class Walk2D(object):
 
         elif self.mode == IMAGE:
             if self.obstacle_pos_list==[]:
-                image = self.get_screen(array)
+                image_agent = self.get_screen(array)
                 if self.random_background:
                     image_background = self.get_screen(self.background_array)
                     image_background = image_background*self.background_feature_mask*FEATURE_DISCOUNT
                     image_background_no_agent = image_background*(1.0-image_agent)
-                    image = image + image_background_no_agent
+                    image = image_agent + image_background_no_agent
+                else:
+                    image = image_agent
             else:
                 if self.random_background:
                     raise Exception('s')
@@ -513,7 +509,7 @@ def l1_distance(dist1, dist2):
         l1 += np.abs(dist1.get(key, 0) - dist2.get(key, 0))
     return l1
 
-def evaluate_domain(domain, s1_state, s2_samples):
+def evaluate_domain(domain, s1_state, s2_samples, is_tabular=False):
 
     s1_pos = domain.state_vector_to_position(
         s1_state,
@@ -524,22 +520,34 @@ def evaluate_domain(domain, s1_state, s2_samples):
     # print(s)
 
     true_distribution = domain.get_transition_probs(
-        state_pos=s1_pos
+        state_pos=s1_pos,
+        is_tabular=is_tabular
     )
     # print(true_distribution)
     bad_count = 0
     good_count = 0
     sample_distribution = {}
-    for b in range(np.shape(s2_samples)[0]):
-        s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
-        if s2_sample_pos=='bad state':
-            bad_count += 1
-        else:
-            good_count += 1
+
+    if is_tabular:
+
+        for s2_sample in s2_samples.next_dic.keys():
+            good_count += s2_samples.next_dic[s2_sample]
             try:
-                sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
+                sample_distribution[s2_sample] = sample_distribution[str(s2_sample_pos)] + s2_samples.next_dic[s2_sample]
             except Exception as e:
-                sample_distribution[str(s2_sample_pos)] = 1
+                sample_distribution[s2_sample] = s2_samples.next_dic[s2_sample]
+
+    else:
+        for b in range(np.shape(s2_samples)[0]):
+            s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
+            if s2_sample_pos=='bad state':
+                bad_count += 1
+            else:
+                good_count += 1
+                try:
+                    sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
+                except Exception as e:
+                    sample_distribution[str(s2_sample_pos)] = 1
 
     if good_count>0.0:
 
@@ -555,7 +563,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
     else:
 
         return 2.0, 0.0
-    
-                
+
+            
 
 

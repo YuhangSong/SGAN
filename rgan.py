@@ -10,6 +10,7 @@ import sklearn.datasets
 import tflib as lib
 import tflib.plot
 import cv2
+import joblib
 
 import subprocess
 from PIL import Image
@@ -49,7 +50,7 @@ def add_parameters(**kwargs):
 
 '''domain settings'''
 add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
-add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -68,11 +69,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
-
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
+
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -95,7 +96,7 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'tabular') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
 add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
 # add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
@@ -163,7 +164,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
 add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 100) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
+add_parameters(DATASET_SIZE = 33554) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
@@ -224,7 +225,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = '')
+add_parameters(AUX_INFO = '1')
 
 '''
 summary settings
@@ -803,51 +804,46 @@ def song2chris(x):
 
     return x
 
-def get_tabular_samples(tabular_dic,start_state):
+def get_tabular_samples(tabular_dic,start_state_chris):
 
-    for tabular_i in tabular_dic:
-        delta = np.mean(
-            np.abs(start_state - tabular_i.x),
-            keepdims=False
-        )
-        if delta==0.0:
-            print('Found tabular.')
-            total = 0
-            for x_next_i in tabular_i.x_next_dic:
-                total += x_next_i.count
-            samples = []
-            for x_next_i in tabular_i.x_next_dic:
-                if x_next_i.count!=0:
-                    samples += [x_next_i.x]*long((float(x_next_i.count)/total*RESULT_SAMPLE_NUM))
-            return np.array(samples).astype(float)
+    start_state_ = domain.get_state_str(start_state_chris)
+
+    try:
+        tabular = tabular_dic[start_state_]
+        return tabular
+    except Exception as e:
+        print('No tabular found.')
+        return None
 
 def collect_samples(iteration,tabular=None):
 
     if params['DOMAIN']!='marble':
 
         domain.reset()
-        all_possible = chris2song(domain.get_all_possible_start_states())
+        all_possible_chris = domain.get_all_possible_start_states()
+        all_possible_song = chris2song(all_possible_chris)
 
         all_l1 = []
         all_ac = []
-        for ii in range(all_possible.size()[0]):
+        for ii in range(all_possible_song.size()[0]):
 
-            start_state = all_possible[ii:ii+1]
+            start_state_song = all_possible_song[ii:ii+1]
+            start_state_chris = all_possible_chris[ii]
             
             if tabular is None:
 
                 if (params['REPRESENTATION']==chris_domain.SCALAR) or (params['REPRESENTATION']==chris_domain.VECTOR):
-                    start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1)
+                    start_state_song_batch = start_state_song.repeat(RESULT_SAMPLE_NUM,1,1)
 
                 elif params['REPRESENTATION']==chris_domain.IMAGE:
-                    start_state_batch = start_state.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
+                    start_state_song_batch = start_state_song.repeat(RESULT_SAMPLE_NUM,1,1,1,1)
 
                 else:
                     raise Exception('ss')
                 
                 if params['METHOD']=='deterministic-deep-net':
                     prediction = netT(
-                        state_v = autograd.Variable(start_state_batch)
+                        state_v = autograd.Variable(start_state_song_batch)
                     ).data
 
                 elif params['METHOD']=='s-gan':
@@ -855,27 +851,32 @@ def collect_samples(iteration,tabular=None):
                     noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
                     prediction = netG(
                         noise_v = autograd.Variable(noise, volatile=True),
-                        state_v = autograd.Variable(start_state_batch, volatile=True)
+                        state_v = autograd.Variable(start_state_song_batch, volatile=True)
                     )[0].data
 
                 else:
                     raise Exception('Unsupport')
 
+                log_img(start_state_song_batch,'state_'+str(ii),iteration)
+                log_img(prediction,'prediction_'+str(ii),iteration)
+
             else:
                 
-                prediction = get_tabular_samples(tabular,start_state[0].cpu().numpy())
-                
-                if prediction is not None:
-                    prediction = torch.cuda.FloatTensor(prediction)
-
-            log_img(start_state_batch,'state_'+str(ii),iteration)
-            log_img(prediction,'prediction_'+str(ii),iteration)
+                prediction = get_tabular_samples(tabular,start_state_chris)
 
             if prediction is not None:
+                if tabular is None:
+                    prediction = song2chris(prediction)
+                    is_tabular = False
+                else:
+                    prediction = prediction
+                    is_tabular = True
+
                 l1, ac = chris_domain.evaluate_domain(
                     domain=domain,
-                    s1_state=song2chris(start_state)[0],
-                    s2_samples=song2chris(prediction)
+                    s1_state=song2chris(start_state_song)[0],
+                    s2_samples=prediction,
+                    is_tabular=is_tabular,
                 )
 
             else:
@@ -889,7 +890,7 @@ def collect_samples(iteration,tabular=None):
                     MULTI_RUN,
                     iteration,
                     ii,
-                    all_possible.size()[0],
+                    all_possible_song.size()[0],
                     l1,
                     ac
                 )
@@ -1700,12 +1701,12 @@ class Tabular(object):
     def __init__(self):
         super(Tabular, self).__init__()
         self.next_dic = {}
-    def push(self,prediction_gt_str):
+    def push(self,prediction_gt_):
         try:
-            self.next_dic.keys().index(prediction_gt_str)
-            self.next_dic[prediction_gt_str] = self.next_dic[prediction_gt_str] + 1
+            self.next_dic.keys().index(prediction_gt_)
+            self.next_dic[prediction_gt_] = self.next_dic[prediction_gt_] + 1
         except Exception as e:
-            self.next_dic[prediction_gt_str] = 1
+            self.next_dic[prediction_gt_] = 1
         
 ############################### Definition End ###############################
 
@@ -1818,16 +1819,18 @@ while True:
         prediction_gt=song2chris(prediction_gt)
 
         for b in range(np.shape(state)[0]):
-            state_str = domain.get_state_str(state[b])
-            prediction_gt_str = domain.get_state_str(prediction_gt[b])
+            # print(state[b][:,:,0])
+            # print(ss)
+            prediction_gt_ = domain.get_state_str(prediction_gt[b])
+            state_ = domain.get_state_str(state[b])
             try:
-                tabular_dic.keys().index(state_str)
+                tabular_dic.keys().index(state_)
             except Exception as e:
-                tabular_dic[state_str] = Tabular()
-            tabular_dic[state_str].push(prediction_gt_str)
+                tabular_dic[state_] = Tabular()
+            tabular_dic[state_].push(prediction_gt_)
 
-        # if iteration % LOG_INTER == 5:
-        #     l1,_ = evaluate_domain(iteration,tabular_dic)
+        if iteration % LOG_INTER == 5:
+            l1,_ = evaluate_domain(iteration,tabular_dic)
 
         logger.plot('len(tabular_dic.keys())',[len(tabular_dic.keys())])
 
