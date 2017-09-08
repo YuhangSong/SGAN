@@ -10,7 +10,6 @@ import sklearn.datasets
 import tflib as lib
 import tflib.plot
 import cv2
-import joblib
 
 import subprocess
 from PIL import Image
