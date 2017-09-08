@@ -24,8 +24,8 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_d' # display a tag before the result printed
-GPU = "0" # use which GPU
+MULTI_RUN = 'comp_tabular' # display a tag before the result printed
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -48,8 +48,8 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'noise_encourage_dd') # the first level of log dir
-add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
+add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -68,11 +68,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    # add_parameters(OBSTACLE_POS_LIST = [])
-
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     add_parameters(OBSTACLE_POS_LIST = [])
+
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -107,7 +107,10 @@ add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
 
-add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
+if params['DOMAIN']=='marble':
+    add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
+else:
+    add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
 
 '''
 compute delta for differant domains
@@ -150,7 +153,7 @@ elif params['DOMAIN']=='2Dgrid':
 
 elif params['DOMAIN']=='marble':
     add_parameters(
-        DELTA_T = ( BASE * ( ( ( (params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        DELTA_T = 2.0*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
 
 else:
@@ -221,7 +224,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = '3')
+add_parameters(AUX_INFO = '')
 
 '''
 summary settings
@@ -274,7 +277,10 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
         raise Exception('s')
 
 if params['DOMAIN']=='marble':
-    PRE_DATASET = True # if prepare date on marble domain
+    PRE_DATASET = False
+    LOG_SEQ_NUM = 32
+    LOG_SEQ_LENTH = 8
+    
 ############################### Definition Start ###############################
 
 def vector2image(x):
@@ -295,22 +301,29 @@ def vector2image(x):
                 x_temp[b,d,0,:,from_:to_].fill_(fill_)
     return x_temp
 
-def log_img(x,name,iteration=0):
+def log_img(x,name,iteration=0,nrow=8):
     if params['REPRESENTATION']==chris_domain.VECTOR:
         x = vector2image(x)
     x = x.squeeze(1)
     if params['DOMAIN']=='2Dgrid':
         if x.size()[1]==2:
-            log_img_final(x[:,0:1,:,:],name+'_b',iteration)
-            log_img_final(x[:,1:2,:,:],name+'_a',iteration)
+            log_img_final(x[:,0:1,:,:],name+'_b',iteration,nrow)
+            log_img_final(x[:,1:2,:,:],name+'_a',iteration,nrow)
             x = torch.cat([x,x[:,0:1,:,:]],1)
-    log_img_final(x,name,iteration)
+    log_img_final(x,name,iteration,nrow)
 
-def log_img_final(x,name,iteration=0):
-    vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
-    vis.images( x.cpu().numpy(),
-                win=str(MULTI_RUN)+'-'+name,
-                opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)))
+def log_img_final(x,name,iteration=0,nrow=8):
+    vutils.save_image(
+        x,
+        LOGDIR+name+'_'+str(iteration)+'.png',
+        nrow=nrow,
+    )
+    vis.images( 
+        x.cpu().numpy(),
+        win=str(MULTI_RUN)+'-'+name,
+        opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)),
+        nrow=nrow,
+    )
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -439,11 +452,11 @@ class Generator(nn.Module):
                 marble domain use a another network
                 '''
                 conv_layer = nn.Sequential(
-                    # params['FEATURE']*1*64*64
+                    # params['FEATURE']*2*64*64
                     nn.Conv3d(
                         in_channels=1,
                         out_channels=64,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
@@ -650,9 +663,9 @@ class Discriminator(nn.Module):
                 marble domain use a another network
                 '''
                 conv_layer = nn.Sequential(
-                    # 1*2*64*64
+                    # 1*3*64*64
                     nn.Conv3d(
-                        in_channels=params['FEATURE'],
+                        in_channels=1,
                         out_channels=64,
                         kernel_size=(2,4,4),
                         stride=(1,2,2),
@@ -660,19 +673,29 @@ class Discriminator(nn.Module):
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
-                    # 64*1*32*32
+                    # 64*2*32*32
                     nn.Conv3d(
                         in_channels=64,
                         out_channels=128,
-                        kernel_size=(1,4,4),
+                        kernel_size=(2,4,4),
                         stride=(1,2,2),
                         padding=(0,1,1),
                         bias=False,
                     ),
                     nn.LeakyReLU(0.001, inplace=True),
                     # 128*1*16*16
+                    nn.Conv3d(
+                        in_channels=128,
+                        out_channels=256,
+                        kernel_size=(1,4,4),
+                        stride=(1,2,2),
+                        padding=(0,1,1),
+                        bias=False,
+                    ),
+                    nn.LeakyReLU(0.001, inplace=True),
+                    # 256*1*8*8
                 )
-                temp = 128*1*16*16
+                temp = 256*1*8*8
                 squeeze_layer = nn.Sequential(
                     nn.Linear(temp, params['DIM']),
                     nn.LeakyReLU(0.001, inplace=True),
@@ -702,9 +725,6 @@ class Discriminator(nn.Module):
         self.final_layer = final_layer
 
     def forward(self, state_v, prediction_v):
-
-        # if params['DOMAIN']=='marble':
-        #     state_v.data.fill_(0.0)
 
         '''prepare'''
         if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
@@ -881,23 +901,36 @@ def collect_samples(iteration,tabular=None):
 
     elif params['DOMAIN']=='marble':
         state = domain.get_batch().narrow(1,0,params['STATE_DEPTH'])
-        # state = state[0:1]
-        # # print(state.size())
-        # log_img(state.squeeze(0).unsqueeze(1),'state',iteration)
-        # state = torch.cat([state]*params['BATCH_SIZE'],0)
+        state = state[0:1]
+        state = torch.cat([state]*LOG_SEQ_NUM,0)
 
-        '''prediction'''
-        if params['METHOD']=='s-gan':
-            noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
-            prediction = netG(
-                noise_v = autograd.Variable(noise, volatile=True),
-                state_v = autograd.Variable(state, volatile=True)
-            )[0].data
-        elif params['METHOD']=='deterministic-deep-net':
-            prediction = netT(
-                state_v = autograd.Variable(state, volatile=True)
-            ).data
-        log_img(prediction,'prediction',iteration)
+        seq = state
+
+        for t in range(LOG_SEQ_LENTH):
+            '''prediction'''
+            if params['METHOD']=='s-gan':
+                noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+                prediction = netG(
+                    noise_v = autograd.Variable(noise, volatile=True),
+                    state_v = autograd.Variable(state, volatile=True)
+                )[0].data
+            elif params['METHOD']=='deterministic-deep-net':
+                prediction = netT(
+                    state_v = autograd.Variable(state, volatile=True)
+                ).data
+
+            seq = torch.cat([seq,prediction],1)
+
+            state = seq.narrow(1,seq.size()[1]-params['STATE_DEPTH'],params['STATE_DEPTH'])
+
+        seq = seq.contiguous().view(-1,1,seq.size()[2],seq.size()[3],seq.size()[4])
+
+        log_img(
+            seq,
+            'seq',
+            iteration,
+            nrow=(LOG_SEQ_LENTH+params['STATE_DEPTH']),
+        )
 
         l1, ac = 0.0, 0.0
 
@@ -1309,20 +1342,12 @@ class marble_domain(object):
                 try:
                     data = torch.from_numpy(np.load(file_name+'.npy'))
                     print('Load data from '+file+' : '+str(data.size()))
+                    try:
+                        self.dataset = torch.cat([self.dataset,data],0)
+                    except Exception as e:
+                        self.dataset = data
                 except Exception as e:
                     print('Failed to load data from '+file)
-
-                try:
-                    self.dataset = torch.cat([self.dataset,data],0)
-
-                except Exception as e:
-                    self.dataset = data
-
-                print('Dataset: {}'
-                    .format(
-                        self.dataset.size()
-                    )
-                )
 
             self.dataset = self.dataset.float()/255.0
             self.dataset = self.dataset.cuda()
@@ -1348,9 +1373,8 @@ class grid_domain(object):
 
         self.indexs_selector = torch.LongTensor(params['BATCH_SIZE'])
 
-        file = '5x5_random_bg_3_small10'
-        # file = '5x5_random_bg_3_small10_temp'
-        file_name = '../../dataset/grid/'+file
+        file = 'dataset'
+        file_name = LOGDIR+file
 
         try:
             self.dataset = torch.from_numpy(np.load(file_name+'.npy')).cuda()
@@ -1423,7 +1447,7 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
 
         dataset = wrap_domain.get_batch()
 
-        # # print(dataset.size())
+        # print(dataset.size())
         # print(dataset[3,0,0,:,:])
         # # # print(dataset[3,0,1,:,:])
         # print(dataset[3,1,0,:,:])
@@ -1444,11 +1468,13 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     
     '''get multiple interplots'''
     if params['INTERPOLATES_MODE']=='auto':
-
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
         max_norm = (prediction_gt_fl.size()[1])**0.5      
         d_mean = (prediction_gt_fl-prediction_fl).norm(2,dim=1)/max_norm
+        # print(d_mean)
+        # print(prediction_gt[0:4,0,1,:,:])
+        # print(s)
         num_t = (d_mean / params['DELTA_T']).floor().int() - 1
 
         num_t_sum = 0.0
@@ -1458,8 +1484,7 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
                 continue
             else:
                 t = num_t[b]
-
-            num_t_sum += t
+                num_t_sum += t
 
             if params['REPRESENTATION']==chris_domain.SCALAR or params['REPRESENTATION']==chris_domain.VECTOR:
                 state_b = state[b].unsqueeze(0).repeat(t,1,1)
@@ -1500,6 +1525,10 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     else:
         num_t_sum = params['BATCH_SIZE']
         alpha = torch.rand(prediction_gt.size()[0]).cuda()
+
+    # if params['SOFT_GP']:
+    #     '''solf function here'''
+    #     alpha = (alpha*params['SOFT_GP_FACTOR']).tanh()
         
     while len(alpha.size())!=len(prediction_gt.size()):
         alpha = alpha.unsqueeze(1)
@@ -1525,40 +1554,91 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
 
     interpolates = ((1.0 - alpha) * prediction_gt) + (alpha * prediction)
 
-    interpolates = autograd.Variable(
-        interpolates,
-        requires_grad=True
-    )
+    # print(prediction_gt[0:1,0,1,:,:])
+    # print(prediction[0:1,0,1,:,:])
+    # print(interpolates[0:1,0,1,:,:])
+
+    if log:
+        plt.scatter(
+            interpolates.squeeze(1).cpu().numpy()[:, 0], 
+            interpolates.squeeze(1).cpu().numpy()[:, 1],
+            c='red', 
+            marker='+', 
+            alpha=0.1
+        )
+
+    interpolates = autograd.Variable(interpolates, requires_grad=True)
 
     disc_interpolates = netD(
-        state_v = autograd.Variable(state),
-        prediction_v = interpolates
-    )
+                            state_v = autograd.Variable(state),
+                            prediction_v = interpolates
+                        )
 
     gradients = autograd.grad(
-        outputs=disc_interpolates,
-        inputs=interpolates,
-        grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
-        create_graph=True,
-        retain_graph=True,
-        only_inputs=True
-    )[0]
+                    outputs=disc_interpolates,
+                    inputs=interpolates,
+                    grad_outputs=torch.ones(disc_interpolates.size()).cuda(),
+                    create_graph=True,
+                    retain_graph=True,
+                    only_inputs=True)[0]
 
     gradients = gradients.contiguous()
     gradients_fl = gradients.view(gradients.size()[0],-1)
 
-    if (params['GP_MODE']=='use-guide') or (params['GP_MODE']=='pure-guide'):
+    if params['GP_MODE']=='pure-guide':
 
         prediction_fl = prediction.contiguous().view(prediction.size()[0],-1)
         prediction_gt_fl = prediction_gt.contiguous().view(prediction_gt.size()[0],-1)
 
         gradients_direction_gt_fl = prediction_gt_fl - prediction_fl
 
+        def torch_remove_at_batch(x,index):
+
+            if x.size()[0]==1:
+                return None
+
+            if index==0:
+                x = x[index+1:x.size()[0]]
+            elif index==(x.size()[0]-1):
+                x[0:index]
+            else:
+                x = torch.cat(
+                    [x[0:index],x[index+1:x.size()[0]]],
+                    0
+                )
+
+            return x
+
+        original_size = gradients_direction_gt_fl.size()[0]
+
+        b = 0
+        while True:
+            if gradients_direction_gt_fl[b].abs().max() < 0.01:
+                gradients_direction_gt_fl = torch_remove_at_batch(
+                    gradients_direction_gt_fl,
+                    b
+                )
+                gradients_fl = torch_remove_at_batch(
+                    gradients_fl,
+                    b
+                )
+                if gradients_fl is None:
+                    print('No valid batch, return')
+                    return None, 0
+            else:
+                b += 1
+                if b>=gradients_direction_gt_fl.size()[0]:
+                    # print('Filter batch to: ' + str(gradients_direction_gt_fl.size()[0]))
+                    break
+
         gradients_direction_gt_fl = gradients_direction_gt_fl/(gradients_direction_gt_fl.norm(2,dim=1).unsqueeze(1).repeat(1,gradients_direction_gt_fl.size()[1]))
 
         gradients_direction_gt_fl = autograd.Variable(gradients_direction_gt_fl)
 
         gradients_penalty = (gradients_fl-gradients_direction_gt_fl).norm(2,dim=1).pow(2).mean()
+
+        if params['GP_MODE']=='use-guide':
+            gradients_penalty = gradients_penalty * params['LAMBDA'] * params['GP_GUIDE_FACTOR']
 
         if math.isnan(gradients_penalty.data.cpu().numpy()[0]):
             print('Bad gradients_penalty, return!')
@@ -1970,8 +2050,12 @@ while True:
                 L1, AC = evaluate_domain(iteration)
 
             if params['NOISE_ENCOURAGE']:
-                if L1<0.5:
-                    params['NOISE_ENCOURAGE'] = False
+                if params['DOMAIN']=='marble':
+                    if iteration>30*1000:
+                        params['NOISE_ENCOURAGE'] = False
+                else:
+                    if L1<0.5:
+                        params['NOISE_ENCOURAGE'] = False
 
     if iteration % LOG_INTER == 5:
         logger.flush()
