@@ -316,7 +316,11 @@ def log_img(x,name,iteration=0,nrow=8):
     log_img_final(x,name,iteration,nrow)
 
 def log_img_final(x,name,iteration=0,nrow=8):
-    vutils.save_image(x, LOGDIR+name+'_'+str(iteration)+'.png')
+    vutils.save_image(
+        x,
+        LOGDIR+name+'_'+str(iteration)+'.png',
+        nrow=nrow,
+    )
     vis.images( 
         x.cpu().numpy(),
         win=str(MULTI_RUN)+'-'+name,
