@@ -25,7 +25,7 @@ from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
 MULTI_RUN = 'noise_encourage_marble' # display a tag before the result printed
-GPU = "0" # use which GPU
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -153,7 +153,7 @@ elif params['DOMAIN']=='2Dgrid':
 
 elif params['DOMAIN']=='marble':
     add_parameters(
-        DELTA_T = 2.0*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
+        DELTA_T = 1.5*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
 
 else:
