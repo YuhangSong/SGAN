@@ -309,7 +309,7 @@ class Walk2D(object):
         else:
             return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
-    def state_vector_to_position(self, state_vector, start_state=False):
+    def state_vector_to_position(self, state_vector, include_background=False):
 
         if self.mode==SCALAR:
 
@@ -332,7 +332,6 @@ class Walk2D(object):
         elif self.mode==IMAGE:
 
             '''detect agent opsition from image'''
-
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
@@ -348,7 +347,7 @@ class Walk2D(object):
                         if self.random_background:
                             close_to_feature_background = np.mean(np.abs(block-self.background_feature_block))
                             close_to_unfeature_background = np.mean(np.abs(block-self.background_unfeature_block))
-                            if start_state:
+                            if include_background:
                                 '''if start state, set the self.background_array'''        
                                 if close_to_feature_background <= ACCEPT_GATE:
                                     self.background_array[y,x] = 1
@@ -380,6 +379,18 @@ class Walk2D(object):
         else:
             raise Exception('Not a valid mode')
 
+    def get_background_str(self):
+        return str(self.background_array)
+
+    def get_state_str(self, state_vector):
+        state_str = self.state_vector_to_position(
+            state_vector,
+            include_background = True,
+        )
+        if self.random_background:
+            state_str = str(state_str)+'\n'+self.get_background_str()
+        return state_str
+
     def get_transition_probs(self, state_vector=None, state_pos=None):
 
         prob_dict = {}
@@ -409,6 +420,9 @@ class Walk2D(object):
         self.y_pos = y_pos
         assert (x_pos, y_pos) not in self.obstacle_pos_list
 
+    def get_screen(self,x):
+        return (1.0-self.visualizer.make_screen(x)[:,:,1:2]/255.0)
+
     def get_state(self, state=None):
         if state is None:
             state = self.x_pos, self.y_pos
@@ -426,19 +440,12 @@ class Walk2D(object):
 
         elif self.mode == IMAGE:
             if self.obstacle_pos_list==[]:
-                if self.random_background==False:
-                    image = self.visualizer.make_screen(array)
-                    image = image[:,:,1:2]
-                    image = image / 255.0
-                    image = 1.0 - image
-                else:
-                    image_background = 1.0-self.visualizer.make_screen(self.background_array)[:,:,1:2]/255.0
-                    image_agent = 1.0-self.visualizer.make_screen(array)[:,:,1:2]/255.0
-
+                image = self.get_screen(array)
+                if self.random_background:
+                    image_background = self.get_screen(self.background_array)
                     image_background = image_background*self.background_feature_mask*FEATURE_DISCOUNT
                     image_background_no_agent = image_background*(1.0-image_agent)
-
-                    image = image_background_no_agent + image_agent
+                    image = image + image_background_no_agent
             else:
                 if self.random_background:
                     raise Exception('s')
@@ -510,7 +517,7 @@ def evaluate_domain(domain, s1_state, s2_samples):
 
     s1_pos = domain.state_vector_to_position(
         s1_state,
-        start_state = True,
+        include_background = True,
     )
     # print(s1_pos)
     # print(domain.background_array)
