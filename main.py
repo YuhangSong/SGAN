@@ -21,11 +21,10 @@ import math
 import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 import imageio
-from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_marble' # display a tag before the result printed
-GPU = "1" # use which GPU
+MULTI_RUN = 'SGAN' # display a tag before the result printed, to identify multiple runs on your machine
+GPU = "0" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -48,8 +47,8 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
-add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(EXP = 'exp_1') # the first level of log dir
+add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
 add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
@@ -68,11 +67,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
-
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [])
+
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -80,7 +79,7 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
 
-    add_parameters(RANDOM_BACKGROUND = True)
+    add_parameters(RANDOM_BACKGROUND = False)
 
     add_parameters(FEATURE = 1)
 
@@ -95,17 +94,17 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'sgan') # tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-add_parameters(GP_GUIDE_FACTOR = 1.0)
+if params['METHOD']=='sgan':
+    add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+    add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+else:
+    add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+    add_parameters(GP_GUIDE_FACTOR = 1.0)
+    add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
-
-# add_parameters(NOISE_ENCOURAGE = False)
-add_parameters(NOISE_ENCOURAGE = True)
+add_parameters(NOISE_ENCOURAGE = False)
 
 if params['DOMAIN']=='marble':
     add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
@@ -845,7 +844,7 @@ def collect_samples(iteration,tabular=None):
                         state_v = autograd.Variable(start_state_song_batch)
                     ).data
 
-                elif params['METHOD']=='s-gan':
+                elif params['METHOD']=='gp-wgan' or params['METHOD']=='sgan':
                     '''prediction'''
                     noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
                     prediction = netG(
@@ -1766,7 +1765,7 @@ elif params['METHOD']=='bayes-net-learner':
 
     print(s)
 
-elif params['METHOD']=='deterministic-deep-net' or params['METHOD']=='s-gan':
+elif params['METHOD']=='deterministic-deep-net' or params['METHOD']=='gp-wgan' or params['METHOD']=='sgan':
 
     mse_loss_model = torch.nn.MSELoss(size_average=True)
 
@@ -1803,6 +1802,9 @@ iteration = logger.restore()
 
 while True:
     iteration += 1
+    print(iteration)
+    if iteration > TrainTo:
+        raise Exception('Train to iteration: '+str(TrainTo))
 
     if params['METHOD']=='tabular':
 
@@ -1892,7 +1894,7 @@ while True:
             )
         )
 
-    elif params['METHOD']=='s-gan':
+    elif params['METHOD']=='gp-wgan' or params['METHOD']=='sgan':
 
         ########################################################
         ############### (1) Update D network ###################
@@ -2014,7 +2016,7 @@ while True:
                 prediction_v_before_deconv=prediction_v_before_deconv,
             )
             gradients_reward.backward(mone)
-        GR_cost = gradients_reward.data.cpu().numpy()
+            GR_cost = gradients_reward.data.cpu().numpy()
         logger.plot('GR_cost', GR_cost)
 
         optimizerG.step()

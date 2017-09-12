@@ -41,7 +41,7 @@ class Walk1D(object):
     def get_all_possible_start_states(self):
         return [self.get_state(pos) for pos in range(self.n)]
 
-    def get_transition_probs(self, state_pos):
+    def get_transition_probs(self, state_pos, is_tabular=False):
 
         prob_dict = {}
 
@@ -87,7 +87,7 @@ class Walk1D(object):
         self.state = self.update_state(self.state, direction)
         return self.get_state(self.state)
 
-    def state_vector_to_position(self, state_vector):
+    def state_vector_to_position(self, state_vector, include_background=False):
 
         if self.mode==IMAGE:
 
@@ -128,114 +128,6 @@ class Walk1D(object):
 
             else:
                 return 'bad state'
-
-class BitFlip1D(object):
-
-    def __init__(self, length, mode, prob_dirs, fix_state=False, soft_vector=0.0):
-        assert mode in [IMAGE, VECTOR]
-        self.mode = mode
-        self.fix_state = fix_state
-        self.n = length
-        self.state = np.random.randint(0, 2, size=(1, self.n))
-        self.visualizer = visualizer.Visualizer(BLOCK_SIZE, 1, self.n,
-                                                {0: visualizer.WHITE,
-                                                 1: visualizer.BLUE})
-        self.cleaner_function = clean_entry_01_vec
-        self.action_dic = range(self.n)
-        self.prob_dirs = prob_dirs
-        self.fix_state = fix_state
-        self.fix_state_to = np.array([1.0]*(self.n/2)+[0.0]*(self.n-self.n/2))
-        self.soft_vector = soft_vector
-
-    def set_fix_state(self,fix_state):
-        self.fix_state = fix_state
-
-    def get_vector_size(self):
-        return self.n
-
-    def get_all_possible_start_states(self):
-        if self.fix_state:
-            all_start_state = [self.get_state(self.fix_state_to)]
-        else:
-            all_start_state = [np.array(x) for x in itertools.product([0, 1], repeat=self.n)]
-            for i in range(len(all_start_state)):
-                all_start_state[i] = np.clip(
-                    all_start_state[i],
-                    self.soft_vector,
-                    1.0-self.soft_vector
-                )
-            # print(all_start_state)
-            # print(s)
-
-        all_start_state = all_start_state[0:LIMIT_START_STATE_TO]
-
-        return all_start_state
-
-    def get_transition_probs(self, state_pos):
-
-        prob_dict = {}
-
-        for action_i in range(len(self.action_dic)):
-
-            key = str(self.update_state(state_pos, self.action_dic[action_i]))
-
-            if prob_dict.has_key(key):
-                prob_dict[key] += self.prob_dirs[action_i]
-            else:
-                prob_dict[key] = self.prob_dirs[action_i]
-            
-        return prob_dict
-
-    def set_state(self, state):
-        self.state = state
-
-    def reset(self):
-        if not self.fix_state:
-            self.state = np.random.randint(0, 2, size=(self.n))
-        else:
-            self.state = self.fix_state_to
-
-    def get_state(self, state=None):
-        if state is None:
-            state = self.state
-        if self.mode == IMAGE:
-            image = self.visualizer.make_screen(state)
-            raise Exception('we_donot_need_this_domain')
-        else:
-            vector = state.copy()
-            vector = np.clip(
-                vector,
-                self.soft_vector,
-                1.0-self.soft_vector
-            )
-            # print(vector)
-            # print(s)
-            return vector
-
-    def update_state(self, state, action):
-        state = state.copy()
-        state[action] = 1 - state[action]
-        return state
-
-    def update(self):
-        action = np.random.choice(self.action_dic, p=self.prob_dirs)
-        self.state = self.get_state(self.update_state(self.state, action))
-        return self.state
-
-    def state_vector_to_position(self, state_vector):
-
-        # print(state_vector)
-
-        for i in range(np.shape(state_vector)[0]):
-
-            if np.abs(state_vector[i]-self.soft_vector)<=ACCEPT_GATE:
-                state_vector[i] = 0.0
-            elif np.abs(state_vector[i]-(1.0-self.soft_vector))<=ACCEPT_GATE:
-                state_vector[i] = 1.0
-            else:
-                return 'bad state'
-
-        return state_vector
 
 class Walk2D(object):
 
@@ -521,7 +413,7 @@ def evaluate_domain(domain, s1_state, s2_samples, is_tabular=False):
 
     true_distribution = domain.get_transition_probs(
         state_pos=s1_pos,
-        is_tabular=is_tabular
+        is_tabular=is_tabular,
     )
     # print(true_distribution)
     bad_count = 0
