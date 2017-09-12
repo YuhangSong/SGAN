@@ -18,12 +18,13 @@ MEAN_NUM = 50
 
 class logger(object):
 	"""docstring for logger"""
-	def __init__(self,LOGDIR,DSP,params_str):
+	def __init__(self,LOGDIR,DSP,params_str, MULTI_RUN):
 		super(logger, self).__init__()
 
 		self.LOGDIR = LOGDIR
 		self.DSP = DSP
 		self.params_str = params_str
+		self.MULTI_RUN = MULTI_RUN
 
 		self._iter = 0
 
@@ -36,6 +37,7 @@ class logger(object):
 		try:
 			self._since_beginning = dill.load(open(self.LOGDIR+'log.pkl', "r"))
 			self._iter = dill.load(open(self.LOGDIR+'iteration.pkl', "r"))
+			# self._iter += 1
 			print('Restore plot from iter: '+str(self._iter))
 			return self._iter
 		except Exception, e:
@@ -50,11 +52,17 @@ class logger(object):
 		value = np.asarray(value)
 		self._since_last_flush[name][self._iter] = value
 
+
+	def get_plot(self, name):
+		x_vals = np.asarray(np.sort(self._since_beginning[name].keys()))
+		y_vals = np.asarray(np.squeeze(np.asarray([self._since_beginning[name][x] for x in x_vals])))
+		return x_vals, y_vals
+		
 	def flush(self):
 
 		vis.text(
-			self.params_str.replace('\n','<br>'),
-			win='discribe'
+			(self.MULTI_RUN+self.params_str).replace('\n','<br>'),
+			win=str(self.MULTI_RUN)+'-discribe'
 		)
 
 		for name, vals in self._since_last_flush.items():
@@ -91,8 +99,8 @@ class logger(object):
 			if len(x_vals) > 1:
 				vis.line(   X=x_vals,
 							Y=y_vals,
-		                    win=name,
-		                    opts=dict(title=name))
+		                    win=str(self.MULTI_RUN)+'-'+name,
+		                    opts=dict(title=str(self.MULTI_RUN)+'-'+name))
 
 		self._since_last_flush.clear()
 
