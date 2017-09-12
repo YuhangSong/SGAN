@@ -1,5 +1,5 @@
 # SGAN
-####
+#### This repo provide code for all the result reported in SGAN paper.
 
 ## Setup enviroment: vertual env on conda named sgan_env.
 ### Some basic setups for your computer, if you are familiar with these, pass them.
