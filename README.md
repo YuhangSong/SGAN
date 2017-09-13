@@ -21,9 +21,9 @@ mkdir -p sgan_env/project/ && cd sgan_env/project/ && git clone https://github.c
 ```
 
 ## Run the code
-We auto restore the checkpoint of the model, as well as restore the every plot from last run. If you want to start a new run, you should change the EXP parameter in rgan.py
+We auto restore the checkpoint of the model, as well as restore the every plot from last run. If you want to start a new run, you should change the EXP parameter in main.py
 ```
-source ~/.bashrc && source activate sgan_env && python rgan.py
+source ~/.bashrc && source activate sgan_env && python main.py
 ```
 
 ## Visualize result
