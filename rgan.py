@@ -24,7 +24,7 @@ import imageio
 from decision_tree import *
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'noise_encourage_marble' # display a tag before the result printed
+MULTI_RUN = 'sgan' # display a tag before the result printed
 GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
@@ -50,7 +50,7 @@ def add_parameters(**kwargs):
 '''domain settings'''
 add_parameters(EXP = 'noise_encourage_exp') # the first level of log dir
 add_parameters(DOMAIN = 'marble') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
+add_parameters(FIX_STATE = True) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
 add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
 add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
 
@@ -68,11 +68,11 @@ elif params['DOMAIN']=='2Dgrid':
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.5,0.5,0.0,0.0])
     # add_parameters(OBSTACLE_POS_LIST = [])
 
-    add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
-    add_parameters(OBSTACLE_POS_LIST = [])
-
-    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    # add_parameters(GRID_ACTION_DISTRIBUTION = [0.6, 0.0, 0.2, 0.2])
     # add_parameters(OBSTACLE_POS_LIST = [])
+
+    add_parameters(GRID_ACTION_DISTRIBUTION = [0.25,0.25,0.25,0.25])
+    add_parameters(OBSTACLE_POS_LIST = [])
 
     # add_parameters(GRID_ACTION_DISTRIBUTION = [0.8, 0.0, 0.1, 0.1])
     # add_parameters(OBSTACLE_POS_LIST = [(2, 2)])
@@ -95,14 +95,14 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 's-gan') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
+add_parameters(METHOD = 'deterministic-deep-net') # tabular, bayes-net-learner, deterministic-deep-net, s-gan
 
-add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-# add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
+# add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
+add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
 add_parameters(GP_GUIDE_FACTOR = 1.0)
 
-add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-# add_parameters(INTERPOLATES_MODE = 'one') # auto, one
+# add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
 # add_parameters(NOISE_ENCOURAGE = False)
 add_parameters(NOISE_ENCOURAGE = True)
@@ -250,7 +250,7 @@ with open(LOGDIR+"Settings.txt","a") as f:
     f.write(params_str)
 
 N_POINTS = 128 # for scalar domain, data tendity when draw the critic surface
-RESULT_SAMPLE_NUM = 1000 # number of samples to draw when evaluate L1 loss
+RESULT_SAMPLE_NUM = params['BATCH_SIZE'] # number of samples to draw when evaluate L1 loss
 TrainTo   = 100000 # train to 100k and evaluate
 
 LOG_INTER = 1000
@@ -839,11 +839,16 @@ def collect_samples(iteration,tabular=None):
 
                 else:
                     raise Exception('ss')
+
+                start_state_song_batch = data.next().narrow(1,0,params['STATE_DEPTH'])
                 
                 if params['METHOD']=='deterministic-deep-net':
+                    noise = torch.randn((RESULT_SAMPLE_NUM), params['NOISE_SIZE']).cuda()
+                    noise.fill_(0.0)
                     prediction = netG(
-                        state_v = autograd.Variable(start_state_song_batch)
-                    ).data
+                        noise_v = autograd.Variable(noise, volatile=True),
+                        state_v = autograd.Variable(start_state_song_batch),
+                    )[0].data
 
                 elif params['METHOD']=='s-gan':
                     '''prediction'''
@@ -856,8 +861,10 @@ def collect_samples(iteration,tabular=None):
                 else:
                     raise Exception('Unsupport')
 
-                log_img(start_state_song_batch,'state_'+str(ii),iteration)
-                log_img(prediction,'prediction_'+str(ii),iteration)
+                print(start_state_song_batch.size())
+                # print()
+                log_img((torch.cat([start_state_song_batch.unsqueeze(1),prediction.unsqueeze(1)],1)).contiguous().view(params['BATCH_SIZE']*2,1,1,20,20),'state_'+str(ii),iteration,nrow=2)
+                # log_img(prediction[0],'prediction_'+str(ii),iteration)
 
             else:
                 
@@ -1370,6 +1377,14 @@ class marble_domain(object):
         #     opts=dict(caption=str(4)),
         # )
         # raw_input('hit')
+
+        log_img(
+            self.dataset[0:1000,0:1,:,:,:],
+            'seq',
+            2,
+            nrow=(50),
+        )
+        raise Exception('sss')
 
     def get_batch(self):
         indexs = self.indexs_selector.random_(0,self.dataset.size()[0]).cuda()
