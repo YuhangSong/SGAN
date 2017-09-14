@@ -23,8 +23,8 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
-MULTI_RUN = 'GP-WGAN_3' # display a tag before the result printed, to identify multiple runs on your machine
-GPU = "0" # use which GPU
+MULTI_RUN = 'GP-WGAN_4' # display a tag before the result printed, to identify multiple runs on your machine
+GPU = "1" # use which GPU
 
 MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
 os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
@@ -223,7 +223,7 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = 'another_3')
+add_parameters(AUX_INFO = 'another_4')
 
 '''
 summary settings
