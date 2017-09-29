@@ -23,6 +23,7 @@ import matplotlib.cm as cm
 import imageio
 
 CLEAR_RUN = False # if delete logdir and start a new run
+
 MULTI_RUN = 'SGAN_1' # display a tag before the result printed, to identify multiple runs on your machine
 GPU = "0" # use which GPU
 
@@ -97,22 +98,50 @@ method settings
 add_parameters(METHOD = 'sgan') # tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
 
 if params['METHOD']=='sgan':
-    add_parameters(GP_MODE = 'pure-guide') # none-guide, use-guide, pure-guide
-    add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
-else:
-    add_parameters(GP_MODE = 'none-guide') # none-guide, use-guide, pure-guide
-    add_parameters(GP_GUIDE_FACTOR = 1.0)
-    add_parameters(INTERPOLATES_MODE = 'one') # auto, one
 
+    '''
+        options:    none-guide, use-guide, pure-guide
+        note:   none-guide  --  use the original loss of D in GP-WGAN / WGAN
+                use-guide   --  use both the original loss of D in GP-WGAN / WGAN
+                                and the loss of D in SGAN
+                pure-guide  --  use only the loss of D in SGAN
+    '''
+    add_parameters(GP_MODE = 'pure-guide') 
+
+    '''
+        optitions:  auto, one
+        note:   auto    -- simple x_\tau for T times in SGAN
+                one     -- simple x_\tau for one time, like in GP-WGAN
+    '''
+    add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+
+else:
+    add_parameters(GP_MODE = 'none-guide')
+
+    '''
+        note:   when using use-guide, this is a factor to integrate SGAN loss D
+                to the original loss D in WGAN
+    '''
+    add_parameters(GP_GUIDE_FACTOR = 1.0)
+    add_parameters(INTERPOLATES_MODE = 'one')
+
+'''
+    note:   the optianal additional loss of G in the paper
+'''
 add_parameters(NOISE_ENCOURAGE = False)
 
 if params['DOMAIN']=='marble':
+    '''
+        note:   the co-efficient of noise encourage loss in G
+    '''
     add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
 else:
     add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
 
 '''
-compute delta for differant domains
+    note:   compute delta for differant domains
+            this implement the part of the paper that describe how to set the
+            SGAN's hyper-parameter.
 '''
 BASE = 0.1 / ( ( (1)**0.5 ) / ( (5)**0.5 ) )
 if params['DOMAIN']=='1Dflip' or params['DOMAIN']=='1Dgrid':
@@ -162,7 +191,7 @@ else:
 add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
 add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 33554) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
+add_parameters(DATASET_SIZE = 335) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
 # LAMBDA is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
