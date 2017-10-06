@@ -34,7 +34,7 @@ If you meet any failure, you are wellcome to report and pull request a fix, sinc
 sudo apt autoremove && sudo apt-get install -y tmux htop cmake golang libjpeg-dev git && source ~/.bashrc && source deactivate && conda remove --name sgan_env --all && conda create -n sgan_env python=2 -y && source ~/.bashrc && source activate sgan_env && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && rm -r sgan_env && mkdir -p sgan_env/project/ && cd sgan_env/project/ && wget http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl && pip install http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl && pip install numpy scipy torchvision universe six visdom "gym[atari]" matplotlib dill pygame imageio opencv-python && git config --global push.default "current" && git config --global pull.default "current" && git config --global credential.helper "cache --timeout=36000000000000000" && git clone https://github.com/YuhangSong/SGAN.git && cd SGAN
 ```
 
-Install Pytorch from source
+Install Pytorch from source (This has been depreciated, since the official release from Pytorch has supported all the features we need.)
 ```
 git clone https://github.com/pytorch/pytorch.git && cd pytorch && git submodule update --init && python setup.py install && cd ..
 ```
