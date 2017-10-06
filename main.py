@@ -6,7 +6,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
-import sklearn.datasets
 import tflib as lib
 import tflib.plot
 import cv2
