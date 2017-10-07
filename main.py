@@ -329,6 +329,20 @@ def vector2image(x):
     return x_temp
 
 def log_img(x,name,iteration=0,nrow=8):
+
+    def log_img_final(x,name,iteration=0,nrow=8):
+        vutils.save_image(
+            x,
+            LOGDIR+name+'_'+str(iteration)+'.png',
+            nrow=nrow,
+        )
+        vis.images( 
+            x.cpu().numpy(),
+            win=str(MULTI_RUN)+'-'+name,
+            opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)),
+            nrow=nrow,
+        )
+
     if params['REPRESENTATION']==chris_domain.VECTOR:
         x = vector2image(x)
     x = x.squeeze(1)
@@ -338,19 +352,6 @@ def log_img(x,name,iteration=0,nrow=8):
             log_img_final(x[:,1:2,:,:],name+'_a',iteration,nrow)
             x = torch.cat([x,x[:,0:1,:,:]],1)
     log_img_final(x,name,iteration,nrow)
-
-def log_img_final(x,name,iteration=0,nrow=8):
-    vutils.save_image(
-        x,
-        LOGDIR+name+'_'+str(iteration)+'.png',
-        nrow=nrow,
-    )
-    vis.images( 
-        x.cpu().numpy(),
-        win=str(MULTI_RUN)+'-'+name,
-        opts=dict(caption=str(MULTI_RUN)+'-'+name+'_'+str(iteration)),
-        nrow=nrow,
-    )
 
 def plt_to_vis(fig,win,name):
     canvas=fig.canvas
@@ -831,6 +832,9 @@ def song2chris(x):
     return x
 
 def get_tabular_samples(tabular_dic,start_state_chris):
+    '''
+        evaluate domain
+    '''
 
     start_state_ = domain.get_state_str(start_state_chris)
 
@@ -842,6 +846,9 @@ def get_tabular_samples(tabular_dic,start_state_chris):
         return None
 
 def collect_samples(iteration,tabular=None):
+    '''
+        evaluate domain
+    '''
 
     if params['DOMAIN']!='marble':
 
@@ -960,6 +967,9 @@ def collect_samples(iteration,tabular=None):
     return l1, ac
 
 def evaluate_domain(iteration,tabular=None):
+    '''
+        evaluate domain
+    '''
 
     if params['REPRESENTATION']==chris_domain.SCALAR:
 
@@ -994,6 +1004,10 @@ def evaluate_domain(iteration,tabular=None):
     return l1, accept_rate
 
 def plot_convergence(images,name):
+    '''
+        evaluate domain
+    '''
+
     dis, accept_rate = get_transition_prob_distribution(images)
     if not (np.sum(dis)==0.0):
         kl = scipy.stats.entropy(
@@ -1016,6 +1030,9 @@ def plot_convergence(images,name):
     )
 
 def evaluate_domain_with_filter(iteration,dataset,gen_basic=False,filter_net=None):
+    '''
+        evaluate domain
+    '''
 
     plt.clf()
 
@@ -1205,43 +1222,11 @@ def evaluate_domain_with_filter(iteration,dataset,gen_basic=False,filter_net=Non
             win=file_name,
             name=file_name+'_'+str(iteration))
 
-def get_state(fix_state=False):
-
-    if not fix_state:
-        cur_x = np.random.choice(range(params['GRID_SIZE']))
-        cur_y = np.random.choice(range(params['GRID_SIZE']))
-    else:
-        cur_x = FIX_STATE_TO[0]
-        cur_y = FIX_STATE_TO[1]
-
-    return cur_x,cur_y
-
-def transition(cur_x,cur_y,action):
-
-    next_x = cur_x
-    next_y = cur_y
-    if action==0:
-        next_x = cur_x + 1
-    elif action==1:
-        next_y = cur_y + 1
-    elif action==2:
-        next_x = cur_x - 1
-    elif action==3:
-        next_y = cur_y - 1
-    next_x = np.clip(next_x,0,params['GRID_SIZE']-1)
-    next_y = np.clip(next_y,0,params['GRID_SIZE']-1)
-    return next_x,next_y
-
-def get_ob(x,y):
-
-    ob = [x,y]
-    ob = np.asarray(ob).astype(float) / (params['GRID_SIZE']-1)
-    ob = np.expand_dims(ob,0)
-
-    return ob
-
 class marble_domain(object):
-    """docstring for marble_domain"""
+    '''
+        marble domain
+    '''
+
     def __init__(self):
         super(marble_domain, self).__init__()
 
@@ -1406,7 +1391,9 @@ class marble_domain(object):
         return self.dataset[4:5]
 
 class grid_domain(object):
-    """docstring for grid_domain"""
+    '''
+        domain
+    '''
     def __init__(self):
         super(grid_domain, self).__init__()
 
@@ -1472,8 +1459,8 @@ class grid_domain(object):
         return torch.index_select(self.dataset,0,indexs)
 
 '''
-wrap domain is to store dataset
-and generate dataset at the begining,
+    wrap domain is to store dataset
+    and generate dataset at the begining,
 '''
 if params['DOMAIN']=='marble':
     domain = marble_domain()
@@ -1505,6 +1492,10 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
         yield dataset
 
 def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
+    '''
+        compute gradient penalty in GP-WGAN
+        or compute loss of D in SGAN
+    '''
     
     '''get multiple interplots'''
     if params['INTERPOLATES_MODE']=='auto':
@@ -1696,6 +1687,9 @@ def calc_gradient_penalty(netD, state, prediction, prediction_gt, log=False):
     return gradients_penalty, num_t_sum
 
 def calc_gradient_reward(noise_v, prediction_v_before_deconv):
+    '''
+        compute the additional loss of G
+    '''
 
     def get_grad_norm(inputs,outputs):
 
@@ -1939,6 +1933,7 @@ while True:
 
             '''get generated data'''
             noise = torch.randn(params['BATCH_SIZE'], params['NOISE_SIZE']).cuda()
+            '''forward'''
             prediction = netG(
                 noise_v = autograd.Variable(noise, volatile=True),
                 state_v = autograd.Variable(state, volatile=True)
