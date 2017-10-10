@@ -21,24 +21,38 @@ import domains.all_domains as chris_domain
 import matplotlib.cm as cm
 import imageio
 
-CLEAR_RUN = False # if delete logdir and start a new run
+'''if delete logdir and start a new run'''
+CLEAR_RUN = False 
 
-MULTI_RUN = 'SGAN_1' # display a tag before the result printed, to identify multiple runs on your machine
-GPU = "0" # use which GPU
+'''display a tag before the result printed, to identify multiple runs on your machine'''
+MULTI_RUN = 'SGAN_1'
+'''
+use which GPU
+we donot recommend use more than one GPU, if could slow down computing,
+but if you are using a bigger model, you can try multiple GPUs.
+'''
+GPU = "0"
 
-MULTI_RUN = MULTI_RUN + '|GPU:' + GPU # this is a lable displayed before each print and log, to identify different runs at the same time on one computer
-os.environ["CUDA_VISIBLE_DEVICES"] = GPU # set env variable that make the GPU you select
-# after mask GPU, import torch
+# this is a lable displayed before each print and log,
+# to identify different runs at the same time on one computer.
+MULTI_RUN = MULTI_RUN + '|GPU:' + GPU
+# set env variable that make the GPU you select
+os.environ["CUDA_VISIBLE_DEVICES"] = GPU
+# after mask GPU, import torch,
+# so that the environment varaible can take effect
 if GPU!=None:
     import torch
     import torch.autograd as autograd
     import torch.nn as nn
     import torch.nn.functional as F
     import torch.optim as optim
+    # the initial seed is fixed far a fair comparison
     torch.manual_seed(4213)
-    GPU = range(torch.cuda.device_count()) # use all GPU you select
+    # use all GPU you select
+    GPU = range(torch.cuda.device_count())
     print('Using GPU:'+str(GPU))
 
+# create params and manage function
 params = {}
 params_seq = []
 def add_parameters(**kwargs):
@@ -47,11 +61,23 @@ def add_parameters(**kwargs):
     params.update(kwargs)
 
 '''domain settings'''
-add_parameters(EXP = 'exp_2') # the first level of log dir
-add_parameters(DOMAIN = '2Dgrid') # 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(FIX_STATE = False) # whether to fix the start state at a specific point, this will simplify training. Usually using it for debugging so that you can have a quick run.
-add_parameters(REPRESENTATION = chris_domain.IMAGE) # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(GRID_SIZE = 5) # size of 1Dgrid, 1Dflip, 2Dgrid
+
+# the first level of log dir
+add_parameters(EXP = 'exp_2')
+
+# 1Dflip, 1Dgrid, 2Dgrid, marble
+add_parameters(DOMAIN = '2Dgrid')
+
+# whether to fix the start state at a specific point,
+# this will simplify training. Usually using it for 
+# debugging so that you can have a quick run.
+add_parameters(FIX_STATE = False)
+
+# chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
+add_parameters(REPRESENTATION = chris_domain.IMAGE) 
+
+# size of 1Dgrid, 1Dflip, 2Dgrid
+add_parameters(GRID_SIZE = 5) 
 
 '''
 domain dynamic
@@ -94,11 +120,13 @@ else:
 '''
 method settings
 '''
-add_parameters(METHOD = 'sgan') # tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
+# tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
+add_parameters(METHOD = 'sgan')
 
 if params['METHOD']=='sgan':
 
     '''
+        This param is set automatically according to the method.
         options:    none-guide, use-guide, pure-guide
         note:   none-guide  --  use the original loss of D in GP-WGAN / WGAN
                 use-guide   --  use both the original loss of D in GP-WGAN / WGAN
@@ -112,20 +140,22 @@ if params['METHOD']=='sgan':
         note:   auto    -- simple x_\tau for T times in SGAN
                 one     -- simple x_\tau for one time, like in GP-WGAN
     '''
-    add_parameters(INTERPOLATES_MODE = 'auto') # auto, one
+    add_parameters(INTERPOLATES_MODE = 'auto')
 
 else:
     add_parameters(GP_MODE = 'none-guide')
 
+    add_parameters(INTERPOLATES_MODE = 'one')
+
     '''
+        This param is set automatically according to the method.
         note:   when using use-guide, this is a factor to integrate SGAN loss D
                 to the original loss D in WGAN
     '''
     add_parameters(GP_GUIDE_FACTOR = 1.0)
-    add_parameters(INTERPOLATES_MODE = 'one')
 
 '''
-    note:   the optianal additional loss of G in the paper
+    note: the optianal additional loss of G in the paper
 '''
 add_parameters(NOISE_ENCOURAGE = False)
 
@@ -134,10 +164,14 @@ if params['DOMAIN']=='marble':
         note:   the co-efficient of noise encourage loss in G
     '''
     add_parameters(NOISE_ENCOURAGE_FACTOR = 0.1)
+
 else:
     add_parameters(NOISE_ENCOURAGE_FACTOR = 1.0)
 
 '''
+    This param is set here by the method introduced in the paper.
+    Please try out this method when you are trying on a new domain,
+    and let us know if it works.
     note:   compute delta for differant domains
             this implement the part of the paper that describe how to set the
             SGAN's hyper-parameter.
@@ -187,11 +221,25 @@ else:
     raise Exception('s')
 
 '''model settings'''
-add_parameters(DIM = 128) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on DIM = 512
-add_parameters(NOISE_SIZE = 8) # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on NOISE_SIZE = 128, when using noise reward, we can set this to be smaller
+
+# warnning: this is not likely to make a difference, 
+# but the result I report except the random bg domain 
+# is on DIM = 512
+add_parameters(DIM = 128)
+
+# warnning: this is not likely to make a difference, 
+# but the result I report except the random bg domain is on NOISE_SIZE = 128, 
+# when using noise reward, we can set this to be smaller
+add_parameters(NOISE_SIZE = 8) 
+
 add_parameters(BATCH_SIZE = 32)
-add_parameters(DATASET_SIZE = 335) # 33554 # 1610612736 # warnning: this is not likely to make a difference, but the result I report except the random bg domain is on dynamic full data set
-# LAMBDA is set seperatly for different representations
+
+# warnning: this is not likely to make a difference, 
+# but the result I report except the random bg domain is 
+# on dynamic full data set
+add_parameters(DATASET_SIZE = 335) # 33554
+
+# LAMBDA for GP-WGAN is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
     add_parameters(LAMBDA = 0.1)
 
@@ -214,7 +262,8 @@ else:
     add_parameters(STATE_DEPTH = 1)
 
 '''
-build domains according to the settings
+build domains according to the settings,
+ignore this if you are trying you own domain.
 '''
 if params['DOMAIN']=='1Dflip':
     domain = chris_domain.BitFlip1D(
@@ -251,10 +300,17 @@ elif params['DOMAIN']=='marble':
 else:
     print(unsupport)
 
-add_parameters(AUX_INFO = 'another_10')
+'''
+this the last layer of the log dir,
+you can add some aux information about your experiment
+normally, we would describe the model structure here.
+'''
+add_parameters(AUX_INFO = 'my cool model')
 
 '''
 summary settings
+to create log dir and params, do not modify if not
+necessary.
 '''
 DSP = ''
 params_str = 'Settings'+'\n'
@@ -2084,5 +2140,3 @@ while True:
         logger.flush()
 
     logger.tick()
-
-    
