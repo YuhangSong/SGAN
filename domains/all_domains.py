@@ -6,15 +6,28 @@ import itertools
 import numpy as np
 import torch
 
+'''
+    This code is initially provided by Chris
+'''
+
+# three representations
 SCALAR = 0
 VECTOR = 1
 IMAGE = 2
 
+# for image, the size of every block in grid world
 BLOCK_SIZE = 4
+
+# for evaluation, with in this gate, the generated image well
+# be counted as valid 
 ACCEPT_GATE = 0.1
 
+# some of the domain has too many starts state, this will limit
+# the evaluation to parts of the starts state, instead of evaluating
+# them all
 LIMIT_START_STATE_TO = 50
 
+# for the background of the grid world, it is gray
 FEATURE_DISCOUNT = 0.5
 
 class Walk1D(object):
