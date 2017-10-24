@@ -6,58 +6,30 @@ This repo provides code for all the results reported in SGAN paper.
 
 ### Pre-requirements
 
-Refer to [my personal basic setup](https://github.com/YuhangSong/basic_setup) for some convinient command lines.
-
-* [CUDA 8.0](https://developer.nvidia.com/cuda-downloads)
-* [Anaconda3](https://www.anaconda.com/download/)
+Follow [requirements from another repo of mine](https://github.com/YuhangSong/gtn_a2c##requirements) to setup a basic env.
 
 ### Other requirements
 
-This process will requite root password, but note that we only use root permission fot apt-get install, so it is totally safe for your computer.
-
-If you meet any failure, you are wellcome to report and pull request a fix, since we are trying to make our code usable as widely.
-
-In order to install other requirements, follow:
+Install other requirements, follow:
 ```
-# some install
-sudo apt autoremove
-sudo apt-get install -y tmux htop cmake golang libjpeg-dev git
-
-# clean env
-source ~/.bashrc
-source deactivate
-conda remove --name sgan_env --all
-
 # create env
 source ~/.bashrc
 source deactivate
-conda create -n sgan_env python=2 -y
+conda create -n sgan_env --clone gtn_env
 
 # source in env
 source ~/.bashrc
 source activate sgan_env
 
-# install
-export CMAKE_PREFIX_PATH=~/anaconda3/
-conda install -y numpy pyyaml mkl setuptools cmake gcc cffi numpy pyyaml mkl setuptools cmake gcc cffi
-conda install -c soumith magma-cuda80
-
-# clean dir
-rm -r sgan_env
-
-# create dir and install
+# clean dir and create dir and install
+rm -r sgan_env 
 mkdir -p sgan_env/project/
 cd sgan_env/project/
-wget http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl
-pip install http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl
-pip install numpy scipy torchvision universe six visdom "gym[atari]" matplotlib dill pygame imageio opencv-python
+pip install pddlpy
+
+# done
 git clone https://github.com/YuhangSong/SGAN.git
 cd SGAN
-```
-
-Install Pytorch from source (This has been depreciated, since the official release from Pytorch has supported all the features we need.)
-```
-git clone https://github.com/pytorch/pytorch.git && cd pytorch && git submodule update --init && python setup.py install && cd ..
 ```
 
 ## Run the code
