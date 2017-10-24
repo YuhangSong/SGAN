@@ -6,7 +6,7 @@ This repo provides code for all the results reported in SGAN paper.
 
 ### Pre-requirements
 
-Follow [requirements from another repo of mine](https://github.com/YuhangSong/gtn_a2c##requirements) to setup a basic env.
+Follow [requirements from another repo of mine](https://github.com/YuhangSong/gtn_a2c#requirements) to setup a basic env.
 
 ### Other requirements
 
