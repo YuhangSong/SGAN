@@ -17,7 +17,7 @@ import visdom
 vis = visdom.Visdom()
 import time
 import math
-import domains.all_domains as chris_domain
+import all_domains as chris_domain
 import matplotlib.cm as cm
 import imageio
 
@@ -1036,7 +1036,7 @@ def evaluate_domain(iteration,tabular=None):
             fix_state=True,
             batch_size=batch_size
         )
-        dataset = data_fix_state.next()
+        dataset = data_fix_state.__next__()
         domain.set_fix_state(params['FIX_STATE'])
 
         evaluate_domain_with_filter(
@@ -1776,12 +1776,12 @@ def restore_model():
     try:
         netD.load_state_dict(torch.load('{0}/netD.pth'.format(LOGDIR)))
         print('Previous checkpoint for netD founded')
-    except Exception, e:
+    except Exception:
         print('Previous checkpoint for netD unfounded')
     try:
         netG.load_state_dict(torch.load('{0}/netG.pth'.format(LOGDIR)))
         print('Previous checkpoint for netG founded')
-    except Exception, e:
+    except Exception:
         print('Previous checkpoint for netG unfounded')
     print('')
 
@@ -1808,7 +1808,7 @@ elif params['METHOD']=='bayes-net-learner':
     dataset = data("")
     data = dataset_iter()
     for i in range(100):
-        state_prediction_gt = data.next()
+        state_prediction_gt = data.__next__()
         state = state_prediction_gt.narrow(
             dimension=1,
             start=0,
@@ -1849,8 +1849,8 @@ elif params['METHOD']=='deterministic-deep-net' or params['METHOD']=='gp-wgan' o
     '''build models'''
     netG = Generator().cuda()
     netD = Discriminator().cuda()
-    print netG
-    print netD
+    print(netG)
+    print(netD)
 
     '''init models'''
     netD.apply(weights_init)
@@ -1886,7 +1886,7 @@ while True:
     if params['METHOD']=='tabular':
 
         '''get data set'''
-        state_prediction_gt = data.next()
+        state_prediction_gt = data.__next__()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
@@ -1931,7 +1931,7 @@ while True:
                 # 2 dimension: feature (channel), for xianming default to 1
                 # 3 & 4 dimension: size (1D or 2D)
         '''
-        state_prediction_gt = data.next()
+        state_prediction_gt = data.__next__()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
@@ -1980,10 +1980,10 @@ while True:
         for p in netD.parameters():
             p.requires_grad = True
 
-        for iter_d in xrange(5):
+        for iter_d in range(5):
 
             '''get data set'''
-            state_prediction_gt = data.next()
+            state_prediction_gt = data.__next__()
             state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
             prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 
@@ -2057,7 +2057,7 @@ while True:
         ############# (3) Update G network or R ################
         ########################################################
 
-        state_prediction_gt = data.next()
+        state_prediction_gt = data.__next__()
         state = state_prediction_gt.narrow(1,0,params['STATE_DEPTH'])
         prediction_gt = state_prediction_gt.narrow(1,params['STATE_DEPTH'],1)
 

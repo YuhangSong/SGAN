@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 
 import collections
 import time
-import cPickle as pickle
 import dill
 import scipy.signal
 
@@ -40,7 +39,7 @@ class logger(object):
 			# self._iter += 1
 			print('Restore plot from iter: '+str(self._iter))
 			return self._iter
-		except Exception, e:
+		except Exception:
 			print('Previous plot unfounded')
 			return 0
 		print('')
