@@ -2,32 +2,19 @@
 
 This repo provides code for all the results reported in SGAN paper.
 
-## Setup enviroment
+## Requirements
 
-Virtual environment on conda named sgan_env.
+### Pre-requirements
 
-### Basic
+Refer to [my personal basic setup](https://github.com/YuhangSong/basic_setup) for some convinient command lines.
 
-Some basic setups for your computer, if you are familiar with these, just ignore them.
+* [CUDA 8.0](https://developer.nvidia.com/cuda-downloads)
+* [Anaconda3](https://www.anaconda.com/download/)
 
-Install SSH for remote control.
-```
-sudo apt-get install openssh-server
-```
+# Other requirements
 
-Download and install [CUDA 8.0](https://developer.nvidia.com/cuda-downloads).
-```
-wget https://developer.nvidia.com/compute/cuda/8.0/Prod2/local_installers/cuda_8.0.61_375.26_linux-run && sudo chmod -x cuda_8.0.61_375.26_linux-run && mv cuda_8.0.61_375.26_linux-run cuda_8.0.61_375.26_linux.run && sudo sh cuda_8.0.61_375.26_linux.run
-```
+In order to install other requirements, follow:
 
-Download and install [Anaconda3](https://www.anaconda.com/download/).
-```
-wget https://repo.continuum.io/archive/Anaconda3-4.4.0-Linux-x86_64.sh && bash Anaconda3-4.4.0-Linux-x86_64.sh
-```
-
-### Setup Env
-
-Setup environment.
 This process will requite root password, but note that we only use root permission fot apt-get install, so it is totally safe for your computer.
 If you meet any failure, you are wellcome to report and pull request a fix, since we are trying to make our code usable as widely.
 ```
