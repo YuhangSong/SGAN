@@ -11,14 +11,48 @@ Refer to [my personal basic setup](https://github.com/YuhangSong/basic_setup) fo
 * [CUDA 8.0](https://developer.nvidia.com/cuda-downloads)
 * [Anaconda3](https://www.anaconda.com/download/)
 
-# Other requirements
-
-In order to install other requirements, follow:
+### Other requirements
 
 This process will requite root password, but note that we only use root permission fot apt-get install, so it is totally safe for your computer.
+
 If you meet any failure, you are wellcome to report and pull request a fix, since we are trying to make our code usable as widely.
+
+In order to install other requirements, follow:
 ```
-sudo apt autoremove && sudo apt-get install -y tmux htop cmake golang libjpeg-dev git && source ~/.bashrc && source deactivate && conda remove --name sgan_env --all && conda create -n sgan_env python=2 -y && source ~/.bashrc && source activate sgan_env && export CMAKE_PREFIX_PATH=~/anaconda3/ && conda install -y numpy pyyaml mkl setuptools cmake gcc cffi numpy pyyaml mkl setuptools cmake gcc cffi && conda install -c soumith magma-cuda80 && rm -r sgan_env && mkdir -p sgan_env/project/ && cd sgan_env/project/ && wget http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl && pip install http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl && pip install numpy scipy torchvision universe six visdom "gym[atari]" matplotlib dill pygame imageio opencv-python && git config --global push.default "current" && git config --global pull.default "current" && git config --global credential.helper "cache --timeout=36000000000000000" && git clone https://github.com/YuhangSong/SGAN.git && cd SGAN
+# some install
+sudo apt autoremove
+sudo apt-get install -y tmux htop cmake golang libjpeg-dev git
+
+# clean env
+source ~/.bashrc
+source deactivate
+conda remove --name sgan_env --all
+
+# create env
+source ~/.bashrc
+source deactivate
+conda create -n sgan_env python=2 -y
+
+# source in env
+source ~/.bashrc
+source activate sgan_env
+
+# install
+export CMAKE_PREFIX_PATH=~/anaconda3/
+conda install -y numpy pyyaml mkl setuptools cmake gcc cffi numpy pyyaml mkl setuptools cmake gcc cffi
+conda install -c soumith magma-cuda80
+
+# clean dir
+rm -r sgan_env
+
+# create dir and install
+mkdir -p sgan_env/project/
+cd sgan_env/project/
+wget http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl
+pip install http://download.pytorch.org/whl/cu80/torch-0.2.0.post3-cp27-cp27mu-manylinux1_x86_64.whl
+pip install numpy scipy torchvision universe six visdom "gym[atari]" matplotlib dill pygame imageio opencv-python
+git clone https://github.com/YuhangSong/SGAN.git
+cd SGAN
 ```
 
 Install Pytorch from source (This has been depreciated, since the official release from Pytorch has supported all the features we need.)
