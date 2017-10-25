@@ -22,7 +22,7 @@ import matplotlib.cm as cm
 import imageio
 
 '''if delete logdir and start a new run'''
-CLEAR_RUN = False 
+CLEAR_RUN = True 
 
 '''display a tag before the result printed, to identify multiple runs on your machine'''
 MULTI_RUN = 'SGAN_1'
@@ -65,8 +65,8 @@ def add_parameters(**kwargs):
 # the first level of log dir
 add_parameters(EXP = 'exp_2')
 
-# 1Dflip, 1Dgrid, 2Dgrid, marble
-add_parameters(DOMAIN = '2Dgrid')
+# 1Dflip, 1Dgrid, 2Dgrid, marble, Tireworld
+add_parameters(DOMAIN = 'Tireworld')
 
 # whether to fix the start state at a specific point,
 # this will simplify training. Usually using it for 
@@ -74,7 +74,7 @@ add_parameters(DOMAIN = '2Dgrid')
 add_parameters(FIX_STATE = False)
 
 # chris_domain.SCALAR, chris_domain.VECTOR, chris_domain.IMAGE
-add_parameters(REPRESENTATION = chris_domain.IMAGE) 
+add_parameters(REPRESENTATION = chris_domain.VECTOR) 
 
 # size of 1Dgrid, 1Dflip, 2Dgrid
 add_parameters(GRID_SIZE = 5) 
@@ -114,8 +114,53 @@ elif params['DOMAIN']=='marble':
     add_parameters(IMAGE_SIZE = 64)
     add_parameters(FRAME_INTERVAL = 3)
 
+elif params['DOMAIN']=='Tireworld':
+    pass
 else:
     raise Exception('unsupport')
+
+'''
+build domains according to the settings,
+ignore this if you are trying you own domain.
+'''
+if params['DOMAIN']=='1Dflip':
+    domain = chris_domain.BitFlip1D(
+        length=params['GRID_SIZE'],
+        mode=params['REPRESENTATION'],
+        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
+        fix_state=params['FIX_STATE'],
+        soft_vector=params['SOFT_VECTOR']
+    )
+
+elif params['DOMAIN']=='1Dgrid':
+    domain = chris_domain.Walk1D(
+        length=params['GRID_SIZE'],
+        prob_left=params['GRID_ACTION_DISTRIBUTION'][0],
+        mode=params['REPRESENTATION'],
+        fix_state=params['FIX_STATE']
+    )
+
+elif params['DOMAIN']=='2Dgrid':
+    domain = chris_domain.Walk2D(
+        width=params['GRID_SIZE'],
+        height=params['GRID_SIZE'],
+        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
+        obstacle_pos_list=params['OBSTACLE_POS_LIST'],
+        mode=params['REPRESENTATION'],
+        should_wrap=False,
+        fix_state=params['FIX_STATE'],
+        random_background = params['RANDOM_BACKGROUND'],
+    )
+
+elif params['DOMAIN']=='marble':
+    pass
+
+elif params['DOMAIN']=='Tireworld':
+    domain = chris_domain.Tireworld(
+    )
+
+else:
+    print(unsupport)
 
 '''
 method settings
@@ -216,6 +261,10 @@ elif params['DOMAIN']=='marble':
     add_parameters(
         DELTA_T = 1.5*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
+elif params['DOMAIN']=='Tireworld':
+    add_parameters(
+        DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
+    )
 
 else:
     raise Exception('s')
@@ -260,45 +309,6 @@ if params['DOMAIN']=='marble':
 
 else:
     add_parameters(STATE_DEPTH = 1)
-
-'''
-build domains according to the settings,
-ignore this if you are trying you own domain.
-'''
-if params['DOMAIN']=='1Dflip':
-    domain = chris_domain.BitFlip1D(
-        length=params['GRID_SIZE'],
-        mode=params['REPRESENTATION'],
-        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
-        fix_state=params['FIX_STATE'],
-        soft_vector=params['SOFT_VECTOR']
-    )
-
-elif params['DOMAIN']=='1Dgrid':
-    domain = chris_domain.Walk1D(
-        length=params['GRID_SIZE'],
-        prob_left=params['GRID_ACTION_DISTRIBUTION'][0],
-        mode=params['REPRESENTATION'],
-        fix_state=params['FIX_STATE']
-    )
-
-elif params['DOMAIN']=='2Dgrid':
-    domain = chris_domain.Walk2D(
-        width=params['GRID_SIZE'],
-        height=params['GRID_SIZE'],
-        prob_dirs=params['GRID_ACTION_DISTRIBUTION'],
-        obstacle_pos_list=params['OBSTACLE_POS_LIST'],
-        mode=params['REPRESENTATION'],
-        should_wrap=False,
-        fix_state=params['FIX_STATE'],
-        random_background = params['RANDOM_BACKGROUND'],
-    )
-
-elif params['DOMAIN']=='marble':
-    pass
-
-else:
-    print(unsupport)
 
 '''
 this the last layer of the log dir,
@@ -356,6 +366,9 @@ elif params['REPRESENTATION']==chris_domain.VECTOR:
     if params['DOMAIN']=='1Dgrid' or params['DOMAIN']=='1Dflip':
         DESCRIBE_DIM = params['GRID_SIZE']
 
+    elif params['DOMAIN']=='Tireworld' or params['DOMAIN']=='Climber':
+        DESCRIBE_DIM = domain.get_state_size()
+
     else:
         raise Exception('s')
 
@@ -373,7 +386,7 @@ def vector2image(x):
         x.size()[1],
         1,
         block_size,
-        params['GRID_SIZE']*block_size
+        DESCRIBE_DIM*block_size
     ).cuda().fill_(0.0)
     for b in range(x.size()[0]):
         for d in range(x.size()[1]):
@@ -909,7 +922,7 @@ def collect_samples(iteration,tabular=None):
     if params['DOMAIN']!='marble':
 
         domain.reset()
-        all_possible_chris = domain.get_all_possible_start_states()
+        all_possible_chris = domain.get_state_list()
         all_possible_song = chris2song(all_possible_chris)
 
         all_l1 = []
@@ -1471,8 +1484,9 @@ class grid_domain(object):
             while True:
 
                 domain.reset()
-                ob = torch.from_numpy(domain.get_state()).unsqueeze(0)
-                ob_next = torch.from_numpy(domain.update()).unsqueeze(0)
+                ob = torch.from_numpy(domain.description_to_state(domain.get_description())).unsqueeze(0)
+                domain.update()
+                ob_next = torch.from_numpy(domain.description_to_state(domain.get_description())).unsqueeze(0)
 
                 data = torch.cat([ob,ob_next],0).unsqueeze(0)
                 
@@ -1531,7 +1545,8 @@ def dataset_iter(fix_state=False, batch_size=params['BATCH_SIZE']):
         dataset = wrap_domain.get_batch()
 
         # print(dataset.size())
-        # print(dataset[3,0,0,:,:])
+        # print(dataset[:,0,:])
+        # print(dataset[:,1,:])
         # # # print(dataset[3,0,1,:,:])
         # print(dataset[3,1,0,:,:])
         # print(dataset[3,1,1,:,:])
@@ -2136,7 +2151,7 @@ while True:
                     if L1<0.5:
                         params['NOISE_ENCOURAGE'] = False
 
-    if iteration % LOG_INTER == 5:
-        logger.flush()
+    # if iteration % (LOG_INTER) == 5:
+    #     logger.flush()
 
     logger.tick()

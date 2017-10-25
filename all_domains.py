@@ -5,6 +5,123 @@ from random import choice
 import itertools
 import numpy as np
 import torch
+from  pddlpy import DomainProblem
+import copy
+
+class Tireworld(object):
+
+    def __init__(self):
+
+        self.config_domain()
+        self.build_domain_list()
+        self.build_domain_related_list()
+
+    def config_domain(self):
+        '''domain specific'''
+        self.at_len = 17
+        self.p_flattire = 3.0/5.0
+
+    def build_domain_list(self):
+        '''domain specific'''
+        '''description list is the base of this domain'''
+        self.descriptions_list = []
+        for at_temp in range(self.at_len):
+            for flattire_temp in [0.0, 1.0]:
+                self.at, self.flattire = at_temp, flattire_temp
+                self.update_description()
+                self.descriptions_list += [self.get_description()]
+
+    def build_domain_related_list(self):
+        self.state_list = []
+        for description in self.descriptions_list:
+            self.state_list  += [self.description_to_state(description)]
+        
+        self.string_list = []
+        for description in self.descriptions_list:
+            self.string_list += [self.description_to_string(description)]
+
+    def get_description(self):
+        return self.description
+
+    def set_domain(self, description):
+        '''set domain with description'''
+        '''domain specific'''
+        self.description = description
+        self.at = description[0]
+        self.flattire = description[1]
+
+    def update_description(self):
+        '''update current description'''
+        '''domain specific'''
+        self.description=[self.at, self.flattire]
+
+    def description_to_state(self, description):
+        '''description to state'''
+        '''domain specific'''
+        at_state = np.zeros((self.at_len), dtype=np.float)
+        at_state[int(description[0])] = 1.0
+        flattire_state = np.zeros((1), dtype=np.float)
+        flattire_state[0] = description[1]
+        return np.concatenate((at_state, flattire_state), axis=0)
+
+    def description_to_string(self, description):
+        '''get current string'''
+        return str(description)
+
+    def get_state_size(self):
+        return self.at_len+1
+
+    def get_state_list(self):
+        return self.state_list
+
+    def get_string_list(self):
+        return self.string_list
+
+    def state_to_description(self, state, include_background=None):
+        '''domain specific'''
+        for i in range(len(self.state_list)):
+            if np.mean(np.abs(state-self.state_list[i]))<ACCEPT_GATE:
+                return self.descriptions_list[i]
+        return 'bad state'
+
+    def get_transition_probs(self, description, is_tabular=False):
+        '''string: prob'''
+        '''domain specific'''
+
+        prob_dict = {}
+        self.set_domain(description=description)
+        self.update()
+        temp=self.get_description()
+        if description[1]==1.0:
+            temp[1]=1.0
+            prob_dict[self.description_to_string(temp)]=1.0
+        else:
+            temp[1]=1.0
+            prob_dict[self.description_to_string(temp)]=self.p_flattire
+            temp[1]=0.0
+            prob_dict[self.description_to_string(temp)]=1.0 - self.p_flattire
+
+        return prob_dict
+
+    def reset(self):
+        '''domain specific'''
+        self.at = float(np.random.choice(range(self.at_len), p=[1.0/self.at_len]*self.at_len))
+        self.flattire = np.random.choice([0.0, 1.0], p=[0.5, 0.5])
+        self.update_description()
+
+    def update_domain(self, action):
+        '''domain specific'''
+        self.at = action
+        if self.flattire == 0.0:
+            self.flattire = np.random.choice([0.0, 1.0], p=[(1.0-self.p_flattire), self.p_flattire])
+        else:
+            self.flattire = 1.0
+        self.update_description()
+
+    def update(self):
+        '''domain specific'''
+        action = 10
+        self.update_domain(action)
 
 '''
     This code is initially provided by Chris
@@ -48,19 +165,19 @@ class Walk1D(object):
                                                  1: visualizer.BLUE})
         self.cleaner_function = clean_entry_01_vec
 
-    def get_vector_size(self):
+    def get_state_size(self):
         return self.n
 
-    def get_all_possible_start_states(self):
+    def get_state_list(self):
         return [self.get_state(pos) for pos in range(self.n)]
 
-    def get_transition_probs(self, state_pos, is_tabular=False):
+    def get_transition_probs(self, description, is_tabular=False):
 
         prob_dict = {}
 
         for action_i in range(len(self.action_dic)):
 
-            key = str(self.update_state(state_pos, self.action_dic[action_i]))
+            key = str(self.update_state(description, self.action_dic[action_i]))
 
             if prob_dict.has_key(key):
                 prob_dict[key] += self.prob_dirs[action_i]
@@ -70,7 +187,7 @@ class Walk1D(object):
         return prob_dict
 
 
-    def set_state(self, state):
+    def set_domain(self, state):
         self.state = state
 
     def get_state(self, pos=None):
@@ -100,7 +217,7 @@ class Walk1D(object):
         self.state = self.update_state(self.state, direction)
         return self.get_state(self.state)
 
-    def state_vector_to_position(self, state_vector, include_background=False):
+    def state_to_description(self, state, include_background=False):
 
         if self.mode==IMAGE:
 
@@ -112,7 +229,7 @@ class Walk1D(object):
             for x in range(self.n):
                 valid_on_channel = True
                 for c in range(1):
-                    pixel_value_mean_on_channel = np.mean(state_vector[:,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
+                    pixel_value_mean_on_channel = np.mean(state[:,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
                     if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (ACCEPT_GATE):
                         valid_on_channel = False
                         break
@@ -132,7 +249,7 @@ class Walk1D(object):
 
             agent_count = 0
             for x in range(self.n):
-                if abs(state_vector[x]-agent_channel_should_be) < 1.0*ACCEPT_GATE:
+                if abs(state[x]-agent_channel_should_be) < 1.0*ACCEPT_GATE:
                     pos = x
                     agent_count += 1
 
@@ -203,10 +320,10 @@ class Walk2D(object):
     def set_fix_state(self,fix_state):
         self.fix_state = fix_state
 
-    def get_vector_size(self):
+    def get_state_size(self):
         return self.h * self.w
 
-    def get_all_possible_start_states(self):
+    def get_state_list(self):
 
         if self.fix_state:
             return [self.get_state(self.fix_state_to)]
@@ -214,14 +331,14 @@ class Walk2D(object):
         else:
             return [self.get_state((x, y)) for (x, y) in self.non_obstacle_squares]
 
-    def state_vector_to_position(self, state_vector, include_background=False):
+    def state_to_description(self, state, include_background=False):
 
         if self.mode==SCALAR:
 
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    if np.abs(float(x)/self.w-state_vector[0])<(1.0/self.w*ACCEPT_GATE) and np.abs(float(y)/self.h-state_vector[1])<(1.0/self.h*ACCEPT_GATE):
+                    if np.abs(float(x)/self.w-state[0])<(1.0/self.w*ACCEPT_GATE) and np.abs(float(y)/self.h-state[1])<(1.0/self.h*ACCEPT_GATE):
                         pos = (x,y)
                         agent_count += 1
 
@@ -240,7 +357,7 @@ class Walk2D(object):
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    block = state_vector[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,:]
+                    block = state[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,:]
                     close_to_agent = np.mean(np.abs(block-self.agent_block))
                     if close_to_agent <= ACCEPT_GATE:
                         '''if agent is here'''
@@ -284,19 +401,19 @@ class Walk2D(object):
         else:
             raise Exception('Not a valid mode')
 
-    def get_state_str(self, state_vector):
-        return str((state_vector/FEATURE_DISCOUNT).astype(int)[:,:,0])
+    def state_to_string(self, state):
+        return str((state/FEATURE_DISCOUNT).astype(int)[:,:,0])
 
-    def get_transition_probs(self, state_vector=None, state_pos=None, is_tabular=False):
+    def get_transition_probs(self, state=None, description=None, is_tabular=False):
 
         prob_dict = {}
 
         for action_i in range(len(self.action_dic)):
 
             if is_tabular:
-                key = self.get_state_str(self.get_state(self.update_state(state_pos, self.action_dic[action_i])))
+                key = self.state_to_string(self.get_state(self.update_state(description, self.action_dic[action_i])))
             else:
-                key = str(self.update_state(state_pos, self.action_dic[action_i]))
+                key = str(self.update_state(description, self.action_dic[action_i]))
 
             if prob_dict.has_key(key):
                 prob_dict[key] += self.prob_dirs[action_i]
@@ -314,7 +431,7 @@ class Walk2D(object):
 
         self.reset_background()
 
-    def set_state(self, x_pos, y_pos):
+    def set_domain(self, x_pos, y_pos):
         self.x_pos = x_pos
         self.y_pos = y_pos
         assert (x_pos, y_pos) not in self.obstacle_pos_list
@@ -416,19 +533,19 @@ def l1_distance(dist1, dist2):
 
 def evaluate_domain(domain, s1_state, s2_samples, is_tabular=False):
 
-    s1_pos = domain.state_vector_to_position(
+    description = domain.state_to_description(
         s1_state,
         include_background = True,
     )
-    # print(s1_pos)
-    # print(domain.background_array)
+    # print(description)
     # print(s)
 
     true_distribution = domain.get_transition_probs(
-        state_pos=s1_pos,
+        description=description,
         is_tabular=is_tabular,
     )
     # print(true_distribution)
+    # print(s)
     bad_count = 0
     good_count = 0
     sample_distribution = {}
@@ -444,22 +561,22 @@ def evaluate_domain(domain, s1_state, s2_samples, is_tabular=False):
 
     else:
         for b in range(np.shape(s2_samples)[0]):
-            s2_sample_pos = domain.state_vector_to_position(s2_samples[b])
+            s2_sample_pos = domain.description_to_string(domain.state_to_description(s2_samples[b]))
             if s2_sample_pos=='bad state':
                 bad_count += 1
             else:
                 good_count += 1
                 try:
-                    sample_distribution[str(s2_sample_pos)] = sample_distribution[str(s2_sample_pos)] + 1.0
+                    sample_distribution[s2_sample_pos] = sample_distribution[s2_sample_pos] + 1.0
                 except Exception as e:
-                    sample_distribution[str(s2_sample_pos)] = 1
+                    sample_distribution[s2_sample_pos] = 1
 
     if good_count>0.0:
 
         for key in sample_distribution.keys():
             sample_distribution[key] = sample_distribution[key] / float(good_count)
         print('----------------------------------------------')
-        print('Start: '+str(s1_pos))
+        print('Start: '+str(description))
         print('True: '+str(true_distribution))
         print('Sample: '+str(sample_distribution))
         L1 = l1_distance(true_distribution, sample_distribution)
