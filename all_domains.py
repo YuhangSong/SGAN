@@ -90,15 +90,15 @@ class Tireworld(object):
         prob_dict = {}
         self.set_domain(description=description)
         self.update()
-        temp=self.get_description()
+        description_next=self.get_description()
         if description[1]==1.0:
-            temp[1]=1.0
-            prob_dict[self.description_to_string(temp)]=1.0
+            description_next[1]=1.0
+            prob_dict[self.description_to_string(description_next)]=1.0
         else:
-            temp[1]=1.0
-            prob_dict[self.description_to_string(temp)]=self.p_flattire
-            temp[1]=0.0
-            prob_dict[self.description_to_string(temp)]=1.0 - self.p_flattire
+            description_next[1]=1.0
+            prob_dict[self.description_to_string(description_next)]=self.p_flattire
+            description_next[1]=0.0
+            prob_dict[self.description_to_string(description_next)]=1.0 - self.p_flattire
 
         return prob_dict
 

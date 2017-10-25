@@ -22,7 +22,7 @@ import matplotlib.cm as cm
 import imageio
 
 '''if delete logdir and start a new run'''
-CLEAR_RUN = True 
+CLEAR_RUN = False 
 
 '''display a tag before the result printed, to identify multiple runs on your machine'''
 MULTI_RUN = 'SGAN_1'
@@ -202,7 +202,7 @@ else:
 '''
     note: the optianal additional loss of G in the paper
 '''
-add_parameters(NOISE_ENCOURAGE = False)
+add_parameters(NOISE_ENCOURAGE = True)
 
 if params['DOMAIN']=='marble':
     '''
@@ -263,7 +263,7 @@ elif params['DOMAIN']=='marble':
     )
 elif params['DOMAIN']=='Tireworld':
     add_parameters(
-        DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
+        DELTA_T = 1.0 / 3.0 * ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
     )
 
 else:
@@ -286,7 +286,7 @@ add_parameters(BATCH_SIZE = 32)
 # warnning: this is not likely to make a difference, 
 # but the result I report except the random bg domain is 
 # on dynamic full data set
-add_parameters(DATASET_SIZE = 335) # 33554
+add_parameters(DATASET_SIZE = 33554) # 33554
 
 # LAMBDA for GP-WGAN is set seperatly for different representations
 if params['REPRESENTATION']==chris_domain.SCALAR:
