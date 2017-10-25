@@ -7,6 +7,30 @@ import numpy as np
 import torch
 import copy
 
+'''
+    This code is initially provided by Chris
+'''
+
+# three representations
+SCALAR = 0
+VECTOR = 1
+IMAGE = 2
+
+# for image, the size of every block in grid world
+BLOCK_SIZE = 4
+
+# for evaluation, with in this gate, the generated image well
+# be counted as valid 
+ACCEPT_GATE = 0.01
+
+# some of the domain has too many starts state, this will limit
+# the evaluation to parts of the starts state, instead of evaluating
+# them all
+LIMIT_START_STATE_TO = 50
+
+# for the background of the grid world, it is gray
+FEATURE_DISCOUNT = 0.5
+
 class Tireworld(object):
 
     def __init__(self):
@@ -29,6 +53,7 @@ class Tireworld(object):
                 self.at, self.flattire = at_temp, flattire_temp
                 self.update_description()
                 self.descriptions_list += [self.get_description()]
+        # self.descriptions_list += [[2, 1.0]]
 
     def build_domain_related_list(self):
         self.state_list = []
@@ -72,6 +97,7 @@ class Tireworld(object):
 
     def get_state_list(self):
         return self.state_list
+        # return [self.description_to_state([2, 0.0])]
 
     def get_string_list(self):
         return self.string_list
@@ -106,6 +132,8 @@ class Tireworld(object):
         '''domain specific'''
         self.at = float(np.random.choice(range(self.at_len), p=[1.0/self.at_len]*self.at_len))
         self.flattire = np.random.choice([0.0, 1.0], p=[0.5, 0.5])
+        # self.at = 2
+        # self.flattire = 0.0
         self.update_description()
 
     def update_domain(self, action):
@@ -121,30 +149,6 @@ class Tireworld(object):
         '''domain specific'''
         action = 10
         self.update_domain(action)
-
-'''
-    This code is initially provided by Chris
-'''
-
-# three representations
-SCALAR = 0
-VECTOR = 1
-IMAGE = 2
-
-# for image, the size of every block in grid world
-BLOCK_SIZE = 4
-
-# for evaluation, with in this gate, the generated image well
-# be counted as valid 
-ACCEPT_GATE = 0.1
-
-# some of the domain has too many starts state, this will limit
-# the evaluation to parts of the starts state, instead of evaluating
-# them all
-LIMIT_START_STATE_TO = 50
-
-# for the background of the grid world, it is gray
-FEATURE_DISCOUNT = 0.5
 
 class Walk1D(object):
 
@@ -560,7 +564,10 @@ def evaluate_domain(domain, s1_state, s2_samples, is_tabular=False):
 
     else:
         for b in range(np.shape(s2_samples)[0]):
+            # print(np.shape(s2_samples[b]))
             s2_sample_pos = domain.description_to_string(domain.state_to_description(s2_samples[b]))
+            # print(s2_sample_pos)
+            # print(s)
             if s2_sample_pos=='bad state':
                 bad_count += 1
             else:

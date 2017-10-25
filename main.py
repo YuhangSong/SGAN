@@ -22,7 +22,7 @@ import matplotlib.cm as cm
 import imageio
 
 '''if delete logdir and start a new run'''
-CLEAR_RUN = False 
+CLEAR_RUN = True 
 
 '''display a tag before the result printed, to identify multiple runs on your machine'''
 MULTI_RUN = 'SGAN_1'
@@ -202,7 +202,7 @@ else:
 '''
     note: the optianal additional loss of G in the paper
 '''
-add_parameters(NOISE_ENCOURAGE = True)
+add_parameters(NOISE_ENCOURAGE = False)
 
 if params['DOMAIN']=='marble':
     '''
@@ -263,7 +263,7 @@ elif params['DOMAIN']=='marble':
     )
 elif params['DOMAIN']=='Tireworld':
     add_parameters(
-        DELTA_T = 1.0 / 3.0 * ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
+        DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
     )
 
 else:
@@ -973,7 +973,11 @@ def collect_samples(iteration,tabular=None):
                 else:
                     prediction = prediction
                     is_tabular = True
-
+                # print(start_state_song.size())
+                # print(start_state_song[0,0,:])
+                # print(s)
+                # print(np.shape(prediction))
+                # print(prediction[0:10,:])
                 l1, ac = chris_domain.evaluate_domain(
                     domain=domain,
                     s1_state=song2chris(start_state_song)[0],
