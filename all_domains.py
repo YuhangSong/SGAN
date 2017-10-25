@@ -5,7 +5,6 @@ from random import choice
 import itertools
 import numpy as np
 import torch
-from  pddlpy import DomainProblem
 import copy
 
 class Tireworld(object):
