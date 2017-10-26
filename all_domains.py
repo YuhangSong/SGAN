@@ -19,10 +19,6 @@ IMAGE = 2
 # for image, the size of every block in grid world
 BLOCK_SIZE = 4
 
-# for evaluation, with in this gate, the generated image well
-# be counted as valid 
-ACCEPT_GATE = 0.01
-
 # some of the domain has too many starts state, this will limit
 # the evaluation to parts of the starts state, instead of evaluating
 # them all
@@ -33,12 +29,17 @@ FEATURE_DISCOUNT = 0.5
 
 class Tireworld(object):
 
-    def __init__(self):
+    def __init__(self, **args):
 
+        '''general config'''
+        self.config(**args)
         self.reset()
         self.build_domain_list()
         self.build_domain_related_list()
 
+    def config(self):
+        self.accept_gate=0.01
+        
     def build_domain_list(self):
         '''domain specific'''
         self.descriptions_list = []
@@ -90,7 +91,7 @@ class Tireworld(object):
     def state_to_description(self, state, include_background=None):
         '''domain specific'''
         for i in range(len(self.state_list)):
-            if np.mean(np.abs(state-self.state_list[i]))<ACCEPT_GATE:
+            if np.mean(np.abs(state-self.state_list[i]))<self.accept_gate:
                 return self.descriptions_list[i]
         return 'bad state'
 
@@ -114,6 +115,8 @@ class Tireworld(object):
         return prob_dict
 
     def reset(self):
+        '''domain specific config'''
+        self.accept_gate=0.01
         '''domain specific'''
         self.description = {}
         self.description['at_len'] = 17
@@ -169,16 +172,16 @@ class Tireworld(object):
 
 class Climber(Tireworld):
 
-    def __init__(self):
-        super(Climber, self).__init__()
-        
+    def __init__(self, **args):
+        super(Climber, self).__init__(**args)
+
     def build_domain_list(self):
         '''domain specific'''
         self.descriptions_list = []
         for on_roof_temp in [0, 1]:
             for alive_temp in [0, 1]:
                 for ladder_on_ground_temp in [0, 1]:
-                    self.description['on_roof'], self.description['alive'], self.description[ladder_on_ground] = on_roof_temp, alive_temp, ladder_on_ground_temp
+                    self.description['on_roof'], self.description['alive'], self.description['ladder_on_ground'] = on_roof_temp, alive_temp, ladder_on_ground_temp
                     self.descriptions_list += [copy.deepcopy(self.description)]
 
     def description_to_state(self, description):
@@ -212,6 +215,8 @@ class Climber(Tireworld):
         return prob_dict
 
     def reset(self):
+        '''domain specific config'''
+        self.accept_gate=0.01
         '''domain specific'''
         self.description = {}
         self.description['on_roof'] = float(np.random.choice([1, 0], p=[0.5]*2))
@@ -230,54 +235,37 @@ class Climber(Tireworld):
         action = 'climb-without-ladder'
         self.update_domain(action)
 
-class Walk1D(object):
+class Walk1D(Tireworld):
+        
+    def __init__(self, **args):
+        super(Walk1D, self).__init__(**args)
 
-    def __init__(self, length, prob_left, mode, fix_state=False):
-        assert 0 <= prob_left <= 1
-        assert mode in [IMAGE, VECTOR]
-        self.LEFT, self.RIGHT = 0, 1
-        self.action_dic = [self.LEFT, self.RIGHT]
+    def config(self, length, prob_left, mode, fix_state=False):
+        self.accept_gate = 0.1
         self.mode = mode
-        self.fix_state = fix_state
         self.n = length
-        self.p = prob_left
-        self.prob_dirs = [self.p, (1-self.p)]
-        self.state = np.random.randint(0, length)
+        self.prob_dis = [prob_left, (1-prob_left)]
         self.visualizer = visualizer.Visualizer(BLOCK_SIZE, 1, self.n,
                                                 {0: visualizer.WHITE,
                                                  1: visualizer.BLUE})
-        self.cleaner_function = clean_entry_01_vec
 
-    def get_state_size(self):
-        return self.n
+    def reset(self):
+        '''domain specific'''
+        self.description = {}
+        self.description['at'] = np.random.randint(0, self.n)
 
-    def get_state_list(self):
-        return [self.get_state(pos) for pos in range(self.n)]
+    def build_domain_list(self):
+        '''domain specific'''
+        self.descriptions_list = []
+        for at_temp in range(self.n):
+            self.description['at'] = at_temp
+            self.descriptions_list += [copy.deepcopy(self.description)]
 
-    def get_transition_probs(self, description, is_tabular=False):
-
-        prob_dict = {}
-
-        for action_i in range(len(self.action_dic)):
-
-            key = str(self.update_state(description, self.action_dic[action_i]))
-
-            if prob_dict.has_key(key):
-                prob_dict[key] += self.prob_dirs[action_i]
-            else:
-                prob_dict[key] = self.prob_dirs[action_i]
-
-        return prob_dict
-
-
-    def set_domain(self, state):
-        self.state = state
-
-    def get_state(self, pos=None):
-        if pos is None:
-            pos = self.state
+    def description_to_state(self, description):
+        '''description to state'''
+        '''domain specific'''
         onehot = [0] * self.n
-        onehot[pos] = 1
+        onehot[description['at']] = 1
         if self.mode == IMAGE:
             image = self.visualizer.make_screen([onehot])
             image = image[:,:,1:2]
@@ -286,61 +274,49 @@ class Walk1D(object):
             return image
         else:
             return np.array(onehot)
+        return state
 
-    def update_state(self, state, direction):
-        delta = -1 if direction == self.LEFT else 1
-        new_state = np.clip(state+delta, 0, self.n-1)
-        return new_state
+    def get_state_size(self):
+        return self.n
 
-    def reset(self):
-        self.state = np.random.randint(0, self.n)
+    def get_transition_probs(self, description, is_tabular=False):
+        '''string: prob'''
+        '''domain specific'''
+
+        prob_dict = {}
+
+        self.set_domain(description=description)
+        action = 0
+        self.update_domain(action)
+        description_next=self.get_description()
+        try:
+            prob_dict[self.description_to_string(description_next)]+=self.prob_dis[0]
+        except Exception as e:
+            prob_dict[self.description_to_string(description_next)]=self.prob_dis[0]
+
+        self.set_domain(description=description)
+        action = 1
+        self.update_domain(action)
+        description_next=self.get_description()
+        try:
+            prob_dict[self.description_to_string(description_next)]+=self.prob_dis[1]
+        except Exception as e:
+            prob_dict[self.description_to_string(description_next)]=self.prob_dis[1]
+
+        return prob_dict
+
+    def update_domain(self, action):
+        '''domain specific'''
+        if action == 0:
+            self.description['at'] -= 1
+        elif action == 1:
+            self.description['at'] += 1
+        self.description['at'] = np.clip(self.description['at'], 0, self.n-1)
 
     def update(self):
-        direction = self.LEFT if np.random.uniform(0, 1) < self.p else self.RIGHT
-        self.state = self.update_state(self.state, direction)
-        return self.get_state(self.state)
-
-    def state_to_description(self, state, include_background=False):
-
-        if self.mode==IMAGE:
-
-            '''detect agent opsition from image'''
-
-            agent_channel_should_be = [1.0]
-
-            agent_count = 0
-            for x in range(self.n):
-                valid_on_channel = True
-                for c in range(1):
-                    pixel_value_mean_on_channel = np.mean(state[:,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,c])
-                    if abs(pixel_value_mean_on_channel-agent_channel_should_be[c]) >= (ACCEPT_GATE):
-                        valid_on_channel = False
-                        break
-                if valid_on_channel:
-                    pos = x
-                    agent_count += 1
-
-            if agent_count==1:
-                return pos
-
-            else:
-                return 'bad state'
-
-        elif self.mode==VECTOR:
-
-            agent_channel_should_be = 1.0
-
-            agent_count = 0
-            for x in range(self.n):
-                if abs(state[x]-agent_channel_should_be) < 1.0*ACCEPT_GATE:
-                    pos = x
-                    agent_count += 1
-
-            if agent_count==1:
-                return pos
-
-            else:
-                return 'bad state'
+        '''domain specific'''
+        action = np.random.choice([0,1], p=self.prob_dis)
+        self.update_domain(action)
 
 class Walk2D(object):
 
@@ -421,7 +397,7 @@ class Walk2D(object):
             agent_count = 0
             for x in range(self.w):
                 for y in range(self.h):
-                    if np.abs(float(x)/self.w-state[0])<(1.0/self.w*ACCEPT_GATE) and np.abs(float(y)/self.h-state[1])<(1.0/self.h*ACCEPT_GATE):
+                    if np.abs(float(x)/self.w-state[0])<(1.0/self.w*self.accept_gate) and np.abs(float(y)/self.h-state[1])<(1.0/self.h*self.accept_gate):
                         pos = (x,y)
                         agent_count += 1
 
@@ -442,7 +418,7 @@ class Walk2D(object):
                 for y in range(self.h):
                     block = state[y*BLOCK_SIZE:(y+1)*BLOCK_SIZE,x*BLOCK_SIZE:(x+1)*BLOCK_SIZE,:]
                     close_to_agent = np.mean(np.abs(block-self.agent_block))
-                    if close_to_agent <= ACCEPT_GATE:
+                    if close_to_agent <= self.accept_gate:
                         '''if agent is here'''
                         pos = (x,y)
                         agent_count += 1
@@ -454,19 +430,19 @@ class Walk2D(object):
                             close_to_unfeature_background = np.mean(np.abs(block-self.background_unfeature_block))
                             if include_background:
                                 '''if start state, set the self.background_array'''        
-                                if close_to_feature_background <= ACCEPT_GATE:
+                                if close_to_feature_background <= self.accept_gate:
                                     self.background_array[y,x] = 1
-                                elif close_to_unfeature_background <= ACCEPT_GATE:
+                                elif close_to_unfeature_background <= self.accept_gate:
                                     self.background_array[y,x] = 0
                                 else:
                                     return 'bad state'
                             else:
                                 '''see if generate background right'''
                                 if self.background_array[y,x]==1:
-                                    if not (close_to_feature_background <= ACCEPT_GATE):
+                                    if not (close_to_feature_background <= self.accept_gate):
                                         return 'bad state'
                                 elif self.background_array[y,x]==0:
-                                    if not (close_to_unfeature_background <= ACCEPT_GATE):
+                                    if not (close_to_unfeature_background <= self.accept_gate):
                                         return 'bad state'
                                 elif self.background_array[y,x]==255:
                                     pass
@@ -580,19 +556,19 @@ class Walk2D(object):
         return self.get_state((self.x_pos, self.y_pos))
 
 def clean_entry_01(entry):
-    if np.abs(entry - 0) <= ACCEPT_GATE:
+    if np.abs(entry - 0) <= self.accept_gate:
         return 0
-    elif np.abs(entry - 1) <= ACCEPT_GATE:
+    elif np.abs(entry - 1) <= self.accept_gate:
         return 1
     else:
         return -1
 
 def clean_entry_012(entry):
-    if np.abs(entry - 0) <= ACCEPT_GATE:
+    if np.abs(entry - 0) <= self.accept_gate:
         return 0
-    elif np.abs(entry - 1) <= ACCEPT_GATE:
+    elif np.abs(entry - 1) <= self.accept_gate:
         return 1
-    elif np.abs(entry - 2) <= ACCEPT_GATE:
+    elif np.abs(entry - 2) <= self.accept_gate:
         return 2
     else:
         return -1

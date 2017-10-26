@@ -65,8 +65,8 @@ def add_parameters(**kwargs):
 # the first level of log dir
 add_parameters(EXP = 'exp_2')
 
-# 1Dflip, 1Dgrid, 2Dgrid, marble, Tireworld
-add_parameters(DOMAIN = 'Climber')
+# 1Dgrid, 2Dgrid, marble, Tireworld, Climber
+add_parameters(DOMAIN = '1Dgrid')
 
 # whether to fix the start state at a specific point,
 # this will simplify training. Usually using it for 
