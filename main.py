@@ -25,13 +25,13 @@ import imageio
 CLEAR_RUN = True 
 
 '''display a tag before the result printed, to identify multiple runs on your machine'''
-MULTI_RUN = 'WGAN_1'
+MULTI_RUN = 'SGAN_1'
 '''
 use which GPU
 we donot recommend use more than one GPU, if could slow down computing,
 but if you are using a bigger model, you can try multiple GPUs.
 '''
-GPU = "1"
+GPU = "0"
 
 # this is a lable displayed before each print and log,
 # to identify different runs at the same time on one computer.
@@ -66,7 +66,7 @@ def add_parameters(**kwargs):
 add_parameters(EXP = 'exp_2')
 
 # 1Dflip, 1Dgrid, 2Dgrid, marble, Tireworld
-add_parameters(DOMAIN = 'Tireworld')
+add_parameters(DOMAIN = 'Climber')
 
 # whether to fix the start state at a specific point,
 # this will simplify training. Usually using it for 
@@ -116,6 +116,10 @@ elif params['DOMAIN']=='marble':
 
 elif params['DOMAIN']=='Tireworld':
     pass
+
+elif params['DOMAIN']=='Climber':
+    pass
+
 else:
     raise Exception('unsupport')
 
@@ -159,6 +163,10 @@ elif params['DOMAIN']=='Tireworld':
     domain = chris_domain.Tireworld(
     )
 
+elif params['DOMAIN']=='Climber':
+    domain = chris_domain.Tireworld(
+    )
+
 else:
     print(unsupport)
 
@@ -166,7 +174,7 @@ else:
 method settings
 '''
 # tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
-add_parameters(METHOD = 'gp-wgan')
+add_parameters(METHOD = 'sgan')
 
 if params['METHOD']=='sgan':
 
@@ -261,7 +269,13 @@ elif params['DOMAIN']=='marble':
     add_parameters(
         DELTA_T = 1.5*( BASE * ( ( ( (0.5*params['IMAGE_SIZE']*2.4/14.9)**2)**0.5 ) / ( ( ( (params['IMAGE_SIZE'])**2)*params['FEATURE'])**0.5 ) ) )
     )
+
 elif params['DOMAIN']=='Tireworld':
+    add_parameters(
+        DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
+    )
+
+elif params['DOMAIN']=='Climber':
     add_parameters(
         DELTA_T = ( BASE * ( ( (1)**0.5 ) / ( ( domain.get_state_size())**0.5 ) ) )
     )

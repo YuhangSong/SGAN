@@ -35,25 +35,17 @@ class Tireworld(object):
 
     def __init__(self):
 
-        self.config_domain()
+        self.reset()
         self.build_domain_list()
         self.build_domain_related_list()
 
-    def config_domain(self):
-        '''domain specific'''
-        self.at_len = 17
-        self.p_flattire = 3.0/5.0
-
     def build_domain_list(self):
         '''domain specific'''
-        '''description list is the base of this domain'''
         self.descriptions_list = []
-        for at_temp in range(self.at_len):
-            for flattire_temp in [0.0, 1.0]:
-                self.at, self.flattire = at_temp, flattire_temp
-                self.update_description()
-                self.descriptions_list += [self.get_description()]
-        # self.descriptions_list += [[2, 1.0]]
+        for at_temp in range(self.description['at_len']):
+            for flattire_temp in [0, 1]:
+                self.description['at'], self.description['flattire'] = at_temp, flattire_temp
+                self.descriptions_list += [copy.deepcopy(self.description)]
 
     def build_domain_related_list(self):
         self.state_list = []
@@ -71,21 +63,14 @@ class Tireworld(object):
         '''set domain with description'''
         '''domain specific'''
         self.description = description
-        self.at = description[0]
-        self.flattire = description[1]
-
-    def update_description(self):
-        '''update current description'''
-        '''domain specific'''
-        self.description=[self.at, self.flattire]
 
     def description_to_state(self, description):
         '''description to state'''
         '''domain specific'''
-        at_state = np.zeros((self.at_len), dtype=np.float)
-        at_state[int(description[0])] = 1.0
+        at_state = np.zeros((self.description['at_len']), dtype=np.float)
+        at_state[int(description['at'])] = 1.0
         flattire_state = np.zeros((1), dtype=np.float)
-        flattire_state[0] = description[1]
+        flattire_state[0] = description['flattire']
         return np.concatenate((at_state, flattire_state), axis=0)
 
     def description_to_string(self, description):
@@ -93,11 +78,11 @@ class Tireworld(object):
         return str(description)
 
     def get_state_size(self):
-        return self.at_len+1
+        return self.description['at_len']+1
 
     def get_state_list(self):
         return self.state_list
-        # return [self.description_to_state([2, 0.0])]
+        # return [self.description_to_state([2, 0])]
 
     def get_string_list(self):
         return self.string_list
@@ -117,37 +102,132 @@ class Tireworld(object):
         self.set_domain(description=description)
         self.update()
         description_next=self.get_description()
-        if description[1]==1.0:
-            description_next[1]=1.0
+        if description['flattire']==1:
+            description_next['flattire']=1
             prob_dict[self.description_to_string(description_next)]=1.0
         else:
-            description_next[1]=1.0
-            prob_dict[self.description_to_string(description_next)]=self.p_flattire
-            description_next[1]=0.0
-            prob_dict[self.description_to_string(description_next)]=1.0 - self.p_flattire
+            description_next['flattire']=1
+            prob_dict[self.description_to_string(description_next)]=self.description['p_flattire']
+            description_next['flattire']=0
+            prob_dict[self.description_to_string(description_next)]=1.0 - self.description['p_flattire']
 
         return prob_dict
 
     def reset(self):
         '''domain specific'''
-        self.at = float(np.random.choice(range(self.at_len), p=[1.0/self.at_len]*self.at_len))
-        self.flattire = np.random.choice([0.0, 1.0], p=[0.5, 0.5])
-        # self.at = 2
-        # self.flattire = 0.0
-        self.update_description()
+        self.description = {}
+        self.description['at_len'] = 17
+        self.description['at'] = float(np.random.choice(range(self.description['at_len']), p=[1.0/self.description['at_len']]*self.description['at_len']))
+        # self.description['at'] = 2
+        self.description['road'] = []
+        self.description['road'] += [[0, 12]]
+        self.description['road'] += [[0, 16]]
+        self.description['road'] += [[1, 2]]
+        self.description['road'] += [[1, 3]]
+        self.description['road'] += [[3, 4]]
+        self.description['road'] += [[3, 13]]
+        self.description['road'] += [[3, 14]]
+        self.description['road'] += [[5, 8]]
+        self.description['road'] += [[5, 10]]
+        self.description['road'] += [[5, 16]]
+        self.description['road'] += [[6, 14]]
+        self.description['road'] += [[7, 9]]
+        self.description['road'] += [[7, 13]]
+        self.description['road'] += [[8, 9]]
+        self.description['road'] += [[9, 12]]
+        self.description['road'] += [[9, 16]]
+        self.description['road'] += [[10, 12]]
+        self.description['road'] += [[10, 13]]
+        self.description['road'] += [[11, 16]]
+        self.description['road'] += [[12, 16]]
+        self.description['road'] += [[13, 15]]
+        self.description['road'] += [[14, 16]]
+        self.description['spare_in'] = []
+        self.description['spare_in'] += [4]
+        self.description['spare_in'] += [5]
+        self.description['spare_in'] += [7]
+        self.description['spare_in'] += [8]
+        self.description['spare_in'] += [10]
+        self.description['spare_in'] += [12]
+        self.description['spare_in'] += [16]
+        self.description['p_flattire'] = 3.0/5.0
+        # self.description['flattire'] = 0
+        self.description['flattire'] = np.random.choice([0, 1], p=[0.5, 0.5])
 
     def update_domain(self, action):
         '''domain specific'''
-        self.at = action
-        if self.flattire == 0.0:
-            self.flattire = np.random.choice([0.0, 1.0], p=[(1.0-self.p_flattire), self.p_flattire])
+        self.description['at'] = action
+        if self.description['flattire'] == 0:
+            self.description['flattire'] = np.random.choice([0, 1], p=[(1.0-self.description['p_flattire']), self.description['p_flattire']])
         else:
-            self.flattire = 1.0
-        self.update_description()
+            self.description['flattire'] = 1
 
     def update(self):
         '''domain specific'''
         action = 10
+        self.update_domain(action)
+
+class Climber(Tireworld):
+
+    def __init__(self):
+        super(Climber, self).__init__()
+        
+    def build_domain_list(self):
+        '''domain specific'''
+        self.descriptions_list = []
+        for on_roof_temp in [0, 1]:
+            for alive_temp in [0, 1]:
+                for ladder_on_ground_temp in [0, 1]:
+                    self.description['on_roof'], self.description['alive'], self.description[ladder_on_ground] = on_roof_temp, alive_temp, ladder_on_ground_temp
+                    self.descriptions_list += [copy.deepcopy(self.description)]
+
+    def description_to_state(self, description):
+        '''description to state'''
+        '''domain specific'''
+        state = np.zeros((3), dtype=np.float)
+        state[0]=description['on_roof']
+        state[1]=description['alive']
+        state[2]=description['ladder_on_ground']
+        return state
+
+    def get_state_size(self):
+        return 3
+
+    def get_transition_probs(self, description, is_tabular=False):
+        '''string: prob'''
+        '''domain specific'''
+
+        prob_dict = {}
+        self.set_domain(description=description)
+        self.update()
+        description_next=self.get_description()
+        if (description['on_roof']==1) and (description['alive']==1):
+            description_next['alive']=0
+            prob_dict[self.description_to_string(description_next)]=0.4
+            description_next['alive']=1
+            prob_dict[self.description_to_string(description_next)]=0.6
+        else:
+            prob_dict[self.description_to_string(description_next)]=1.0
+
+        return prob_dict
+
+    def reset(self):
+        '''domain specific'''
+        self.description = {}
+        self.description['on_roof'] = float(np.random.choice([1, 0], p=[0.5]*2))
+        self.description['alive'] = float(np.random.choice([1, 0], p=[0.5]*2))
+        self.description['ladder_on_ground'] = float(np.random.choice([1, 0], p=[0.5]*2))
+
+    def update_domain(self, action):
+        '''domain specific'''
+        if action == 'climb-without-ladder':
+            if (self.description['on_roof']==1) and (self.description['alive']==1):
+                self.description['on_roof']=0
+                self.description['alive']=np.random.choice([0, 1], p=[0.4, 0.6])
+
+    def update(self):
+        '''domain specific'''
+        action = 'climb-without-ladder'
         self.update_domain(action)
 
 class Walk1D(object):
