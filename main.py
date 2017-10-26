@@ -25,13 +25,13 @@ import imageio
 CLEAR_RUN = True 
 
 '''display a tag before the result printed, to identify multiple runs on your machine'''
-MULTI_RUN = 'SGAN_1'
+MULTI_RUN = 'WGAN_1'
 '''
 use which GPU
 we donot recommend use more than one GPU, if could slow down computing,
 but if you are using a bigger model, you can try multiple GPUs.
 '''
-GPU = "0"
+GPU = "1"
 
 # this is a lable displayed before each print and log,
 # to identify different runs at the same time on one computer.
@@ -166,7 +166,7 @@ else:
 method settings
 '''
 # tabular, bayes-net-learner, deterministic-deep-net, gp-wgan, sgan
-add_parameters(METHOD = 'sgan')
+add_parameters(METHOD = 'gp-wgan')
 
 if params['METHOD']=='sgan':
 
