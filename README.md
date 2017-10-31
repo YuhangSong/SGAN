@@ -1,6 +1,6 @@
 # SGAN
 
-This repo provides code for all the results reported in SGAN paper: [Learning
+This repo provides code for all the results reported in SGAN paper. See [Learning
 Approximate Stochastic Transition Models.](https://arxiv.org/abs/1710.09718)
 
 ## Requirements
