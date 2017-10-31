@@ -12,6 +12,10 @@ Follow [requirements from another repo of mine](https://github.com/YuhangSong/gt
 
 Install other requirements, follow:
 ```
+# clear env
+source ~/.bashrc
+source deactivate
+conda remove --name sgan_env --all
 # create env
 source ~/.bashrc
 source deactivate
@@ -22,7 +26,7 @@ source ~/.bashrc
 source activate sgan_env
 
 # clean dir and create dir and install
-rm -r sgan_env 
+sudo rm -r sgan_env 
 mkdir -p sgan_env/project/
 cd sgan_env/project/
 pip install pddlpy
@@ -37,7 +41,9 @@ cd SGAN
 The code auto restore the checkpoint of the model, as well as restore any plot from the last run.
 If you want to start a new run without restore anything, you should change the EXP parameter in main.py
 ```
-source ~/.bashrc && source activate sgan_env && python main.py
+source ~/.bashrc
+source activate sgan_env
+python main.py
 ```
 
 ## Visualize result
@@ -51,16 +57,10 @@ The result you see in the remote visdom will be same as what you have stored on 
 To enable remote visdom, start disdom server by running following commend in the local machine (The machine you run main.py).
 Note that if you do not need remote visdom, we recommend you also start following visdom server, in order to avoid warning massage printing in the console.
 ```
-source ~/.bashrc && source activate sgan_env && python -m visdom.server
+source ~/.bashrc
+source activate sgan_env
+python -m visdom.server
 ```
-
-If you the computer running this is behind a firewall ,start ngrok by running following commend in the local machine (The machine you run main.py).
-```
-wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip && unzip ngrok-stable-linux-amd64.zip && ./ngrok http 8097
-```
-
-If you do not use ngrok, browse: <your ip>:8097
-If you are using ngrok, browse the address provided by above command, like: http://bbc9b540.ngrok.io/.
 
 ## Note
 Note that the default program run SGAN on 2D Grid with uniform action dynamic.
