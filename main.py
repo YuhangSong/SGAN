@@ -142,7 +142,7 @@ if params['METHOD']=='sgan':
     '''
     add_parameters(INTERPOLATES_MODE = 'auto')
 
-else:
+elif params['METHOD']=='gp-wgan':
     add_parameters(GP_MODE = 'none-guide')
 
     add_parameters(INTERPOLATES_MODE = 'one')
@@ -153,6 +153,9 @@ else:
                 to the original loss D in WGAN
     '''
     add_parameters(GP_GUIDE_FACTOR = 1.0)
+
+else:
+    pass
 
 '''
     note: the optianal additional loss of G in the paper
