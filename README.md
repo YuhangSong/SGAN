@@ -1,8 +1,15 @@
 # SGAN
 
-This repo provides code for all the results reported in SGAN paper. See [Learning
-Approximate Stochastic Transition Models.](https://arxiv.org/abs/1710.09718)
+This repository provides **database** and **code** for reproducing all the results in:
 
+* [**Learning
+Approximate Stochastic Transition Models.**](https://arxiv.org/abs/1710.09718)
+[*Yuhang Song*](https://yuhangsong.my.cam/),
+[*Christopher Grimm*]().
+[*Xianming Wang*]().
+[*Michael L. Littman $ss$*](http://cs.brown.edu/~mlittman/).
+By [MC2 Lab](http://45.77.201.133/).
+Submitted to [TPAMI](https://www.computer.org/web/tpami).
 ## Requirements
 
 ### Pre-requirements
@@ -27,7 +34,7 @@ source ~/.bashrc
 source activate sgan_env
 
 # clean dir and create dir and install
-sudo rm -r sgan_env 
+sudo rm -r sgan_env
 mkdir -p sgan_env/project/
 cd sgan_env/project/
 pip install pddlpy
