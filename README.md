@@ -26,7 +26,7 @@ Specifically, this repository includes extremely simple guidelines to:
 
 Our Stochastic World database contains two physical games of **Marble Game** and **Chaos Double Pendulum**. Each game was recorded for more than **24** hours with more then **10e7** frames.
 
-![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_all.gif)
+<p align="center"><img src="https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_all.gif"/></p>
 
 Scene A  | Scene B  | Scene C  |  Scene D
 :-------------------------:|:-------------------------:|:-------------------------:|:-------------------------:
