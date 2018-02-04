@@ -11,7 +11,7 @@ Approximate Stochastic Transition Models.**](https://arxiv.org/abs/1710.09718)
 By [HCRI](https://hcri.brown.edu/) @ [Brown University](https://www.brown.edu/).
 
 Specifically, this repository includes extremely simple guidelines to:
-* Download and setup the Stochastic World database.
+* Download and setup the [Stochastic World database](#download-and-setup-stochastic-world-database).
 * Setup a friendly environment to run our code (including the part handling stochastic Atari games, as following figures).
 
 [Amidar](http://www.free80sarcade.com/2600_Amidar.php)  |  [Alien](http://www.free80sarcade.com/2600_Alien.php)  |  [Assault](http://www.free80sarcade.com/2600_Assault.php)
