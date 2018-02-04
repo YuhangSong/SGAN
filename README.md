@@ -10,6 +10,10 @@ Approximate Stochastic Transition Models.**](https://arxiv.org/abs/1710.09718)
 [*Michael L. Littman* &#8727;](http://cs.brown.edu/~mlittman/).
 By [HCRI](https://hcri.brown.edu/) @ [Brown University](https://www.brown.edu/).
 
+Specifically, this repository includes extremely simple guidelines to:
+* Download and setup the Stochastic World database.
+* Setup a friendly environment to run our code (including the part handling stochastic Atari games, as following figures).
+
 [Amidar](http://www.free80sarcade.com/2600_Amidar.php)  |  [Alien](http://www.free80sarcade.com/2600_Alien.php)  |  [Assault](http://www.free80sarcade.com/2600_Assault.php)
 :-------------------------:|:-------------------------:|:-------------------------:
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Amidar.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Alien.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Assault.gif)
@@ -17,10 +21,6 @@ By [HCRI](https://hcri.brown.edu/) @ [Brown University](https://www.brown.edu/).
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/BeamRider.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Boxing.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/DemonAttack.gif)
 [WizardOfWor](http://www.free80sarcade.com/2600_Wizard_Of_Wor.php)  |  [MsPacman](http://www.free80sarcade.com/2600_Ms_Pac_Man.php) |  [Phoenix](http://www.free80sarcade.com/2600_Phoenix.php)
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/WizardOfWor.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/MsPacman.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Phoenix.gif)
-
-Specifically, this repository includes extremely simple guidelines to:
-* Download and setup the Stochastic World database.
-* Setup a friendly environment to run our code (including the part handling stochastic Atari games).
 
 ## Download and setup Stochastic World database
 
