@@ -28,11 +28,10 @@ Our Stochastic World database contains two physical games of **Marble Game** and
 
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_all.gif)
 
-![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single1.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single2.gif)
-:-------------------------:|:-------------------------:|
-![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single3.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single4.gif)
+Scene A  | Scene B  | Scene C  |  Scene D
+:-------------------------:|:-------------------------:|:-------------------------:|:-------------------------:
+![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single1.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single2.gif)  | ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single3.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_single4.gif)
 
-![](https://github.com/YuhangSong/SGAN/blob/master/imgs/marble_all.gif)
 
 Follow command lines here to download and setup our PVS-HM database:
 ```
