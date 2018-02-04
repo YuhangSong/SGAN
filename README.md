@@ -10,12 +10,12 @@ Approximate Stochastic Transition Models.**](https://arxiv.org/abs/1710.09718)
 [*Michael L. Littman* &#8727;](http://cs.brown.edu/~mlittman/).
 By [HCRI](https://hcri.brown.edu/) @ [Brown University](https://www.brown.edu/).
 
-[Amidar](https://www.youtube.com/watch?v=3sJubQAXSUc)  |  [Alien](https://www.youtube.com/watch?v=bOZ7TIx5Zv8&t=47s)  |  [Assault](https://www.youtube.com/watch?v=HwWJrb2PQQ0&t=38s)
+[Amidar](http://www.free80sarcade.com/2600_Amidar.php)  |  [Alien](http://www.free80sarcade.com/2600_Alien.php)  |  [Assault](http://www.free80sarcade.com/2600_Assault.php)
 :-------------------------:|:-------------------------:|:-------------------------:
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Amidar.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Alien.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Assault.gif)
-[BeamRider](https://www.youtube.com/watch?v=dgTxca0pdac)  |  [Boxing](https://www.youtube.com/watch?v=Ev0_hmee2cM)  |  [DemonAttack](https://www.youtube.com/watch?v=p67oOM4rjcU&t=31s)
+[BeamRider](http://www.free80sarcade.com/2600_BeamRider.php)  |  [Boxing](http://www.free80sarcade.com/2600_Boxing.php)  |  [DemonAttack](hhttp://www.free80sarcade.com/2600_Demon_Attack.php)
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/BeamRider.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Boxing.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/DemonAttack.gif)
-[WizardOfWor](https://www.youtube.com/watch?v=1wFzsa-S_fY)  |  [MsPacman](https://www.youtube.com/watch?v=CYjSI4Pnh7M) |  [Phoenix](https://www.youtube.com/watch?v=3ILULkcBRG0)
+[WizardOfWor](http://www.free80sarcade.com/2600_Wizard_Of_Wor.php)  |  [MsPacman](http://www.free80sarcade.com/2600_Ms_Pac_Man.php) |  [Phoenix](http://www.free80sarcade.com/2600_Phoenix.php)
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/WizardOfWor.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/MsPacman.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Phoenix.gif)
 
 Specifically, this repository includes extremely simple guidelines to:
