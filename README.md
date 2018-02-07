@@ -17,7 +17,7 @@ Specifically, this repository includes extremely simple guidelines to:
 [Amidar](http://www.free80sarcade.com/2600_Amidar.php)  |  [Alien](http://www.free80sarcade.com/2600_Alien.php)  |  [Assault](http://www.free80sarcade.com/2600_Assault.php)
 :-------------------------:|:-------------------------:|:-------------------------:
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Amidar.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Alien.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Assault.gif)
-[BeamRider](http://www.free80sarcade.com/2600_BeamRider.php)  |  [Boxing](http://www.free80sarcade.com/2600_Boxing.php)  |  [DemonAttack](hhttp://www.free80sarcade.com/2600_Demon_Attack.php)
+[BeamRider](http://www.free80sarcade.com/2600_BeamRider.php)  |  [Boxing](http://www.free80sarcade.com/2600_Boxing.php)  |  [DemonAttack](http://www.free80sarcade.com/2600_Demon_Attack.php)
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/BeamRider.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Boxing.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/DemonAttack.gif)
 [WizardOfWor](http://www.free80sarcade.com/2600_Wizard_Of_Wor.php)  |  [MsPacman](http://www.free80sarcade.com/2600_Ms_Pac_Man.php) |  [Phoenix](http://www.free80sarcade.com/2600_Phoenix.php)
 ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/WizardOfWor.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/MsPacman.gif)  |  ![](https://github.com/YuhangSong/SGAN/blob/master/imgs/Phoenix.gif)
